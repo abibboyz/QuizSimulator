@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
@@ -14,10 +14,34 @@ import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
 
+// useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
+  return (
+    <Suspense fallback={<Splash message="Loading quiz…" />}>
+      <PlayView />
+    </Suspense>
+  );
+}
+
+function PlayView() {
   const params = useParams<{ quizId: string }>();
   const quizId = params.quizId;
+
+  const searchParams = useSearchParams();
+  const [view, setView] = useState<ViewMode>(searchParams.get("view") === "mobile" ? "mobile" : "web");
+  const mobile = view === "mobile";
+
+  const chooseView = (next: ViewMode) => {
+    setView(next);
+    window.localStorage.setItem(VIEW_KEY, next);
+  };
+
+  /** Phone-width column; on a big screen it gets a device frame so the shape reads as deliberate. */
+  const stageWidth = mobile
+    ? "max-w-[26rem] lg:rounded-[2rem] lg:border lg:border-ink-700/80 lg:bg-ink-950/30 lg:shadow-2xl"
+    : "max-w-4xl";
 
   const [loaded, setLoaded] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -165,7 +189,11 @@ export default function PlayPage() {
   return (
     <ThemeShell theme={quiz.theme}>
       {phase === "intro" && (
-        <div className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center gap-6 px-6 text-center">
+        <div
+          className={`mx-auto flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center ${
+            mobile ? "max-w-[26rem]" : "max-w-2xl"
+          }`}
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-ink-400">Solo run</p>
           <h1 className="stage-prompt text-4xl font-extrabold md:text-6xl">{quiz.title}</h1>
           {quiz.description && <p className="text-lg text-ink-300">{quiz.description}</p>}
@@ -178,7 +206,14 @@ export default function PlayPage() {
             {quiz.settings.streakBonus && <Chip>Streak multiplier</Chip>}
           </div>
 
-          <Button variant="primary" size="lg" className="mt-2 px-10" onClick={() => session.begin()}>
+          {/* Last chance to change your mind without going back to the dashboard. */}
+          <div className="flex items-center gap-3 text-xs text-ink-400">
+            <span>Playing in</span>
+            <ViewModeToggle value={view} onChange={chooseView} size="full" />
+            <span>{mobile ? "mobile view" : "web view"}</span>
+          </div>
+
+          <Button variant="primary" size="lg" className="px-10" onClick={() => session.begin()}>
             Start quiz
           </Button>
           <Link href="/" className="text-sm text-ink-400 underline-offset-4 hover:underline">
@@ -188,7 +223,7 @@ export default function PlayPage() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col justify-center px-5 py-8">
+        <div className={`mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           <QuestionStage
             question={question}
             index={index}
@@ -198,6 +233,7 @@ export default function PlayPage() {
             interactive={phase === "asking"}
             onPick={handlePick}
             mode="solo"
+            narrow={mobile}
             header={
               <div className="flex items-center gap-5">
                 <ScoreBadge score={score} streak={streak} compact />
@@ -225,6 +261,17 @@ export default function PlayPage() {
               </Button>
             )}
           </div>
+
+          {/* Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop. */}
+          <p className="mt-4 text-center text-xs text-ink-500">
+            {mobile
+              ? phase === "asking"
+                ? "Tap an answer"
+                : "Tap to keep going"
+              : phase === "asking"
+                ? `Press 1–${question.options.length} to answer`
+                : "Press Enter for the next question"}
+          </p>
         </div>
       )}
 
@@ -235,6 +282,7 @@ export default function PlayPage() {
           answers={answers}
           score={score}
           bestStreak={bestStreak}
+          narrow={mobile}
           onRetryAll={() => {
             session.start(quiz);
             session.begin();

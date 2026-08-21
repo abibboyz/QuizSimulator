@@ -13,6 +13,8 @@ interface Props {
   interactive: boolean;
   onPick: (optionId: string) => void;
   mode: StageMode;
+  /** Phone-shaped play: one tile per row, whatever the layout says. */
+  narrow?: boolean;
 }
 
 const TEXT: Record<StageMode, string> = {
@@ -27,13 +29,8 @@ const PAD: Record<StageMode, string> = {
   preview: "p-1.5 min-h-8",
 };
 
-export function AnswerGrid({ question, selected, revealed, interactive, onPick, mode }: Props) {
-  const columns =
-    question.layout === "list"
-      ? "grid-cols-1"
-      : question.options.length <= 2
-        ? "grid-cols-1 sm:grid-cols-2"
-        : "grid-cols-1 sm:grid-cols-2";
+export function AnswerGrid({ question, selected, revealed, interactive, onPick, mode, narrow = false }: Props) {
+  const columns = narrow || question.layout === "list" ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
 
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";
 

@@ -19,9 +19,20 @@ interface Props {
   bestStreak: number;
   onRetryAll: () => void;
   onRetryMissed: (ids: string[]) => void;
+  /** Phone-shaped play: narrower column, stat tiles two-up instead of four. */
+  narrow?: boolean;
 }
 
-export function ResultsScreen({ quiz, order, answers, score, bestStreak, onRetryAll, onRetryMissed }: Props) {
+export function ResultsScreen({
+  quiz,
+  order,
+  answers,
+  score,
+  bestStreak,
+  onRetryAll,
+  onRetryMissed,
+  narrow = false,
+}: Props) {
   const reduced = useReducedMotion();
   const shownScore = useAnimatedNumber(score, 1100);
 
@@ -43,7 +54,7 @@ export function ResultsScreen({ quiz, order, answers, score, bestStreak, onRetry
   }, [verdict.celebrate, reduced, quiz.settings.sound]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-5 py-10">
+    <div className={`mx-auto flex w-full flex-col gap-8 px-5 py-10 ${narrow ? "max-w-[26rem]" : "max-w-3xl"}`}>
       <header className="animate-pop text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-400">{quiz.title}</p>
         <h1 className="stage-prompt mt-2 text-5xl font-extrabold md:text-6xl" style={{ color: "var(--accent)" }}>
@@ -52,7 +63,7 @@ export function ResultsScreen({ quiz, order, answers, score, bestStreak, onRetry
         <p className="mt-2 text-ink-300">{verdict.blurb}</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${narrow ? "" : "sm:grid-cols-4"}`}>
         <Stat label="Score" value={shownScore.toLocaleString()} highlight />
         <Stat label="Correct" value={`${correctCount}/${answers.length}`} />
         <Stat label="Accuracy" value={`${Math.round(accuracy * 100)}%`} />

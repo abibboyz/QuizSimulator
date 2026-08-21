@@ -15,6 +15,7 @@ import { getPreset, withAlpha } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
 
 
 
@@ -23,7 +24,27 @@ export default function Dashboard() {
   const [quizzes, setQuizzes] = useState<QuizSummary[] | null>(null);
   const [usage, setUsage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>("web");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Remembers the last choice, and starts on mobile for touch devices — where
+  // the web layout would be the wrong default anyway.
+  useEffect(() => {
+    const saved = window.localStorage.getItem(VIEW_KEY);
+    const guess: ViewMode =
+      saved === "mobile" || saved === "web"
+        ? saved
+        : window.matchMedia("(pointer: coarse)").matches
+          ? "mobile"
+          : "web";
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    setView(guess);
+  }, []);
+
+  const chooseView = (next: ViewMode) => {
+    setView(next);
+    window.localStorage.setItem(VIEW_KEY, next);
+  };
 
   const refresh = useCallback(async () => {
     setQuizzes(await listQuizzes());
@@ -174,12 +195,14 @@ export default function Dashboard() {
                       {new Date(quiz.updatedAt).toLocaleDateString()}
                     </p>
 
-                    <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                      <Link href={`/play/${quiz.id}`} className="flex-1">
+                    <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+                      <Link href={`/play/${quiz.id}?view=${view}`} className="flex-1">
                         <Button variant="primary" size="sm" className="w-full">
                           Play
                         </Button>
                       </Link>
+                      {/* Sits on the Play button so the shape is chosen before the quiz opens. */}
+                      <ViewModeToggle value={view} onChange={chooseView} />
                       <Link href={`/host/${quiz.id}`}>
                         <Button variant="outline" size="sm">
                           Host

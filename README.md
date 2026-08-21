@@ -31,7 +31,14 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 
 **Solo play** (`/play/[quizId]`)
 
-Per-question countdown, instant reveal with an explanation, speed bonus, streak multiplier, and a results screen with a per-question breakdown and a "retry the ones I missed" button. Answer with the number keys, advance with Enter.
+Per-question countdown, instant reveal with an explanation, speed bonus, streak multiplier, and a results screen with a per-question breakdown and a "retry the ones I missed" button.
+
+Pick the play surface before you start, with the toggle beside **Play** (or on the intro screen):
+
+- **Web** — wide layout, answers in a 2×2 grid, number keys to answer and Enter to advance
+- **Mobile** — phone-width column, one answer per row, touch-sized tiles. On a desktop it's framed like a phone so you can see how it'll look; on an actual phone it just fills the screen
+
+The choice is remembered, defaults to mobile on touch devices, and rides along in the URL (`?view=mobile`) so a link opens the way you meant it to.
 
 **Host mode** (`/host/[quizId]`)
 

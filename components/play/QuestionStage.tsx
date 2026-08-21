@@ -14,6 +14,8 @@ interface Props {
   interactive: boolean;
   onPick: (optionId: string) => void;
   mode: StageMode;
+  /** Phone-shaped play: one answer per row. */
+  narrow?: boolean;
   /** Timer, score, and anything else that belongs on the stage's top rail. */
   header?: ReactNode;
 }
@@ -44,6 +46,7 @@ export function QuestionStage({
   interactive,
   onPick,
   mode,
+  narrow = false,
   header,
 }: Props) {
   const imageLeads = question.layout === "image-top" && !!question.media;
@@ -108,6 +111,7 @@ export function QuestionStage({
         interactive={interactive}
         onPick={onPick}
         mode={mode}
+        narrow={narrow}
       />
 
       {revealed && question.explanation && (
