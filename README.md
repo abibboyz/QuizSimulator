@@ -33,6 +33,8 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 
 Per-question countdown, instant reveal with an explanation, speed bonus, streak multiplier, and a results screen with a per-question breakdown and a "retry the ones I missed" button.
 
+**Run out of time and the quiz keeps itself moving:** the correct answer is revealed, a countdown shows how long until the next question (5 seconds by default, editable under **Settings → Solo play**), and it carries on — through to the results screen if that was the last one. A question you actually *answered* stays put, so you can read the explanation at your own pace. The whole behaviour can be switched off.
+
 Pick the play surface before you start, with the toggle beside **Play** (or on the intro screen):
 
 - **Web** — wide layout, answers in a 2×2 grid, number keys to answer and Enter to advance
@@ -81,6 +83,14 @@ Push to GitHub and import the repo at [vercel.com/new](https://vercel.com/new). 
 ```bash
 npm run build
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+Node's built-in runner, no dependencies. Coverage is thin — it covers the auto-advance rules in `lib/autoAdvance.ts`, where the "keep going after a timeout, but not after an answer" distinction is easy to break by accident.
 
 ## Stack
 

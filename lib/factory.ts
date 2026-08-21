@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   sound: true,
   autoReveal: false,
   autoAdvanceSeconds: null,
+  autoAdvanceOnTimeout: true,
+  timeoutRevealSeconds: 5,
 };
 
 export function createOption(text = "", correct = false): Option {

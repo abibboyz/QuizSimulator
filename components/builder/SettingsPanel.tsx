@@ -95,6 +95,31 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings }: Props) {
       </div>
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Solo play</h3>
+
+        <Toggle
+          label="Keep going after a timeout"
+          hint="Shows the answer, then moves on by itself"
+          checked={settings.autoAdvanceOnTimeout}
+          onChange={(autoAdvanceOnTimeout) => onChangeSettings({ autoAdvanceOnTimeout })}
+        />
+
+        {settings.autoAdvanceOnTimeout && (
+          <Field label="Show the answer for (seconds)">
+            <Input
+              type="number"
+              min={1}
+              max={30}
+              value={settings.timeoutRevealSeconds}
+              onChange={(event) =>
+                onChangeSettings({ timeoutRevealSeconds: Math.max(1, Number(event.target.value) || 1) })
+              }
+            />
+          </Field>
+        )}
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Host mode</h3>
 
         <Toggle

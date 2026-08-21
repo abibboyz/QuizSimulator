@@ -119,6 +119,16 @@ body {
   }
 }
 
+/* Drains left-to-right to show an auto-advance is coming. */
+@keyframes drain {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
 @keyframes timer-pulse {
   0%,
   100% {

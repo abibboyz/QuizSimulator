@@ -71,6 +71,14 @@ export interface QuizSettings {
   autoReveal: boolean;
   /** Host mode: seconds to wait after a reveal before moving on. `null` waits for the host. */
   autoAdvanceSeconds: number | null;
+  /**
+   * Solo play: when the timer expires with nothing picked, show the answer and
+   * then carry on by itself. There's no decision left to make at that point, so
+   * waiting on a click only stalls the run.
+   */
+  autoAdvanceOnTimeout: boolean;
+  /** Seconds the answer stays up before solo play moves on after a timeout. */
+  timeoutRevealSeconds: number;
 }
 
 export interface Quiz {

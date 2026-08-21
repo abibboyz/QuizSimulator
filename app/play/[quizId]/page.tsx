@@ -12,6 +12,8 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { TimerRing } from "@/components/play/TimerRing";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
+import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
+import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
@@ -105,6 +107,20 @@ function PlayView() {
     const id = window.setTimeout(() => usePlaySession.getState().next(), 220);
     return () => window.clearTimeout(id);
   }, [phase, quiz]);
+
+  // A question that ran out of time leaves the player nothing to decide, so the
+  // answer is shown for a beat and the quiz keeps going on its own — through to
+  // the results screen if that was the last question.
+  const advancingAfterTimeout = quiz
+    ? shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
+    : false;
+  const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
+
+  useEffect(() => {
+    if (!advancingAfterTimeout) return;
+    const id = window.setTimeout(() => usePlaySession.getState().next(), holdSeconds * 1000);
+    return () => window.clearTimeout(id);
+  }, [advancingAfterTimeout, holdSeconds]);
 
   const submitAnswer = useCallback(() => {
     const elapsed = limit !== null ? countdown.elapsedMs : Date.now() - startedAtRef.current;
@@ -262,16 +278,24 @@ function PlayView() {
             )}
           </div>
 
-          {/* Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop. */}
-          <p className="mt-4 text-center text-xs text-ink-500">
-            {mobile
-              ? phase === "asking"
-                ? "Tap an answer"
-                : "Tap to keep going"
-              : phase === "asking"
-                ? `Press 1–${question.options.length} to answer`
-                : "Press Enter for the next question"}
-          </p>
+          {advancingAfterTimeout ? (
+            <AutoAdvanceBar
+              key={question.id}
+              seconds={holdSeconds}
+              label={index + 1 >= order.length ? "results" : "next question"}
+            />
+          ) : (
+            // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
+            <p className="mt-4 text-center text-xs text-ink-500">
+              {mobile
+                ? phase === "asking"
+                  ? "Tap an answer"
+                  : "Tap to keep going"
+                : phase === "asking"
+                  ? `Press 1–${question.options.length} to answer`
+                  : "Press Enter for the next question"}
+            </p>
+          )}
         </div>
       )}
 
