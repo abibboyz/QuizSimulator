@@ -1,26 +1,185 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-outfit);
+
+  --color-ink-950: #05060c;
+  --color-ink-900: #0a0c16;
+  --color-ink-850: #0f1120;
+  --color-ink-800: #14172a;
+  --color-ink-700: #1d2136;
+  --color-ink-600: #2b3049;
+  --color-ink-500: #454b69;
+  --color-ink-400: #6c7391;
+  --color-ink-300: #99a0bd;
+  --color-ink-200: #c7cbdd;
+  --color-ink-100: #e9ebf4;
+
+  --color-good: #22c55e;
+  --color-bad: #ef4444;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* Overridden per-quiz by themeVars(); these are the app-chrome defaults. */
+  --accent: #22d3ee;
+  --surface: #070b1a;
+  --glow: #6366f1;
+  --accent-soft: rgba(34, 211, 238, 0.16);
+  --accent-line: rgba(34, 211, 238, 0.35);
+  --quiz-font: var(--font-display);
+
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ink-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --------------------------------------------------------------- surfaces */
+
+.glass {
+  background: color-mix(in srgb, var(--color-ink-850) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-ink-600) 70%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.accent-ring {
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 32px -12px var(--accent);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Long prompts should shrink rather than overflow the stage. */
+.stage-prompt {
+  font-family: var(--quiz-font);
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------------- animations */
+
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(-6%, -4%, 0) scale(1.1) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(6%, 4%, 0) scale(1.25) rotate(12deg);
+  }
+}
+
+@keyframes blob-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(3vw, -4vh, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-2vw, 3vh, 0) scale(0.95);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes streak-flare {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.animate-aurora {
+  animation: aurora-drift 18s ease-in-out infinite;
+}
+.animate-blob {
+  animation: blob-float 22s ease-in-out infinite;
+}
+.animate-pop {
+  animation: pop-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.animate-streak {
+  animation: streak-flare 0.45s ease-out;
+}
+.animate-urgent {
+  animation: timer-pulse 0.7s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------- a11y */
+
+/*
+ * Reduced motion isn't decoration: flashing backgrounds and confetti are a real
+ * problem for some players. Kill all of it, keep the app fully usable.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------ scrollbars */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-700);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-600);
+  background-clip: content-box;
 }

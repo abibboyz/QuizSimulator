@@ -1,68 +1,226 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { QuizSummary } from "@/types/quiz";
+import { duplicateQuiz, estimateUsage, listQuizzes, removeQuiz, saveQuiz } from "@/lib/storage";
+import { exportQuizFile, importBundle, readFileText, TransferError } from "@/lib/transfer";
+import { getQuiz } from "@/lib/storage";
+import { createQuiz } from "@/lib/factory";
+import { sampleQuiz } from "@/lib/sampleQuiz";
+import { ensureSeeded } from "@/lib/seed";
+import { formatBytes } from "@/lib/media";
+import { getPreset, withAlpha } from "@/lib/themes";
+import { Button } from "@/components/ui/Button";
+import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
+import { DEFAULT_THEME } from "@/lib/themes";
+
+
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [quizzes, setQuizzes] = useState<QuizSummary[] | null>(null);
+  const [usage, setUsage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const refresh = useCallback(async () => {
+    setQuizzes(await listQuizzes());
+    const estimate = await estimateUsage();
+    setUsage(estimate ? formatBytes(estimate.bytes) : null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      // Gives a fresh install something to play immediately.
+      await ensureSeeded();
+      const list = await listQuizzes();
+
+      if (cancelled) return;
+      setQuizzes(list);
+      const estimate = await estimateUsage();
+      if (!cancelled) setUsage(estimate ? formatBytes(estimate.bytes) : null);
+    };
+
+    void load().catch((e) => setError(e instanceof Error ? e.message : "Couldn't open local storage."));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleNew = async () => {
+    const quiz = createQuiz();
+    await saveQuiz(quiz);
+    router.push(`/edit/${quiz.id}`);
+  };
+
+  const handleImport = async (file: File) => {
+    setError(null);
+    try {
+      const quiz = await importBundle(await readFileText(file));
+      await refresh();
+      router.push(`/edit/${quiz.id}`);
+    } catch (e) {
+      setError(e instanceof TransferError ? e.message : "That file couldn't be imported.");
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    const quiz = await getQuiz(id);
+    if (quiz) await exportQuizFile(quiz);
+  };
+
+  const handleDelete = async (summary: QuizSummary) => {
+    if (!window.confirm(`Delete "${summary.title}"? This can't be undone.`)) return;
+    await removeQuiz(summary.id);
+    await refresh();
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <div className="relative min-h-dvh">
+      <AnimatedBackground kind="aurora" accent={DEFAULT_THEME.accent} glow="#6366f1" surface="#070b1a" subtle />
+
+      <main className="mx-auto w-full max-w-6xl px-5 py-10 md:py-16">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="stage-prompt text-4xl font-extrabold md:text-5xl">
+              Quiz <span style={{ color: "var(--accent)" }}>Simulator</span>
+            </h1>
+            <p className="mt-2 max-w-xl text-ink-300">
+              Build a quiz, theme it, then run it solo or throw it on the big screen for a room.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleImport(file);
+                event.target.value = "";
+              }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              Import
+            </Button>
+            <Button variant="primary" onClick={handleNew}>
+              + New quiz
+            </Button>
+          </div>
+        </header>
+
+        {error && (
+          <div className="mt-6 rounded-xl border border-bad/40 bg-bad/10 px-4 py-3 text-sm text-red-200">{error}</div>
+        )}
+
+        {quizzes === null && <p className="mt-12 text-ink-400">Loading your quizzes…</p>}
+
+        {quizzes?.length === 0 && (
+          <div className="glass mt-12 rounded-3xl px-8 py-16 text-center">
+            <h2 className="text-2xl font-bold">No quizzes yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-ink-300">
+              Start from scratch, or drop in the sample pack to see how a finished quiz behaves.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button variant="primary" onClick={handleNew}>
+                Create a quiz
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  await saveQuiz(sampleQuiz());
+                  await refresh();
+                }}
+              >
+                Add the sample quiz
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!!quizzes?.length && (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {quizzes.map((quiz) => {
+              const preset = getPreset(quiz.theme.preset);
+              return (
+                <article
+                  key={quiz.id}
+                  className="glass group relative flex flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5"
+                  style={{ boxShadow: `0 18px 40px -28px ${quiz.theme.accent}` }}
+                >
+                  <div
+                    className="h-24 w-full"
+                    style={{
+                      background: `radial-gradient(120% 140% at 20% 0%, ${withAlpha(quiz.theme.accent, 0.55)}, ${withAlpha(preset.glow, 0.25)} 60%, transparent 100%)`,
+                    }}
+                  />
+
+                  <div className="flex flex-1 flex-col gap-3 p-5">
+                    <div>
+                      <h2 className="text-lg font-bold leading-tight">{quiz.title || "Untitled quiz"}</h2>
+                      <p className="mt-1 line-clamp-2 text-sm text-ink-400">
+                        {quiz.description || "No description"}
+                      </p>
+                    </div>
+
+                    <p className="text-xs uppercase tracking-widest text-ink-500">
+                      {quiz.questionCount} {quiz.questionCount === 1 ? "question" : "questions"} ·{" "}
+                      {new Date(quiz.updatedAt).toLocaleDateString()}
+                    </p>
+
+                    <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                      <Link href={`/play/${quiz.id}`} className="flex-1">
+                        <Button variant="primary" size="sm" className="w-full">
+                          Play
+                        </Button>
+                      </Link>
+                      <Link href={`/host/${quiz.id}`}>
+                        <Button variant="outline" size="sm">
+                          Host
+                        </Button>
+                      </Link>
+                      <Link href={`/edit/${quiz.id}`}>
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    </div>
+
+                    <div className="flex gap-1 border-t border-ink-800 pt-3 text-xs">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          await duplicateQuiz(quiz.id);
+                          await refresh();
+                        }}
+                      >
+                        Duplicate
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleExport(quiz.id)}>
+                        Export
+                      </Button>
+                      <Button variant="ghost" size="sm" className="ml-auto text-bad" onClick={() => handleDelete(quiz)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        <footer className="mt-16 flex flex-wrap items-center justify-between gap-2 border-t border-ink-800 pt-6 text-xs text-ink-500">
+          <p>Everything is stored in this browser. Export a quiz to move it somewhere else.</p>
+          {usage && <p>Using {usage} of local storage</p>}
+        </footer>
       </main>
     </div>
   );
