@@ -93,6 +93,38 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings }: Props) {
           onChange={(sound) => onChangeSettings({ sound })}
         />
       </div>
+
+      <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Host mode</h3>
+
+        <Toggle
+          label="Auto-reveal the answer"
+          hint="Shows the answer by itself when the timer hits zero"
+          checked={settings.autoReveal}
+          onChange={(autoReveal) => onChangeSettings({ autoReveal })}
+        />
+
+        <Toggle
+          label="Auto-advance after reveal"
+          hint="Rolls on to the next question with no clicking"
+          checked={settings.autoAdvanceSeconds !== null}
+          onChange={(on) => onChangeSettings({ autoAdvanceSeconds: on ? 5 : null })}
+        />
+
+        {settings.autoAdvanceSeconds !== null && (
+          <Field label="Wait before advancing (seconds)">
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              value={settings.autoAdvanceSeconds}
+              onChange={(event) =>
+                onChangeSettings({ autoAdvanceSeconds: Math.max(1, Number(event.target.value) || 1) })
+              }
+            />
+          </Field>
+        )}
+      </div>
     </div>
   );
 }

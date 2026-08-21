@@ -11,12 +11,22 @@ import { putMediaRecord } from "@/lib/storage";
 export const MAX_DIM = 1600;
 const QUALITY = 0.85;
 
+/**
+ * Animated files are stored byte-for-byte. Everything else gets downscaled, but
+ * a GIF pushed through a canvas comes out as a single frozen frame — so the
+ * size cap is the only protection here, and it has to be generous enough to be
+ * useful and tight enough to keep exports sendable.
+ */
+const MAX_ANIMATED_BYTES = 12 * 1024 * 1024;
+
 export class MediaError extends Error {}
 
 export async function putImage(file: File | Blob): Promise<MediaRef> {
   if (!file.type.startsWith("image/")) {
     throw new MediaError("That file isn't an image.");
   }
+
+  if (await isAnimated(file)) return storeAsIs(file);
 
   const source = await decode(file);
   const { width, height } = fit(source.width, source.height, MAX_DIM);
@@ -36,6 +46,38 @@ export async function putImage(file: File | Blob): Promise<MediaRef> {
   const id = newId();
   await putMediaRecord({ id, blob, w: width, h: height, createdAt: Date.now() });
 
+  return { kind: "stored", id, w: width, h: height };
+}
+
+/** GIF and APNG are always treated as animated; WebP carries an ANIM chunk. */
+async function isAnimated(file: File | Blob): Promise<boolean> {
+  if (file.type === "image/gif" || file.type === "image/apng") return true;
+  if (file.type !== "image/webp") return false;
+
+  try {
+    const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+    const text = new TextDecoder("latin1").decode(head);
+    return text.startsWith("RIFF") && text.includes("ANIM");
+  } catch {
+    return false;
+  }
+}
+
+/** Keeps the original bytes so the animation survives. */
+async function storeAsIs(file: File | Blob): Promise<MediaRef> {
+  if (file.size > MAX_ANIMATED_BYTES) {
+    throw new MediaError(
+      `That animation is ${formatBytes(file.size)}. Keep it under ${formatBytes(MAX_ANIMATED_BYTES)} so the quiz stays quick to load and export.`,
+    );
+  }
+
+  // The first frame is enough to learn the dimensions.
+  const source = await decode(file);
+  const { width, height } = source;
+  if ("close" in source.image) source.image.close();
+
+  const id = newId();
+  await putMediaRecord({ id, blob: file, w: width, h: height, createdAt: Date.now() });
   return { kind: "stored", id, w: width, h: height };
 }
 

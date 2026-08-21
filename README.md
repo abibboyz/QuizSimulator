@@ -25,6 +25,7 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 - Images on questions *and* on individual answers — drag one in, click to browse, or **paste straight from the clipboard**
 - Four layouts per question: grid, list, image-first, big type
 - Theme each quiz: five palettes, custom accent and stage colours, three fonts, and five animated backgrounds (aurora, particles, floating shapes, starfield, none)
+- **Background image with GIF support** — drop in a picture or an animated GIF, choose fill/fit/tile, and dial in a dim level so the question stays readable. Animated files (GIF, APNG, animated WebP) are stored untouched so they keep moving; everything else is downscaled
 - Live preview that renders the real play stage, so what you design is what plays
 - Autosaves as you type
 
@@ -35,6 +36,13 @@ Per-question countdown, instant reveal with an explanation, speed bonus, streak 
 **Host mode** (`/host/[quizId]`)
 
 Big-screen presentation for a room. You control the pacing: `Space` reveals the answer, `←`/`→` move between questions, `F` goes fullscreen. Includes a manual team scoreboard that survives a refresh.
+
+Two checkboxes under **Settings → Host mode** make it run itself:
+
+- **Auto-reveal the answer** — the answer appears on its own when the timer hits zero
+- **Auto-advance after reveal** — moves to the next question after a delay you set
+
+With both on, you press play once and the whole quiz runs hands-free. Arrow keys still take over at any point, and it always stops on the last question rather than running off the end.
 
 ## Scoring
 

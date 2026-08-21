@@ -131,6 +131,8 @@ export default function HostPage() {
             total={questions.length}
             limitSeconds={limit}
             soundOn={quiz.settings.sound}
+            autoReveal={quiz.settings.autoReveal}
+            autoAdvanceSeconds={quiz.settings.autoAdvanceSeconds}
             canBack={index > 0}
             isLast={index + 1 >= questions.length}
             onNext={goNext}
@@ -154,6 +156,8 @@ interface HostQuestionProps {
   total: number;
   limitSeconds: number | null;
   soundOn: boolean;
+  autoReveal: boolean;
+  autoAdvanceSeconds: number | null;
   canBack: boolean;
   isLast: boolean;
   onNext: () => void;
@@ -166,6 +170,8 @@ function HostQuestion({
   total,
   limitSeconds,
   soundOn,
+  autoReveal,
+  autoAdvanceSeconds,
   canBack,
   isLast,
   onNext,
@@ -200,6 +206,21 @@ function HostQuestion({
     if (soundOn) playWhoosh();
     onNext();
   }, [onNext, soundOn]);
+
+  // Time's up: show the answer on its own. The short beat lets the room register
+  // that the clock ran out before the answer lands.
+  useEffect(() => {
+    if (!autoReveal || !expired || revealed) return;
+    const id = window.setTimeout(reveal, 600);
+    return () => window.clearTimeout(id);
+  }, [autoReveal, expired, revealed, reveal]);
+
+  // Hands-free run: roll on to the next question by itself.
+  useEffect(() => {
+    if (!revealed || autoAdvanceSeconds === null || isLast) return;
+    const id = window.setTimeout(advance, autoAdvanceSeconds * 1000);
+    return () => window.clearTimeout(id);
+  }, [revealed, autoAdvanceSeconds, isLast, advance]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -283,7 +304,14 @@ function HostQuestion({
       </div>
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
-        Space {revealed ? "advances" : "reveals"} · ← → to move · F for fullscreen
+        {revealed && autoAdvanceSeconds !== null && !isLast ? (
+          <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
+        ) : (
+          <>
+            Space {revealed ? "advances" : "reveals"} · ← → to move · F for fullscreen
+            {autoReveal && !revealed && " · answer shows itself at zero"}
+          </>
+        )}
       </p>
     </main>
   );

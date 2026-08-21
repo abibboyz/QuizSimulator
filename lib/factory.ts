@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   speedBonus: true,
   streakBonus: true,
   sound: true,
+  autoReveal: false,
+  autoAdvanceSeconds: null,
 };
 
 export function createOption(text = "", correct = false): Option {

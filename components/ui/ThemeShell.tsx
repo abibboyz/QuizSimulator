@@ -22,16 +22,26 @@ export function ThemeShell({ theme, children, className = "", subtle = false }: 
   const preset = getPreset(theme.preset);
 
   return (
-    // The surface colour is painted by this in-flow element, not only by the
-    // fixed background layer, so scrolled content always sits on the theme
-    // rather than the app's near-black default.
-    <div className={`relative min-h-dvh ${className}`} style={{ ...themeVars(theme), background: theme.surface }}>
+    // Two things at once:
+    // - the surface colour is painted here, not only on the fixed background
+    //   layer, so scrolled content always sits on the theme;
+    // - `isolate` establishes a stacking context, which keeps the background's
+    //   negative z-index *inside* this element. Without it the layer escapes to
+    //   the root and paints behind the surface colour above, hiding the
+    //   animation and any background image entirely.
+    <div
+      className={`isolate relative min-h-dvh ${className}`}
+      style={{ ...themeVars(theme), background: theme.surface }}
+    >
       <AnimatedBackground
         kind={theme.bgAnimation}
         accent={theme.accent}
         glow={preset.glow}
         surface={theme.surface}
         subtle={subtle}
+        image={theme.bgImage}
+        imageFit={theme.bgImageFit}
+        imageDim={theme.bgImageDim}
       />
       {children}
     </div>

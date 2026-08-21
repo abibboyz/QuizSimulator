@@ -14,7 +14,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { MediaRef, Quiz, QuizSummary } from "@/types/quiz";
 import { toSummary } from "@/types/quiz";
-import { newId } from "@/lib/factory";
+import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
+import { DEFAULT_THEME } from "@/lib/themes";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -55,13 +56,27 @@ function db(): Promise<IDBPDatabase<QuizDB>> {
 
 /* ---------------------------------------------------------------- quizzes */
 
+/**
+ * Fills in fields added after a quiz was saved. Without this, a quiz stored by
+ * an older build reaches the UI with `undefined` settings and turns controlled
+ * inputs into uncontrolled ones.
+ */
+function hydrate(quiz: Quiz): Quiz {
+  return {
+    ...quiz,
+    theme: { ...DEFAULT_THEME, ...quiz.theme },
+    settings: { ...DEFAULT_SETTINGS, ...quiz.settings },
+  };
+}
+
 export async function listQuizzes(): Promise<QuizSummary[]> {
   const all = await (await db()).getAll("quizzes");
-  return all.map(toSummary).sort((a, b) => b.updatedAt - a.updatedAt);
+  return all.map((q) => toSummary(hydrate(q))).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getQuiz(id: string): Promise<Quiz | null> {
-  return (await (await db()).get("quizzes", id)) ?? null;
+  const found = await (await db()).get("quizzes", id);
+  return found ? hydrate(found) : null;
 }
 
 export async function saveQuiz(quiz: Quiz): Promise<void> {
@@ -114,9 +129,14 @@ export async function deleteMedia(id: string): Promise<void> {
   await (await db()).delete("media", id);
 }
 
-/** Every media reference used anywhere in a quiz. */
+/**
+ * Every media reference used anywhere in a quiz — including the theme's
+ * background picture. Miss that one and the garbage collector deletes the
+ * background out from under a saved quiz.
+ */
 export function collectRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
+  if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
   for (const q of quiz.questions) {
     if (q.media) refs.push(q.media);
     for (const o of q.options) if (o.media) refs.push(o.media);
@@ -134,6 +154,7 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
 
   return {
     ...quiz,
+    theme: { ...quiz.theme, bgImage: swap(quiz.theme?.bgImage) },
     questions: quiz.questions.map((q) => ({
       ...q,
       media: swap(q.media),

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { BgAnimation } from "@/types/quiz";
+import type { BgAnimation, BgImageFit, MediaRef } from "@/types/quiz";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useMediaUrl } from "@/hooks/useMediaUrl";
 import { withAlpha } from "@/lib/themes";
 
 interface Props {
@@ -14,11 +15,26 @@ interface Props {
   subtle?: boolean;
   /** Paint inside the nearest positioned ancestor instead of the viewport. */
   contained?: boolean;
+  /** Custom background picture, animated GIFs included. */
+  image?: MediaRef;
+  imageFit?: BgImageFit;
+  imageDim?: number;
 }
 
-export function AnimatedBackground({ kind, accent, glow, surface, subtle = false, contained = false }: Props) {
+export function AnimatedBackground({
+  kind,
+  accent,
+  glow,
+  surface,
+  subtle = false,
+  contained = false,
+  image,
+  imageFit = "cover",
+  imageDim = 0.45,
+}: Props) {
   const reduced = useReducedMotion();
   const useCanvas = kind === "particles" || kind === "starfield";
+  const imageUrl = useMediaUrl(image);
 
   return (
     <div
@@ -26,6 +42,25 @@ export function AnimatedBackground({ kind, accent, glow, surface, subtle = false
       className={`pointer-events-none inset-0 overflow-hidden ${contained ? "absolute" : "fixed -z-10"}`}
       style={{ background: `radial-gradient(120% 120% at 50% 0%, ${withAlpha(glow, subtle ? 0.1 : 0.22)} 0%, ${surface} 55%, #04050a 100%)` }}
     >
+      {/*
+        The picture sits under the animation, with a dimming scrim between them
+        so a bright or busy image can't swallow the question text.
+      */}
+      {imageUrl && (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url("${imageUrl}")`,
+              backgroundSize: imageFit === "tile" ? "auto" : imageFit,
+              backgroundRepeat: imageFit === "tile" ? "repeat" : "no-repeat",
+              backgroundPosition: "center",
+            }}
+          />
+          <div className="absolute inset-0" style={{ background: `rgba(0, 0, 0, ${imageDim})` }} />
+        </>
+      )}
+
       {kind === "aurora" && <Aurora accent={accent} glow={glow} subtle={subtle} still={reduced} />}
       {kind === "shapes" && <Shapes accent={accent} glow={glow} subtle={subtle} still={reduced} />}
       {useCanvas && !reduced && <ParticleCanvas kind={kind} accent={accent} glow={glow} subtle={subtle} />}

@@ -43,6 +43,9 @@ export function PreviewPane({ quiz, question, index }: Props) {
           glow={preset.glow}
           surface={quiz.theme.surface}
           contained
+          image={quiz.theme.bgImage}
+          imageFit={quiz.theme.bgImageFit}
+          imageDim={quiz.theme.bgImageDim}
         />
         <div className="relative p-4">
           <QuestionStage

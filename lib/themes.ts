@@ -59,6 +59,8 @@ export const DEFAULT_THEME: Theme = {
   accent: THEME_PRESETS[0].accent,
   surface: THEME_PRESETS[0].surface,
   font: "display",
+  bgImageFit: "cover",
+  bgImageDim: 0.45,
 };
 
 /** Turns a theme into the CSS custom properties the components read. */

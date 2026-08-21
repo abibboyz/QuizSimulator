@@ -1,8 +1,15 @@
 "use client";
 
-import type { Theme } from "@/types/quiz";
+import type { BgImageFit, Theme } from "@/types/quiz";
 import { BG_ANIMATIONS, FONT_CHOICES, THEME_PRESETS, getPreset, readableTextOn } from "@/lib/themes";
 import { Field, Input } from "@/components/ui/Field";
+import { MediaDropZone } from "@/components/builder/MediaDropZone";
+
+const FITS: { id: BgImageFit; label: string }[] = [
+  { id: "cover", label: "Fill" },
+  { id: "contain", label: "Fit" },
+  { id: "tile", label: "Tile" },
+];
 
 interface Props {
   theme: Theme;
@@ -108,6 +115,45 @@ export function ThemePanel({ theme, onChange }: Props) {
           ))}
         </div>
       </div>
+
+      <Field label="Background image" hint="GIFs keep animating. Sits behind the animation above.">
+        <MediaDropZone media={theme.bgImage} onChange={(bgImage) => onChange({ ...theme, bgImage })} label="Background image" />
+      </Field>
+
+      {theme.bgImage && (
+        <>
+          <div>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-widest text-ink-400">Image fit</span>
+            <div className="grid grid-cols-3 gap-2">
+              {FITS.map((fit) => (
+                <button
+                  key={fit.id}
+                  type="button"
+                  onClick={() => onChange({ ...theme, bgImageFit: fit.id })}
+                  className={`focus-ring rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                    theme.bgImageFit === fit.id
+                      ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ink-100"
+                      : "border-ink-700 text-ink-300 hover:border-ink-600"
+                  }`}
+                >
+                  {fit.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field label={`Dim image · ${Math.round(theme.bgImageDim * 100)}%`} hint="Darkens the picture so the question stays readable.">
+            <input
+              type="range"
+              min={0}
+              max={90}
+              value={Math.round(theme.bgImageDim * 100)}
+              onChange={(event) => onChange({ ...theme, bgImageDim: Number(event.target.value) / 100 })}
+              className="focus-ring w-full accent-[var(--accent)]"
+            />
+          </Field>
+        </>
+      )}
 
       <Field label="Stage colour" hint="The base colour behind the animation.">
         <div className="flex gap-2">

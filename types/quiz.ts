@@ -41,12 +41,19 @@ export type BgAnimation = "aurora" | "particles" | "shapes" | "starfield" | "non
 
 export type FontChoice = "sans" | "display" | "mono";
 
+export type BgImageFit = "cover" | "contain" | "tile";
+
 export interface Theme {
   preset: ThemePreset;
   bgAnimation: BgAnimation;
   accent: string;
   surface: string;
   font: FontChoice;
+  /** Custom background picture. Animated GIFs keep animating. */
+  bgImage?: MediaRef;
+  bgImageFit: BgImageFit;
+  /** 0–1 black overlay over the picture, so bright images don't eat the text. */
+  bgImageDim: number;
 }
 
 export interface QuizSettings {
@@ -60,6 +67,10 @@ export interface QuizSettings {
   speedBonus: boolean;
   streakBonus: boolean;
   sound: boolean;
+  /** Host mode: show the answer by itself when the timer runs out. */
+  autoReveal: boolean;
+  /** Host mode: seconds to wait after a reveal before moving on. `null` waits for the host. */
+  autoAdvanceSeconds: number | null;
 }
 
 export interface Quiz {

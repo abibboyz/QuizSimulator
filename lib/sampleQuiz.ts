@@ -1,7 +1,7 @@
 import type { Question, Quiz } from "@/types/quiz";
 import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
-import { getPreset } from "@/lib/themes";
+import { DEFAULT_THEME, getPreset } from "@/lib/themes";
 
 interface Seed {
   prompt: string;
@@ -84,7 +84,14 @@ export function sampleQuiz(): Quiz {
     id: newId(),
     title: "Pub Quiz Starter Pack",
     description: "Eight rounds of general knowledge to try the simulator out.",
-    theme: { preset: "neon", bgAnimation: preset.defaultBg, accent: preset.accent, surface: preset.surface, font: "display" },
+    theme: {
+      ...DEFAULT_THEME,
+      preset: "neon",
+      bgAnimation: preset.defaultBg,
+      accent: preset.accent,
+      surface: preset.surface,
+      font: "display",
+    },
     settings: { ...DEFAULT_SETTINGS },
     questions,
     createdAt: now,
