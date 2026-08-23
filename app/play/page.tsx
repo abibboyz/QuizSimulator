@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
@@ -28,10 +28,12 @@ export default function PlayPage() {
 }
 
 function PlayView() {
-  const params = useParams<{ quizId: string }>();
-  const quizId = params.quizId;
-
   const searchParams = useSearchParams();
+  // The quiz id rides in the query string rather than the path so this route
+  // can be a single static page — which is what lets it be precached and work
+  // offline for every quiz, not just ones already visited online.
+  const quizId = searchParams.get("quiz") ?? "";
+
   const [view, setView] = useState<ViewMode>(searchParams.get("view") === "mobile" ? "mobile" : "web");
   const mobile = view === "mobile";
 
@@ -195,7 +197,7 @@ function PlayView() {
   if (!order.length) {
     return (
       <Splash message="This quiz has no questions yet.">
-        <Link href={`/edit/${quiz.id}`}>
+        <Link href={`/edit?quiz=${quiz.id}`}>
           <Button variant="primary">Open the builder</Button>
         </Link>
       </Splash>

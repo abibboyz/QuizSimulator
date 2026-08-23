@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import type { Question, Quiz } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
@@ -19,9 +19,20 @@ function toggleFullscreen() {
   else void document.documentElement.requestFullscreen().catch(() => {});
 }
 
+// useSearchParams needs a Suspense boundary above it.
 export default function HostPage() {
-  const params = useParams<{ quizId: string }>();
-  const quizId = params.quizId;
+  return (
+    <Suspense fallback={<Splash message="Loading quiz…" />}>
+      <HostView />
+    </Suspense>
+  );
+}
+
+function HostView() {
+  const searchParams = useSearchParams();
+  // See app/play/page.tsx — query param instead of a path segment so the route
+  // stays static and precacheable for offline use.
+  const quizId = searchParams.get("quiz") ?? "";
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
@@ -85,7 +96,7 @@ export default function HostPage() {
   if (!questions.length) {
     return (
       <Splash message="This quiz has no questions yet.">
-        <Link href={`/edit/${quiz.id}`}>
+        <Link href={`/edit?quiz=${quiz.id}`}>
           <Button variant="primary">Open the builder</Button>
         </Link>
       </Splash>

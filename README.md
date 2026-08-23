@@ -64,6 +64,20 @@ wrong or timed out → 0, and the streak resets
 
 All of it is configurable per quiz, and overridable per question.
 
+## Installing it / offline
+
+It's a Progressive Web App. Open it, and your browser will offer to install it — "Install" in Chrome's address bar, or *Share → Add to Home Screen* on iOS. It then launches in its own window with no browser chrome.
+
+**It works with no internet at all.** A service worker precaches the whole app — all five pages, the CSS, JS, and fonts — on your first visit. After that you can build, play, and host quizzes with the network completely off. Verified by killing the server outright and playing a full question.
+
+That works because every route is a static page and the quiz id travels as a query param (`/play?quiz=abc`) rather than a path segment. A dynamic route could only ever be cached per-quiz after visiting that exact quiz online; this way one cached page covers every quiz, including ones created while offline.
+
+Deploys are picked up automatically: pages are fetched network-first, so a new version lands as soon as you're back online, and old caches are cleared on activation.
+
+### What it doesn't do
+
+**There's no online sync, because there's no server.** Vercel serves the app's files; it never sees your quizzes. Everything lives in your browser, so quizzes don't travel between devices or browsers on their own — use **Export** and **Import** to move one. Real sync (and Background Sync, which exists to push local changes to a server) would need the backend listed under *Not built yet*.
+
 ## Where your quizzes live
 
 In this browser, in IndexedDB — not localStorage, because images would blow through its ~5MB cap. Images are downscaled to 1600px and re-encoded as WebP on the way in, which takes a 6MB phone photo down to a couple of hundred KB with no visible loss on a projector.

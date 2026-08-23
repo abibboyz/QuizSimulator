@@ -122,7 +122,7 @@ export function ResultsScreen({
             Retry {missedIds.length} missed
           </Button>
         )}
-        <Link href={`/host/${quiz.id}`}>
+        <Link href={`/host?quiz=${quiz.id}`}>
           <Button variant="outline" size="lg">
             Run for a room
           </Button>

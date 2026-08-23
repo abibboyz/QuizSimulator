@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import type { Question, QuestionKind, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { validateQuiz } from "@/types/quiz";
 import { getQuiz, saveQuiz } from "@/lib/storage";
@@ -19,9 +19,20 @@ import { PreviewPane } from "@/components/builder/PreviewPane";
 type Tab = "preview" | "theme" | "settings";
 type SaveState = "clean" | "saving" | "saved";
 
+// useSearchParams needs a Suspense boundary above it.
 export default function EditPage() {
-  const params = useParams<{ quizId: string }>();
-  const quizId = params.quizId;
+  return (
+    <Suspense fallback={<Centered>Loading builder…</Centered>}>
+      <EditView />
+    </Suspense>
+  );
+}
+
+function EditView() {
+  const searchParams = useSearchParams();
+  // See app/play/page.tsx — query param instead of a path segment so the route
+  // stays static and precacheable for offline use.
+  const quizId = searchParams.get("quiz") ?? "";
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
@@ -169,12 +180,12 @@ export default function EditPage() {
             <Button variant="ghost" size="sm" onClick={() => exportQuizFile(quiz)}>
               Export
             </Button>
-            <Link href={`/host/${quiz.id}`}>
+            <Link href={`/host?quiz=${quiz.id}`}>
               <Button variant="outline" size="sm">
                 Host
               </Button>
             </Link>
-            <Link href={`/play/${quiz.id}`}>
+            <Link href={`/play?quiz=${quiz.id}`}>
               <Button variant="primary" size="sm">
                 Play
               </Button>

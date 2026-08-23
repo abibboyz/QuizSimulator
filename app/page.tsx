@@ -75,7 +75,7 @@ export default function Dashboard() {
   const handleNew = async () => {
     const quiz = createQuiz();
     await saveQuiz(quiz);
-    router.push(`/edit/${quiz.id}`);
+    router.push(`/edit?quiz=${quiz.id}`);
   };
 
   const handleImport = async (file: File) => {
@@ -83,7 +83,7 @@ export default function Dashboard() {
     try {
       const quiz = await importBundle(await readFileText(file));
       await refresh();
-      router.push(`/edit/${quiz.id}`);
+      router.push(`/edit?quiz=${quiz.id}`);
     } catch (e) {
       setError(e instanceof TransferError ? e.message : "That file couldn't be imported.");
     }
@@ -196,19 +196,19 @@ export default function Dashboard() {
                     </p>
 
                     <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
-                      <Link href={`/play/${quiz.id}?view=${view}`} className="flex-1">
+                      <Link href={`/play?quiz=${quiz.id}&view=${view}`} className="flex-1">
                         <Button variant="primary" size="sm" className="w-full">
                           Play
                         </Button>
                       </Link>
                       {/* Sits on the Play button so the shape is chosen before the quiz opens. */}
                       <ViewModeToggle value={view} onChange={chooseView} />
-                      <Link href={`/host/${quiz.id}`}>
+                      <Link href={`/host?quiz=${quiz.id}`}>
                         <Button variant="outline" size="sm">
                           Host
                         </Button>
                       </Link>
-                      <Link href={`/edit/${quiz.id}`}>
+                      <Link href={`/edit?quiz=${quiz.id}`}>
                         <Button variant="outline" size="sm">
                           Edit
                         </Button>
