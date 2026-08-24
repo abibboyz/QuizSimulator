@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
+import type { Cue, CueSlot, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { optionPalette } from "@/lib/themes";
@@ -10,6 +10,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { OptionList } from "@/components/builder/OptionList";
+import { CueEditor, describeCue } from "@/components/builder/CueEditor";
+import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 
 interface Props {
   quiz: Quiz;
@@ -38,6 +40,15 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   const setTheme = (patch: Partial<Theme>) => onChangeTheme({ ...theme, ...patch });
   const ageBand = themeAgeBand(theme);
   const tileColors = optionPalette(ageBand).map((style) => style.bg);
+
+  const setCue = (slot: CueSlot, cue: Cue | null | undefined) => {
+    const cues = { ...question.cues };
+    // Deleting the key is what "inherit" *is* — resolution checks for the key's
+    // presence, so storing undefined would still read as an override.
+    if (cue === undefined) delete cues[slot];
+    else cues[slot] = cue;
+    onChange({ ...question, cues: Object.keys(cues).length ? cues : undefined });
+  };
 
   // Paste an image from the clipboard straight onto the question. This is the
   // difference between adding twenty screenshots comfortably and giving up.
@@ -188,6 +199,24 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             }}
           />
         </Field>
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
+        <p className="text-xs text-ink-500">
+          This question only. Leave a row on the quiz default to inherit it.
+        </p>
+
+        {PER_QUESTION_CUE_SLOTS.map((slot) => (
+          <CueEditor
+            key={slot}
+            label={CUE_SLOT_LABELS[slot].label}
+            hint={CUE_SLOT_LABELS[slot].hint}
+            cue={question.cues?.[slot]}
+            inherits={describeCue(quiz.settings.cues?.[slot])}
+            onChange={(cue) => setCue(slot, cue)}
+          />
+        ))}
       </div>
     </div>
   );

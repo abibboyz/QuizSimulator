@@ -104,6 +104,17 @@ body {
   }
 }
 
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes streak-flare {
   0% {
     transform: scale(0.85);
@@ -147,6 +158,14 @@ body {
 }
 .animate-pop {
   animation: pop-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+/*
+ * `backwards` rather than `both`: with `both` the final `transform: none` keeps
+ * winning the cascade once the animation ends, which would kill the tile's
+ * active:scale press feedback for the rest of the question.
+ */
+.animate-tile-in {
+  animation: tile-in 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
 }
 .animate-streak {
   animation: streak-flare 0.45s ease-out;

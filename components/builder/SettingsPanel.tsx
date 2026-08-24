@@ -1,8 +1,10 @@
 "use client";
 
-import type { Quiz, QuizSettings, Theme } from "@/types/quiz";
+import type { Cue, CueSlot, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { Field, Input, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
+import { CueEditor } from "@/components/builder/CueEditor";
+import { CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
 
 interface Props {
   quiz: Quiz;
@@ -14,6 +16,17 @@ interface Props {
 
 export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTheme }: Props) {
   const { settings } = quiz;
+
+  // Quiz-level rows never inherit, so null and undefined both mean "not set".
+  const setCue = (slot: CueSlot, cue: Cue | null | undefined) => {
+    const cues = { ...settings.cues };
+    // A cleared slot is deleted rather than stored as null: at quiz level the
+    // two mean the same thing, and an absent key is what lets a question
+    // inherit rather than be overridden.
+    if (cue) cues[slot] = cue;
+    else delete cues[slot];
+    onChangeSettings({ cues });
+  };
 
   return (
     <div className="space-y-5">
@@ -106,6 +119,23 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           checked={settings.sound}
           onChange={(sound) => onChangeSettings({ sound })}
         />
+      </div>
+
+      <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
+        <p className="text-xs text-ink-500">
+          Plays at each moment of a run. Nothing is set until you set it.
+        </p>
+
+        {CUE_SLOTS.map((slot) => (
+          <CueEditor
+            key={slot}
+            label={CUE_SLOT_LABELS[slot].label}
+            hint={CUE_SLOT_LABELS[slot].hint}
+            cue={settings.cues?.[slot]}
+            onChange={(cue) => setCue(slot, cue)}
+          />
+        ))}
       </div>
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">

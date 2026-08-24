@@ -10,6 +10,61 @@ export type MediaRef =
   | { kind: "stored"; id: string; w: number; h: number; alt?: string }
   | { kind: "url"; url: string; alt?: string };
 
+/* ------------------------------------------------------------------- cues */
+
+/**
+ * A cue is one animation plus one sound, fired at a named moment in a run.
+ * Both halves are optional, so a cue can be pure sound, pure motion, or — the
+ * default everywhere — nothing at all.
+ */
+export type CueAnimation =
+  | "countdown"
+  | "confetti"
+  | "stars"
+  | "pulse-ring"
+  | "shake"
+  | "stamp"
+  /** Whatever the author uploaded, held on screen for the cue's duration. */
+  | "image";
+
+export type CueSound =
+  | "start"
+  | "correct"
+  | "wrong"
+  | "whoosh"
+  | "riser"
+  | "buzz"
+  | "fanfare"
+  | "consolation";
+
+export interface Cue {
+  animation: CueAnimation | null;
+  /** Only read when `animation` is "image". */
+  media?: MediaRef;
+  sound: CueSound | null;
+  /** How long the overlay holds before the run carries on. */
+  durationMs: number;
+}
+
+/**
+ * `intro` plays before the first question, `between` after a question is done
+ * and before the next one lands, `outro` on the results screen.
+ */
+export type CueSlot = "intro" | "correct" | "wrong" | "between" | "outro";
+
+/**
+ * A missing slot falls through to the quiz-wide default; an explicit `null`
+ * overrides that default back to silence. That distinction is the only way one
+ * question can opt out of a celebration the rest of the quiz uses.
+ */
+export type CueSet = Partial<Record<CueSlot, Cue | null>>;
+
+/** How the question timer draws itself. */
+export type ProgressStyle = "ring" | "bar" | "segments" | "pill" | "dots";
+
+/** Motion layered on the timer as it drains — quickens as time runs out. */
+export type ProgressPulse = "none" | "heartbeat" | "throb" | "flash";
+
 export type QuestionKind = "multiple-choice" | "true-false" | "multi-select";
 
 export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
@@ -46,6 +101,8 @@ export interface Question {
   timerSeconds?: number | null;
   /** Overrides the quiz-level base points. */
   points?: number;
+  /** Overrides the quiz-wide cues, slot by slot. */
+  cues?: CueSet;
 }
 
 /** Audience the quiz is coloured for. Affects palette only, never gameplay. */
@@ -116,6 +173,13 @@ export interface QuizSettings {
   autoAdvanceOnTimeout: boolean;
   /** Seconds the answer stays up before solo play moves on after a timeout. */
   timeoutRevealSeconds: number;
+  /**
+   * Quiz-wide animation and sound cues. Empty by default — a quiz stays exactly
+   * as quiet as it is today until an author sets something.
+   */
+  cues: CueSet;
+  progressStyle: ProgressStyle;
+  progressPulse: ProgressPulse;
 }
 
 export interface Quiz {

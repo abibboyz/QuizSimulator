@@ -24,10 +24,18 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
   const expireRef = useRef(onExpire);
   const firedRef = useRef(false);
   const lastTickRef = useRef(-1);
+  // Held in a ref for the same reason as onExpire, but the stakes are higher:
+  // as an effect dependency it would restart the loop mid-question, and the
+  // body re-reads performance.now() — so muting would hand back a full timer.
+  const soundRef = useRef(soundOn);
 
   useEffect(() => {
     expireRef.current = onExpire;
   }, [onExpire]);
+
+  useEffect(() => {
+    soundRef.current = soundOn;
+  }, [soundOn]);
 
   useEffect(() => {
     if (!active || seconds === null) {
@@ -48,7 +56,7 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
 
       // One tick per whole second remaining, urgent in the last quarter.
       const secondsLeft = Math.ceil((limit - elapsed) / 1000);
-      if (soundOn && secondsLeft !== lastTickRef.current && secondsLeft >= 0) {
+      if (soundRef.current && secondsLeft !== lastTickRef.current && secondsLeft >= 0) {
         lastTickRef.current = secondsLeft;
         if (elapsed / limit > 0.75) playUrgentTick();
         else if (secondsLeft <= 10) playTick();
@@ -66,7 +74,7 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
 
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [active, seconds, soundOn]);
+  }, [active, seconds]);
 
   if (seconds === null) {
     return { elapsedMs, remainingMs: 0, fraction: 1, urgent: false };

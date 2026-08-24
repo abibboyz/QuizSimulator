@@ -16,6 +16,7 @@ import type { MediaRef, Quiz, QuizSummary } from "@/types/quiz";
 import { toSummary } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { mapCueSet, quizCueRefs } from "@/lib/cues";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -131,8 +132,8 @@ export async function deleteMedia(id: string): Promise<void> {
 
 /**
  * Every media reference used anywhere in a quiz — including the theme's
- * background picture. Miss that one and the garbage collector deletes the
- * background out from under a saved quiz.
+ * background picture and every cue's. Miss one and the garbage collector
+ * deletes it out from under a saved quiz.
  */
 export function collectRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
@@ -141,6 +142,7 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
     if (q.media) refs.push(q.media);
     for (const o of q.options) if (o.media) refs.push(o.media);
   }
+  refs.push(...quizCueRefs(quiz));
   return refs;
 }
 
@@ -155,10 +157,12 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
   return {
     ...quiz,
     theme: { ...quiz.theme, bgImage: swap(quiz.theme?.bgImage) },
+    settings: { ...quiz.settings, cues: mapCueSet(quiz.settings?.cues, swap) ?? {} },
     questions: quiz.questions.map((q) => ({
       ...q,
       media: swap(q.media),
       options: q.options.map((o) => ({ ...o, media: swap(o.media) })),
+      cues: mapCueSet(q.cues, swap),
     })),
   };
 }

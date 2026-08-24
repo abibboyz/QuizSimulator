@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
-import type { Question, Quiz } from "@/types/quiz";
+import type { Cue, Question, Quiz } from "@/types/quiz";
 import type { AnswerRecord } from "@/lib/store/playSession";
 import { accuracyLabel } from "@/lib/scoring";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { Button } from "@/components/ui/Button";
 import { playFanfare } from "@/lib/sound";
+import { CuePlayer } from "@/components/play/CuePlayer";
 
 interface Props {
   quiz: Quiz;
@@ -21,6 +22,10 @@ interface Props {
   onRetryMissed: (ids: string[]) => void;
   /** Phone-shaped play: narrower column, stat tiles two-up instead of four. */
   narrow?: boolean;
+  /** The quiz's sound setting and the device mute, already resolved. */
+  soundOn: boolean;
+  /** When set, replaces the stock fanfare-and-confetti ending entirely. */
+  outroCue?: Cue | null;
 }
 
 export function ResultsScreen({
@@ -32,6 +37,8 @@ export function ResultsScreen({
   onRetryAll,
   onRetryMissed,
   narrow = false,
+  soundOn,
+  outroCue = null,
 }: Props) {
   const reduced = useReducedMotion();
   const shownScore = useAnimatedNumber(score, 1100);
@@ -42,8 +49,10 @@ export function ResultsScreen({
   const missedIds = answers.filter((a) => !a.correct).map((a) => a.questionId);
 
   useEffect(() => {
-    if (!verdict.celebrate) return;
-    if (quiz.settings.sound) playFanfare();
+    // An authored outro owns the ending — firing both would stack two
+    // celebrations on top of each other.
+    if (outroCue || !verdict.celebrate) return;
+    if (soundOn) playFanfare();
     if (reduced) return;
 
     // Two bursts from the lower corners reads as celebration without covering
@@ -51,10 +60,12 @@ export function ResultsScreen({
     const common = { particleCount: 70, spread: 70, startVelocity: 45, ticks: 180 } as const;
     confetti({ ...common, origin: { x: 0.1, y: 0.9 }, angle: 60 });
     confetti({ ...common, origin: { x: 0.9, y: 0.9 }, angle: 120 });
-  }, [verdict.celebrate, reduced, quiz.settings.sound]);
+  }, [verdict.celebrate, reduced, soundOn, outroCue]);
 
   return (
     <div className={`mx-auto flex w-full flex-col gap-8 px-5 py-10 ${narrow ? "max-w-[26rem]" : "max-w-3xl"}`}>
+      {/* Nothing to resume afterwards — the run is over, so onDone just clears. */}
+      {outroCue && <CuePlayer cue={outroCue} onDone={() => {}} soundOn={soundOn} />}
       <header className="animate-pop text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-400">{quiz.title}</p>
         <h1 className="stage-prompt mt-2 text-5xl font-extrabold md:text-6xl" style={{ color: "var(--accent)" }}>

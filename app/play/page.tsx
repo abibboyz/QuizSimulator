@@ -3,6 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
+import type { Cue, CueSlot } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
 import { useCountdown } from "@/hooks/useCountdown";
@@ -17,6 +19,11 @@ import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdva
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
+import { MuteButton } from "@/components/ui/MuteButton";
+import { CuePlayer } from "@/components/play/CuePlayer";
+import { activeCue } from "@/lib/cues";
+import { useMuted } from "@/hooks/useMuted";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -80,33 +87,167 @@ function PlayView() {
   }, [quizId]);
 
   const limit = quiz ? timerFor(quiz, question) : null;
-  const soundOn = quiz?.settings.sound ?? false;
+  // The author decides whether a quiz has sound; the player decides whether
+  // this device does. Both have to agree before anything is audible.
+  const muted = useMuted();
+  const soundOn = (quiz?.settings.sound ?? false) && !muted;
+  const reduced = useReducedMotion();
+
+  // One cue plays at a time. Its slot is what tells `handleCueDone` whether the
+  // run is waiting on it or it was pure decoration over a question.
+  const [pending, setPending] = useState<{ cue: Cue; slot: CueSlot; token: number } | null>(null);
+  const cueTokenRef = useRef(0);
+
+  /*
+   * The mirror is written synchronously inside showCue/clearCue rather than in
+   * an effect. Syncing it after the commit left a window where the guard in
+   * goNext still read the *previous* cue: two Enter presses in the same tick
+   * both got through, and the second restarted the between cue that was already
+   * running. Every caller here is an effect or an event handler, never render.
+   */
+  const pendingRef = useRef(pending);
+
+  const showCue = useCallback((cue: Cue, slot: CueSlot) => {
+    cueTokenRef.current += 1;
+    const next = { cue, slot, token: cueTokenRef.current };
+    pendingRef.current = next;
+    setPending(next);
+  }, []);
+
+  const clearCue = useCallback(() => {
+    pendingRef.current = null;
+    setPending(null);
+  }, []);
+
+  const introCue = quiz ? activeCue(quiz, undefined, "intro") : null;
+  const outroCue = quiz ? activeCue(quiz, undefined, "outro") : null;
+
+  // A start cue holds the run in "countdown" until it reports back. The `ready`
+  // fallback means a cue that somehow resolves to nothing can't strand a player
+  // on a blank intro screen.
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    if (introCue) showCue(introCue, "intro");
+    else usePlaySession.getState().ready();
+  }, [phase, introCue, showCue]);
 
   const handleExpire = useCallback(() => {
     if (limit === null) return;
     usePlaySession.getState().submit(limit * 1000, true);
   }, [limit]);
 
-  const countdown = useCountdown(phase === "asking", limit, soundOn, handleExpire);
+  /*
+   * A question is only "live" once nothing is covering it. Because a transition
+   * cue now swaps the question at its midpoint, the next question exists behind
+   * the overlay for the cue's second half — and it must not be on the clock, or
+   * answerable through it, while the player still can't see it.
+   */
+  const stageLive = phase === "asking" && !pending;
+
+  const countdown = useCountdown(stageLive, limit, soundOn, handleExpire);
 
   // Mark the wall-clock start of each question so untimed play can still record
   // how long an answer took.
   useEffect(() => {
-    if (phase === "asking") startedAtRef.current = Date.now();
-  }, [phase, index]);
+    if (stageLive) startedAtRef.current = Date.now();
+  }, [stageLive, index]);
 
-  // Reveal feedback: fires once per scored answer.
+  // Reveal feedback: fires once per scored answer. A cue, when the author set
+  // one, replaces the stock chime entirely — it carries its own sound.
   const answerCount = answers.length;
+  const revealFiredRef = useRef(0);
   useEffect(() => {
-    if (phase !== "revealed" || !answerCount || !soundOn) return;
-    if (answers[answerCount - 1].correct) playCorrect();
+    if (phase !== "revealed" || !answerCount || !quiz) return;
+    // Pinned to the answer, not to the effect's dependencies: `soundOn` is in
+    // there, so hitting mute mid-cue used to re-enter here and restart the
+    // celebration. A restarted run counts back from zero, so a stale value can
+    // never match and block a legitimate fire.
+    if (revealFiredRef.current === answerCount) return;
+    revealFiredRef.current = answerCount;
+
+    const correct = answers[answerCount - 1].correct;
+    // With reveal-off the run only pauses here for 220ms before rolling on, so
+    // a cue would flash a fraction of itself and get yanked. That setting means
+    // "no feedback until the results screen" — a celebration is exactly the
+    // feedback it is switched off to avoid.
+    const cue = quiz.settings.revealAfterEach ? activeCue(quiz, order[index], correct ? "correct" : "wrong") : null;
+    if (cue) {
+      showCue(cue, correct ? "correct" : "wrong");
+      return;
+    }
+
+    if (!soundOn) return;
+    if (correct) playCorrect();
     else playWrong();
-  }, [phase, answerCount, answers, soundOn]);
+  }, [phase, answerCount, answers, soundOn, quiz, order, index, showCue]);
+
+  /**
+   * The single way a question ends. Every path — the button, the keyboard, the
+   * reveal-off timer, the timeout bar — comes through here, so a "between" cue
+   * can hold the run for its duration without any one of them skipping it.
+   */
+  const goNext = useCallback(
+    (manual: boolean) => {
+      const state = usePlaySession.getState();
+      if (state.phase !== "revealed" || !quiz) return;
+      // Already holding for a cue; a second Enter shouldn't restart it.
+      if (pendingRef.current?.slot === "between") return;
+
+      // Nothing to transition into after the last question, and running one
+      // anyway would drop the results screen — and its outro cue — underneath a
+      // still-playing overlay. The stock whoosh below still sees it off.
+      const isLast = state.index + 1 >= state.order.length;
+      const between = isLast ? null : activeCue(quiz, state.order[state.index], "between");
+      if (between) {
+        showCue(between, "between");
+        return;
+      }
+
+      // The stock whoosh stands in for an unset cue, but only on the path where
+      // it always played — the automatic ones were deliberately silent.
+      if (manual && soundOn) playWhoosh();
+      // Drops a reveal cue still running from the question being left behind —
+      // a long cue against a short auto-advance hold would otherwise sit over
+      // the next question for the rest of its duration.
+      clearCue();
+      state.next();
+    },
+    [quiz, soundOn, showCue, clearCue],
+  );
+
+  // The auto-advance timers are armed by effects that must not re-run when
+  // goNext's identity changes, or their countdown would restart. They only read
+  // this from inside a setTimeout, long after the sync below has run.
+  const goNextRef = useRef(goNext);
+
+  useEffect(() => {
+    goNextRef.current = goNext;
+  }, [goNext]);
+
+  const advance = useCallback(() => goNext(true), [goNext]);
+
+  /**
+   * A transition cue swaps the question halfway through rather than at the end,
+   * so it spans the change instead of playing out entirely over the question
+   * being left behind. The second half lands over the question arriving.
+   */
+  const handleCueMidpoint = useCallback(() => {
+    if (pendingRef.current?.slot !== "between") return;
+    usePlaySession.getState().next();
+  }, []);
+
+  const handleCueDone = useCallback(() => {
+    const finished = pendingRef.current;
+    clearCue();
+    if (!finished) return;
+    if (finished.slot === "intro") usePlaySession.getState().ready();
+    // "between" already advanced at its midpoint.
+  }, [clearCue]);
 
   // With instant reveal switched off, roll straight into the next question.
   useEffect(() => {
     if (phase !== "revealed" || !quiz || quiz.settings.revealAfterEach) return;
-    const id = window.setTimeout(() => usePlaySession.getState().next(), 220);
+    const id = window.setTimeout(() => goNextRef.current(false), 220);
     return () => window.clearTimeout(id);
   }, [phase, quiz]);
 
@@ -120,7 +261,7 @@ function PlayView() {
 
   useEffect(() => {
     if (!advancingAfterTimeout) return;
-    const id = window.setTimeout(() => usePlaySession.getState().next(), holdSeconds * 1000);
+    const id = window.setTimeout(() => goNextRef.current(false), holdSeconds * 1000);
     return () => window.clearTimeout(id);
   }, [advancingAfterTimeout, holdSeconds]);
 
@@ -132,7 +273,7 @@ function PlayView() {
   const handlePick = useCallback(
     (optionId: string) => {
       const state = usePlaySession.getState();
-      if (state.phase !== "asking") return;
+      if (state.phase !== "asking" || pendingRef.current) return;
 
       state.toggle(optionId);
       if (soundOn) playSelect();
@@ -146,11 +287,6 @@ function PlayView() {
     [countdown.elapsedMs, limit, soundOn],
   );
 
-  const advance = useCallback(() => {
-    if (soundOn) playWhoosh();
-    usePlaySession.getState().next();
-  }, [soundOn]);
-
   // Keyboard: number keys pick answers, Enter/Space moves on.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -159,6 +295,7 @@ function PlayView() {
       if (!current) return;
 
       if (state.phase === "asking") {
+        if (pendingRef.current) return;
         const n = Number(event.key);
         if (n >= 1 && n <= current.options.length) {
           event.preventDefault();
@@ -206,7 +343,9 @@ function PlayView() {
 
   return (
     <ThemeShell theme={quiz.theme}>
-      {phase === "intro" && (
+      {/* The intro stays put behind a start cue, so the screen is never blank
+          while one plays. */}
+      {(phase === "intro" || phase === "countdown") && (
         <div
           className={`mx-auto flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center ${
             mobile ? "max-w-[26rem]" : "max-w-2xl"
@@ -231,9 +370,16 @@ function PlayView() {
             <span>Playing in</span>
             <ViewModeToggle value={view} onChange={chooseView} size="full" />
             <span>{mobile ? "mobile view" : "web view"}</span>
+            <MuteButton />
           </div>
 
-          <Button variant="primary" size="lg" className="px-10" onClick={() => session.begin()}>
+          <Button
+            variant="primary"
+            size="lg"
+            className="px-10"
+            disabled={phase === "countdown"}
+            onClick={() => session.begin(!!introCue)}
+          >
             Start quiz
           </Button>
           <Link href="/" className="text-sm text-ink-400 underline-offset-4 hover:underline">
@@ -244,31 +390,44 @@ function PlayView() {
 
       {(phase === "asking" || phase === "revealed") && question && (
         <div className={`mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
-          <QuestionStage
-            question={question}
-            index={index}
-            total={order.length}
-            selected={selected}
-            revealed={phase === "revealed"}
-            interactive={phase === "asking"}
-            onPick={handlePick}
-            mode="solo"
-            narrow={mobile}
-            theme={quiz.theme}
-            header={
-              <div className="flex items-center gap-5">
-                <ScoreBadge score={score} streak={streak} compact />
-                {limit !== null && (
-                  <TimerRing
-                    fraction={countdown.fraction}
-                    secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
-                    urgent={countdown.urgent}
-                    size={64}
-                  />
-                )}
-              </div>
-            }
-          />
+          {/* Keyed by question so each one genuinely mounts — without this React
+              reuses the DOM across questions and no entrance can fire. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={question.id}
+              initial={reduced ? false : { opacity: 0, x: 36 }}
+              animate={reduced ? {} : { opacity: 1, x: 0 }}
+              exit={reduced ? {} : { opacity: 0, x: -36 }}
+              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.3, 1] }}
+            >
+              <QuestionStage
+                question={question}
+                index={index}
+                total={order.length}
+                selected={selected}
+                revealed={phase === "revealed"}
+                interactive={stageLive}
+                onPick={handlePick}
+                mode="solo"
+                narrow={mobile}
+                theme={quiz.theme}
+                header={
+                  <div className="flex items-center gap-4">
+                    <ScoreBadge score={score} streak={streak} compact />
+                    <MuteButton />
+                    {limit !== null && (
+                      <TimerRing
+                        fraction={countdown.fraction}
+                        secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
+                        urgent={countdown.urgent}
+                        size={64}
+                      />
+                    )}
+                  </div>
+                }
+              />
+            </motion.div>
+          </AnimatePresence>
 
           <div className="mt-8 flex justify-center gap-3">
             {phase === "asking" && question.kind === "multi-select" && (
@@ -312,14 +471,27 @@ function PlayView() {
           score={score}
           bestStreak={bestStreak}
           narrow={mobile}
+          soundOn={soundOn}
+          outroCue={outroCue}
           onRetryAll={() => {
             session.start(quiz);
-            session.begin();
+            session.begin(!!introCue);
           }}
           onRetryMissed={(ids) => {
             session.start(quiz, ids);
-            session.begin();
+            session.begin(!!introCue);
           }}
+        />
+      )}
+
+      {/* Remounted per cue so a new one can't inherit the previous hold timer. */}
+      {pending && (
+        <CuePlayer
+          key={pending.token}
+          cue={pending.cue}
+          onDone={handleCueDone}
+          onMidpoint={handleCueMidpoint}
+          soundOn={soundOn}
         />
       )}
     </ThemeShell>

@@ -12,6 +12,7 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { TimerRing } from "@/components/play/TimerRing";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
+import { MuteButton } from "@/components/ui/MuteButton";
 import { DEFAULT_THEME } from "@/lib/themes";
 
 function toggleFullscreen() {
@@ -121,6 +122,7 @@ function HostView() {
           <span className="truncate font-semibold text-ink-300">{quiz.title}</span>
 
           <div className="ml-auto flex items-center gap-2">
+            <MuteButton />
             <Button variant="ghost" size="sm" onClick={() => setShowTeams((value) => !value)}>
               {showTeams ? "Hide scores" : "Show scores"}
             </Button>

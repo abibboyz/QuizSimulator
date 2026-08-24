@@ -20,6 +20,11 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   autoAdvanceSeconds: null,
   autoAdvanceOnTimeout: true,
   timeoutRevealSeconds: 5,
+  // Nothing is cued until an author asks for it, so a new quiz plays exactly
+  // like one built before cues existed.
+  cues: {},
+  progressStyle: "ring",
+  progressPulse: "none",
 };
 
 export function createOption(text = "", correct = false): Option {
@@ -70,6 +75,9 @@ export function duplicateQuestion(question: Question): Question {
     ...question,
     id: newId(),
     options: question.options.map((o) => ({ ...o, id: newId() })),
+    // Copied rather than shared: editing the duplicate's cues must not reach
+    // back into the question it came from.
+    cues: question.cues ? { ...question.cues } : undefined,
   };
 }
 

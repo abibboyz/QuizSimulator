@@ -4,14 +4,26 @@
  * context is created lazily on the first play() call.
  */
 
+import type { CueSound } from "@/types/quiz";
+
 let ctx: AudioContext | null = null;
 let muted = false;
 
 const MUTE_KEY = "quizsim:muted";
 
+/**
+ * Mute lives in module state rather than a store because this file is imported
+ * by non-React code and has to stay a singleton. React reads it through
+ * `useMuted`, which needs a change signal — hence the subscriber set.
+ */
+const listeners = new Set<() => void>();
+
 export function initSound() {
   if (typeof window === "undefined") return;
-  muted = window.localStorage.getItem(MUTE_KEY) === "1";
+  const next = window.localStorage.getItem(MUTE_KEY) === "1";
+  if (next === muted) return;
+  muted = next;
+  listeners.forEach((fn) => fn());
 }
 
 export function isMuted() {
@@ -19,10 +31,17 @@ export function isMuted() {
 }
 
 export function setMuted(next: boolean) {
+  if (next === muted) return;
   muted = next;
   if (typeof window !== "undefined") {
     window.localStorage.setItem(MUTE_KEY, next ? "1" : "0");
   }
+  listeners.forEach((fn) => fn());
+}
+
+export function subscribeMuted(onChange: () => void): () => void {
+  listeners.add(onChange);
+  return () => listeners.delete(onChange);
 }
 
 function audio(): AudioContext | null {
@@ -105,4 +124,63 @@ export function playFanfare() {
     tone({ freq, duration: 0.3, type: "triangle", gain: 0.2, delay: i * 0.11 });
   });
   tone({ freq: 1318.5, duration: 0.6, type: "triangle", gain: 0.22, delay: 0.5 });
+}
+
+/* ------------------------------------------------------------- cue sounds */
+
+export function playStart() {
+  // Two rising notes — "we're off", not "you won something".
+  tone({ freq: 392, duration: 0.16, type: "triangle", gain: 0.16 });
+  tone({ freq: 587.33, duration: 0.3, type: "triangle", gain: 0.18, delay: 0.12 });
+}
+
+/** One beat of a 3-2-1 counter. The last one lands higher, as a go signal. */
+export function playCountdownBeep(final = false) {
+  if (final) tone({ freq: 880, duration: 0.34, type: "triangle", gain: 0.22, slideTo: 1174.66 });
+  else tone({ freq: 587.33, duration: 0.12, type: "square", gain: 0.11 });
+}
+
+export function playRiser() {
+  tone({ freq: 220, duration: 0.55, type: "triangle", gain: 0.14, slideTo: 880 });
+  tone({ freq: 330, duration: 0.55, type: "sine", gain: 0.08, slideTo: 1320, delay: 0.04 });
+}
+
+/** Harsh and low — a timeout, not a wrong answer. */
+export function playBuzz() {
+  tone({ freq: 160, duration: 0.4, type: "square", gain: 0.12 });
+  tone({ freq: 155, duration: 0.4, type: "square", gain: 0.1, delay: 0.02 });
+}
+
+/** Falling, but resolved rather than mournful: "that's the round, try again". */
+export function playConsolation() {
+  tone({ freq: 587.33, duration: 0.2, type: "triangle", gain: 0.16 });
+  tone({ freq: 493.88, duration: 0.2, type: "triangle", gain: 0.16, delay: 0.16 });
+  tone({ freq: 392, duration: 0.42, type: "triangle", gain: 0.18, delay: 0.32 });
+}
+
+export function playHeartbeat() {
+  tone({ freq: 90, duration: 0.11, type: "sine", gain: 0.16 });
+  tone({ freq: 76, duration: 0.15, type: "sine", gain: 0.12, delay: 0.14 });
+}
+
+/**
+ * The sounds an author can attach to a cue, in the order they're offered.
+ * Labels are the dropdown; `play` doubles as the editor's preview button.
+ */
+export const SOUNDS: Record<CueSound, { label: string; play: () => void }> = {
+  start: { label: "Start", play: playStart },
+  correct: { label: "Correct chime", play: playCorrect },
+  wrong: { label: "Wrong buzz", play: playWrong },
+  whoosh: { label: "Whoosh", play: playWhoosh },
+  riser: { label: "Riser", play: playRiser },
+  buzz: { label: "Time-up buzz", play: playBuzz },
+  fanfare: { label: "Fanfare", play: playFanfare },
+  consolation: { label: "Consolation", play: playConsolation },
+};
+
+export const SOUND_IDS = Object.keys(SOUNDS) as CueSound[];
+
+export function playCue(sound: CueSound | null) {
+  if (!sound) return;
+  SOUNDS[sound]?.play();
 }

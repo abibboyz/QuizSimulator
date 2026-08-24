@@ -69,12 +69,17 @@ export function AnswerGrid({
             disabled={!interactive}
             onClick={() => onPick(option.id)}
             aria-pressed={isPicked}
-            className={`focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${PAD[mode]} ${TEXT[mode]} ${
+            className={`focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
+              mode === "preview" ? "" : "animate-tile-in"
+            } ${PAD[mode]} ${TEXT[mode]} ${
               interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
             } ${faded ? "opacity-35 saturate-50" : "opacity-100"} ${
               isPicked && !revealed ? "ring-4 ring-white/70" : ""
             } ${showWrong ? "ring-4 ring-white/40" : ""}`}
             style={{
+              // Tiles land one after another rather than all at once. Capped so a
+              // six-answer question doesn't make the last one feel late.
+              animationDelay: mode === "preview" ? undefined : `${Math.min(index, 4) * 45}ms`,
               // The correct tile's white ring and glow ship as one box-shadow:
               // Tailwind's ring is itself a box-shadow, so an inline one would
               // otherwise wipe it out. The glow follows the reveal colour.

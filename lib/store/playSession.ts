@@ -4,7 +4,12 @@ import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
 
-export type Phase = "intro" | "asking" | "revealed" | "results";
+/**
+ * "countdown" sits between the intro screen and the first question, holding the
+ * timer off while a start cue plays. It is skipped entirely when no cue is set,
+ * so a quiz without one goes straight to "asking" as it always did.
+ */
+export type Phase = "intro" | "countdown" | "asking" | "revealed" | "results";
 
 export interface AnswerRecord {
   questionId: string;
@@ -30,7 +35,10 @@ interface PlayState {
   lastResult: ScoreResult | null;
 
   start: (quiz: Quiz, onlyIds?: string[]) => void;
-  begin: () => void;
+  /** `withIntro` keeps cue knowledge in the page; the store just holds a phase. */
+  begin: (withIntro?: boolean) => void;
+  /** Leaves the countdown and starts the clock on the first question. */
+  ready: () => void;
   toggle: (optionId: string) => void;
   submit: (msTaken: number, timedOut?: boolean) => void;
   next: () => void;
@@ -96,7 +104,13 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       lastResult: null,
     }),
 
-  begin: () => set({ phase: "asking", startedAt: Date.now(), selected: [] }),
+  begin: (withIntro = false) =>
+    set({ phase: withIntro ? "countdown" : "asking", startedAt: Date.now(), selected: [] }),
+
+  ready: () => {
+    if (get().phase !== "countdown") return;
+    set({ phase: "asking", startedAt: Date.now() });
+  },
 
   toggle: (optionId) => {
     const { phase, order, index, selected } = get();
