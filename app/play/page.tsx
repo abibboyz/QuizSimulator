@@ -11,7 +11,8 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { initSound, playCorrect, playSelect, playWhoosh, playWrong } from "@/lib/sound";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
-import { TimerRing } from "@/components/play/TimerRing";
+import { ProgressMeter } from "@/components/play/ProgressMeter";
+import { QuizProgress } from "@/components/play/QuizProgress";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
@@ -144,7 +145,13 @@ function PlayView() {
    */
   const stageLive = phase === "asking" && !pending;
 
-  const countdown = useCountdown(stageLive, limit, soundOn, handleExpire);
+  const countdown = useCountdown(
+    stageLive,
+    limit,
+    soundOn,
+    handleExpire,
+    quiz?.settings.progressPulse === "heartbeat" ? "heartbeat" : "beep",
+  );
 
   // Mark the wall-clock start of each question so untimed play can still record
   // how long an answer took.
@@ -155,6 +162,7 @@ function PlayView() {
   // Reveal feedback: fires once per scored answer. A cue, when the author set
   // one, replaces the stock chime entirely — it carries its own sound.
   const answerCount = answers.length;
+  const justCorrect = phase === "revealed" && answers[answerCount - 1]?.correct === true;
   const revealFiredRef = useRef(0);
   useEffect(() => {
     if (phase !== "revealed" || !answerCount || !quiz) return;
@@ -390,6 +398,18 @@ function PlayView() {
 
       {(phase === "asking" || phase === "revealed") && question && (
         <div className={`mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
+          {/* Outside AnimatePresence: the run's progress shouldn't slide away
+              with the question it was measuring. */}
+          <QuizProgress
+            index={index}
+            total={order.length}
+            outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.correct) : undefined}
+            style={quiz.settings.quizProgressStyle}
+            mascot={quiz.settings.progressMascot}
+            mascotMedia={quiz.settings.progressMascotMedia}
+            narrow={mobile}
+          />
+
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}
           <AnimatePresence mode="wait" initial={false}>
@@ -416,10 +436,15 @@ function PlayView() {
                     <ScoreBadge score={score} streak={streak} compact />
                     <MuteButton />
                     {limit !== null && (
-                      <TimerRing
+                      <ProgressMeter
                         fraction={countdown.fraction}
                         secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
                         urgent={countdown.urgent}
+                        style={quiz.settings.progressStyle}
+                        pulse={quiz.settings.progressPulse}
+                        mascot={quiz.settings.progressMascot}
+                        mascotMedia={quiz.settings.progressMascotMedia}
+                        celebrate={justCorrect}
                         size={64}
                       />
                     )}

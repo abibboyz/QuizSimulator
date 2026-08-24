@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { playTick, playUrgentTick } from "@/lib/sound";
+import { playHeartbeat, playTick, playUrgentTick } from "@/lib/sound";
 
 interface Result {
   elapsedMs: number;
@@ -19,7 +19,14 @@ interface Result {
  * When `active` goes false the elapsed value is left where it stopped, which is
  * what freezes the ring at the moment an answer was locked in.
  */
-export function useCountdown(active: boolean, seconds: number | null, soundOn: boolean, onExpire: () => void): Result {
+export function useCountdown(
+  active: boolean,
+  seconds: number | null,
+  soundOn: boolean,
+  onExpire: () => void,
+  /** Matches the tick to the meter's pulse, so a heartbeat meter sounds like one. */
+  tick: "beep" | "heartbeat" = "beep",
+): Result {
   const [elapsedMs, setElapsedMs] = useState(0);
   const expireRef = useRef(onExpire);
   const firedRef = useRef(false);
@@ -28,6 +35,7 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
   // as an effect dependency it would restart the loop mid-question, and the
   // body re-reads performance.now() — so muting would hand back a full timer.
   const soundRef = useRef(soundOn);
+  const tickRef = useRef(tick);
 
   useEffect(() => {
     expireRef.current = onExpire;
@@ -36,6 +44,12 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
   useEffect(() => {
     soundRef.current = soundOn;
   }, [soundOn]);
+
+  // Out of the deps for the same reason as soundOn: changing it must not
+  // restart the clock mid-question.
+  useEffect(() => {
+    tickRef.current = tick;
+  }, [tick]);
 
   useEffect(() => {
     if (!active || seconds === null) {
@@ -58,8 +72,14 @@ export function useCountdown(active: boolean, seconds: number | null, soundOn: b
       const secondsLeft = Math.ceil((limit - elapsed) / 1000);
       if (soundRef.current && secondsLeft !== lastTickRef.current && secondsLeft >= 0) {
         lastTickRef.current = secondsLeft;
-        if (elapsed / limit > 0.75) playUrgentTick();
-        else if (secondsLeft <= 10) playTick();
+        const heart = tickRef.current === "heartbeat";
+        if (elapsed / limit > 0.75) {
+          if (heart) playHeartbeat();
+          else playUrgentTick();
+        } else if (secondsLeft <= 10) {
+          if (heart) playHeartbeat();
+          else playTick();
+        }
       }
 
       if (elapsed >= limit) {

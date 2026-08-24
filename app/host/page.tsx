@@ -3,13 +3,14 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { Question, Quiz, Theme } from "@/types/quiz";
+import type { Question, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playUrgentTick, playWhoosh } from "@/lib/sound";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
-import { TimerRing } from "@/components/play/TimerRing";
+import { ProgressMeter } from "@/components/play/ProgressMeter";
+import { QuizProgress } from "@/components/play/QuizProgress";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
 import { MuteButton } from "@/components/ui/MuteButton";
@@ -146,6 +147,7 @@ function HostView() {
             soundOn={quiz.settings.sound}
             autoReveal={quiz.settings.autoReveal}
             autoAdvanceSeconds={quiz.settings.autoAdvanceSeconds}
+            meter={quiz.settings}
             canBack={index > 0}
             isLast={index + 1 >= questions.length}
             onNext={goNext}
@@ -172,6 +174,11 @@ interface HostQuestionProps {
   soundOn: boolean;
   autoReveal: boolean;
   autoAdvanceSeconds: number | null;
+  /** Just the meter's slice of settings — the rest already arrives unpacked. */
+  meter: Pick<
+    QuizSettings,
+    "progressStyle" | "progressPulse" | "progressMascot" | "progressMascotMedia" | "quizProgressStyle"
+  >;
   canBack: boolean;
   isLast: boolean;
   onNext: () => void;
@@ -187,6 +194,7 @@ function HostQuestion({
   soundOn,
   autoReveal,
   autoAdvanceSeconds,
+  meter,
   canBack,
   isLast,
   onNext,
@@ -264,6 +272,15 @@ function HostQuestion({
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto py-2">
+        {/* Host mode doesn't score, so there are no per-question outcomes to
+            colour in — the meter shows position only. */}
+        <QuizProgress
+          index={index}
+          total={total}
+          style={meter.quizProgressStyle}
+          mascot={meter.progressMascot}
+          mascotMedia={meter.progressMascotMedia}
+        />
         <QuestionStage
           question={question}
           index={index}
@@ -276,10 +293,15 @@ function HostQuestion({
           theme={theme}
           header={
             remainingMs !== null && limitSeconds ? (
-              <TimerRing
+              <ProgressMeter
                 fraction={remainingMs / (limitSeconds * 1000)}
                 secondsLeft={Math.ceil(remainingMs / 1000)}
                 urgent={remainingMs / (limitSeconds * 1000) <= 0.25}
+                style={meter.progressStyle}
+                pulse={meter.progressPulse}
+                mascot={meter.progressMascot}
+                mascotMedia={meter.progressMascotMedia}
+                celebrate={revealed}
                 size={96}
               />
             ) : null

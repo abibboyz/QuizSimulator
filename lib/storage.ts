@@ -143,6 +143,7 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
     for (const o of q.options) if (o.media) refs.push(o.media);
   }
   refs.push(...quizCueRefs(quiz));
+  if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
   return refs;
 }
 
@@ -157,7 +158,11 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
   return {
     ...quiz,
     theme: { ...quiz.theme, bgImage: swap(quiz.theme?.bgImage) },
-    settings: { ...quiz.settings, cues: mapCueSet(quiz.settings?.cues, swap) ?? {} },
+    settings: {
+      ...quiz.settings,
+      cues: mapCueSet(quiz.settings?.cues, swap) ?? {},
+      progressMascotMedia: swap(quiz.settings?.progressMascotMedia),
+    },
     questions: quiz.questions.map((q) => ({
       ...q,
       media: swap(q.media),

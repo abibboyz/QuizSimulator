@@ -5,6 +5,7 @@ import { Field, Input, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { CueEditor } from "@/components/builder/CueEditor";
 import { CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
+import { ProgressPanel } from "@/components/builder/ProgressPanel";
 
 interface Props {
   quiz: Quiz;
@@ -120,6 +121,8 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           onChange={(sound) => onChangeSettings({ sound })}
         />
       </div>
+
+      <ProgressPanel settings={settings} onChange={onChangeSettings} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>

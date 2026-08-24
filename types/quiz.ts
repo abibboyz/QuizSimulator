@@ -60,10 +60,17 @@ export type CueSlot = "intro" | "correct" | "wrong" | "between" | "outro";
 export type CueSet = Partial<Record<CueSlot, Cue | null>>;
 
 /** How the question timer draws itself. */
-export type ProgressStyle = "ring" | "bar" | "segments" | "pill" | "dots";
+export type ProgressStyle = "ring" | "bar" | "segments" | "pill" | "dots" | "mascot";
 
 /** Motion layered on the timer as it drains — quickens as time runs out. */
 export type ProgressPulse = "none" | "heartbeat" | "throb" | "flash";
+
+/**
+ * How far through the quiz you are — counts up, unlike the timer. Separate
+ * from the timer's own style: a quiz can want a ring counting down and a bar
+ * filling up at the same time.
+ */
+export type QuizProgressStyle = "none" | "bar" | "segments" | "dots" | "mascot";
 
 export type QuestionKind = "multiple-choice" | "true-false" | "multi-select";
 
@@ -180,6 +187,18 @@ export interface QuizSettings {
   cues: CueSet;
   progressStyle: ProgressStyle;
   progressPulse: ProgressPulse;
+  /**
+   * The character that walks the "mascot" meter. Any character or emoji, same
+   * as an answer tile's icon — blank falls back to the default.
+   */
+  progressMascot: string;
+  /**
+   * An uploaded picture or GIF for the mascot meter. Wins over the character
+   * when set; an animated GIF keeps animating, so it can carry its own walk.
+   */
+  progressMascotMedia?: MediaRef;
+  /** The quiz-wide progress meter. Shares the mascot with the timer. */
+  quizProgressStyle: QuizProgressStyle;
 }
 
 export interface Quiz {

@@ -140,6 +140,81 @@ body {
   }
 }
 
+/* ---------------------------------------------------------- timer meters */
+
+/*
+ * All four take their period from --pulse-ms, which the meter recomputes from
+ * the time left. The beat accelerates as the clock drains, so the meter reads
+ * as urgent before the player has read the number.
+ */
+@keyframes meter-heartbeat {
+  0% {
+    transform: scale(1);
+  }
+  12% {
+    transform: scale(1.13);
+  }
+  24% {
+    transform: scale(1);
+  }
+  36% {
+    transform: scale(1.07);
+  }
+  48%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes meter-throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes meter-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Bob and lean, so the mascot reads as walking rather than sliding. */
+@keyframes mascot-walk {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-7deg);
+  }
+  50% {
+    transform: translateY(-22%) rotate(7deg);
+  }
+}
+
+@keyframes mascot-dance {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-45%) rotate(-20deg) scale(1.2);
+  }
+  50% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  75% {
+    transform: translateY(-45%) rotate(20deg) scale(1.2);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
 @keyframes timer-pulse {
   0%,
   100% {
@@ -172,6 +247,21 @@ body {
 }
 .animate-urgent {
   animation: timer-pulse 0.7s ease-in-out infinite;
+}
+.animate-meter-heartbeat {
+  animation: meter-heartbeat var(--pulse-ms, 1200ms) ease-in-out infinite;
+}
+.animate-meter-throb {
+  animation: meter-throb var(--pulse-ms, 1200ms) ease-in-out infinite;
+}
+.animate-meter-flash {
+  animation: meter-flash var(--pulse-ms, 1200ms) ease-in-out infinite;
+}
+.animate-mascot-walk {
+  animation: mascot-walk var(--pulse-ms, 1200ms) ease-in-out infinite;
+}
+.animate-mascot-dance {
+  animation: mascot-dance 0.6s ease-in-out infinite;
 }
 
 /* ---------------------------------------------------------------- a11y */
