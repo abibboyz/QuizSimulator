@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPTION_STYLES } from "@/lib/themes";
 
 export const metadata = {
   title: "Offline · Quiz Simulator",
@@ -12,8 +13,8 @@ export default function OfflinePage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-5 px-6 text-center">
       <div className="grid grid-cols-2 gap-1.5" aria-hidden>
-        {["#e11d48", "#2563eb", "#f59e0b", "#16a34a"].map((color) => (
-          <span key={color} className="h-7 w-7 rounded-lg opacity-60" style={{ background: color }} />
+        {OPTION_STYLES.slice(0, 4).map((style) => (
+          <span key={style.name} className="h-7 w-7 rounded-lg opacity-60" style={{ background: style.bg }} />
         ))}
       </div>
 

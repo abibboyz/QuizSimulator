@@ -18,9 +18,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Option, Question } from "@/types/quiz";
+import type { ReactNode } from "react";
+import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
-import { optionStyle } from "@/lib/themes";
+import { readableTextOn } from "@/lib/themes";
+import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Input } from "@/components/ui/Field";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
@@ -29,9 +32,14 @@ const MAX_OPTIONS = 6;
 interface Props {
   question: Question;
   onChange: (question: Question) => void;
+  /** Keeps the builder badges matching the tiles that will actually play. */
+  theme: Theme;
+  /** Control shown on the "Answers" header row, e.g. the label colour swatch. */
+  action?: ReactNode;
 }
 
-export function OptionList({ question, onChange }: Props) {
+export function OptionList({ question, onChange, theme, action }: Props) {
+  const ageBand = themeAgeBand(theme);
   const fixed = question.kind === "true-false";
   const multi = question.kind === "multi-select";
 
@@ -73,9 +81,15 @@ export function OptionList({ question, onChange }: Props) {
       option={option}
       index={index}
       multi={multi}
+      ageBand={ageBand}
+      marker={theme.optionMarker}
+      textColor={theme.optionTextColor}
+      colors={theme.optionColors}
       sortable={!fixed}
       canRemove={!fixed && question.options.length > 2}
       onText={(text) => update(option.id, { text })}
+      onIcon={(icon) => update(option.id, { icon: icon.trim() ? icon : undefined })}
+      onColor={(color) => update(option.id, { color })}
       onMedia={(media) => update(option.id, { media })}
       onMarkCorrect={() => markCorrect(option.id)}
       onRemove={() => remove(option.id)}
@@ -88,15 +102,18 @@ export function OptionList({ question, onChange }: Props) {
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
           Answers {multi && <span className="text-ink-500">· mark every correct one</span>}
         </span>
-        {!fixed && question.options.length < MAX_OPTIONS && (
-          <button
-            type="button"
-            onClick={() => onChange({ ...question, options: [...question.options, createOption()] })}
-            className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
-          >
-            + Add answer
-          </button>
-        )}
+        <span className="flex items-center gap-1">
+          {action}
+          {!fixed && question.options.length < MAX_OPTIONS && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...question, options: [...question.options, createOption()] })}
+              className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
+            >
+              + Add answer
+            </button>
+          )}
+        </span>
       </div>
 
       {fixed ? (
@@ -121,21 +138,45 @@ interface RowProps {
   option: Option;
   index: number;
   multi: boolean;
+  ageBand?: AgeBand;
+  marker?: OptionMarker;
+  /** Quiz-wide answer text colour; unset means each badge picks its own. */
+  textColor?: string;
+  /** Quiz-wide tile colours by slot; unset slots fall back to the palette. */
+  colors?: string[];
   sortable: boolean;
   canRemove: boolean;
   onText: (text: string) => void;
+  onIcon: (icon: string) => void;
+  onColor: (color: string | undefined) => void;
   onMedia: (media?: Option["media"]) => void;
   onMarkCorrect: () => void;
   onRemove: () => void;
 }
 
-function OptionRow({ option, index, multi, sortable, canRemove, onText, onMedia, onMarkCorrect, onRemove }: RowProps) {
+function OptionRow({
+  option,
+  index,
+  multi,
+  ageBand,
+  marker,
+  textColor,
+  colors,
+  sortable,
+  canRemove,
+  onText,
+  onIcon,
+  onColor,
+  onMedia,
+  onMarkCorrect,
+  onRemove,
+}: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: option.id,
     disabled: !sortable,
   });
 
-  const style = optionStyle(index);
+  const bg = optionColor(index, { band: ageBand, colors, override: option.color });
 
   return (
     <div
@@ -157,13 +198,29 @@ function OptionRow({ option, index, multi, sortable, canRemove, onText, onMedia,
         </button>
       )}
 
-      <span
-        aria-hidden
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-sm text-white"
-        style={{ background: style.bg }}
-      >
-        {style.shape}
-      </span>
+      {/*
+        The badge doubles as its own editor: type any character or emoji to give
+        this one answer a custom marker, or clear it to fall back to the
+        quiz-wide style. Placeholder shows what the fallback currently renders.
+      */}
+      <input
+        value={option.icon ?? ""}
+        onChange={(event) => onIcon(event.target.value)}
+        placeholder={optionMarker(index, { band: ageBand, marker })}
+        aria-label={`Icon for answer ${index + 1}`}
+        title="Type any character or emoji. Leave blank to use the quiz-wide marker."
+        className="focus-ring h-7 w-9 shrink-0 rounded-lg border-0 text-center text-sm placeholder:text-current placeholder:opacity-70"
+        // Same rules AnswerGrid uses, so the badge here matches the tile that plays.
+        style={{ background: bg, color: textColor ?? readableTextOn(bg) }}
+      />
+
+      <ColorSwatch
+        label={`Tile colour for answer ${index + 1}`}
+        value={option.color}
+        fallback={optionColor(index, { band: ageBand, colors })}
+        onChange={onColor}
+        compact
+      />
 
       <button
         type="button"

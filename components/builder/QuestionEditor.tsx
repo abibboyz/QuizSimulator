@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Question, QuestionKind, QuestionLayout, Quiz } from "@/types/quiz";
+import type { Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
+import { optionPalette } from "@/lib/themes";
+import { themeAgeBand } from "@/lib/ageBands";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { OptionList } from "@/components/builder/OptionList";
 
@@ -13,6 +16,8 @@ interface Props {
   question: Question;
   index: number;
   onChange: (question: Question) => void;
+  /** Text colours are theme-wide, so the swatches here patch the theme. */
+  onChangeTheme: (theme: Theme) => void;
 }
 
 const KINDS: { id: QuestionKind; label: string }[] = [
@@ -28,7 +33,12 @@ const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
   { id: "big-text", label: "Big type", hint: "Oversized prompt, best for True/False" },
 ];
 
-export function QuestionEditor({ quiz, question, index, onChange }: Props) {
+export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme }: Props) {
+  const { theme } = quiz;
+  const setTheme = (patch: Partial<Theme>) => onChangeTheme({ ...theme, ...patch });
+  const ageBand = themeAgeBand(theme);
+  const tileColors = optionPalette(ageBand).map((style) => style.bg);
+
   // Paste an image from the clipboard straight onto the question. This is the
   // difference between adding twenty screenshots comfortably and giving up.
   useEffect(() => {
@@ -65,11 +75,22 @@ export function QuestionEditor({ quiz, question, index, onChange }: Props) {
         </Select>
       </header>
 
-      <Field label="Prompt">
+      <Field
+        label="Prompt"
+        action={
+          <ColorSwatch
+            label="Question text colour"
+            value={theme.promptColor}
+            fallback="#e9ebf4"
+            onChange={(promptColor) => setTheme({ promptColor })}
+          />
+        }
+      >
         <Textarea
           value={question.prompt}
           onChange={(event) => onChange({ ...question, prompt: event.target.value })}
           placeholder="What do you want to ask?"
+          aria-label="Prompt"
           rows={2}
         />
       </Field>
@@ -78,13 +99,38 @@ export function QuestionEditor({ quiz, question, index, onChange }: Props) {
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
 
-      <OptionList question={question} onChange={onChange} />
+      <OptionList
+        question={question}
+        onChange={onChange}
+        theme={theme}
+        action={
+          <ColorSwatch
+            label="Answer text colour"
+            value={theme.optionTextColor}
+            fallback="#ffffff"
+            onChange={(optionTextColor) => setTheme({ optionTextColor })}
+            contrastAgainst={tileColors}
+          />
+        }
+      />
 
-      <Field label="Explanation" hint="Shown after the answer is revealed. Optional.">
+      <Field
+        label="Explanation"
+        hint="Shown after the answer is revealed. Optional."
+        action={
+          <ColorSwatch
+            label="Explanation text colour"
+            value={theme.explanationColor}
+            fallback="#c7cbdd"
+            onChange={(explanationColor) => setTheme({ explanationColor })}
+          />
+        }
+      >
         <Textarea
           value={question.explanation ?? ""}
           onChange={(event) => onChange({ ...question, explanation: event.target.value })}
           placeholder="Why is that the answer?"
+          aria-label="Explanation"
           rows={2}
         />
       </Field>

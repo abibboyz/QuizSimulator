@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { Question, Quiz } from "@/types/quiz";
+import type { Question, Quiz, Theme } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playUrgentTick, playWhoosh } from "@/lib/sound";
@@ -148,6 +148,7 @@ function HostView() {
             isLast={index + 1 >= questions.length}
             onNext={goNext}
             onBack={goBack}
+            theme={quiz.theme}
           />
 
           {showTeams && (
@@ -173,6 +174,7 @@ interface HostQuestionProps {
   isLast: boolean;
   onNext: () => void;
   onBack: () => void;
+  theme: Theme;
 }
 
 function HostQuestion({
@@ -187,6 +189,7 @@ function HostQuestion({
   isLast,
   onNext,
   onBack,
+  theme,
 }: HostQuestionProps) {
   const [revealed, setRevealed] = useState(false);
   const [remainingMs, setRemainingMs] = useState(limitSeconds === null ? null : limitSeconds * 1000);
@@ -268,6 +271,7 @@ function HostQuestion({
           interactive={false}
           onPick={() => {}}
           mode="host"
+          theme={theme}
           header={
             remainingMs !== null && limitSeconds ? (
               <TimerRing

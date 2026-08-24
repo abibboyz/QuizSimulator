@@ -213,7 +213,9 @@ function PlayView() {
           }`}
         >
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-ink-400">Solo run</p>
-          <h1 className="stage-prompt text-4xl font-extrabold md:text-6xl">{quiz.title}</h1>
+          <h1 className="stage-prompt text-4xl font-extrabold md:text-6xl" style={{ color: "var(--title-color)" }}>
+            {quiz.title}
+          </h1>
           {quiz.description && <p className="text-lg text-ink-300">{quiz.description}</p>}
 
           <div className="flex flex-wrap justify-center gap-2 text-sm text-ink-300">
@@ -252,6 +254,7 @@ function PlayView() {
             onPick={handlePick}
             mode="solo"
             narrow={mobile}
+            theme={quiz.theme}
             header={
               <div className="flex items-center gap-5">
                 <ScoreBadge score={score} streak={streak} compact />

@@ -1,7 +1,8 @@
 "use client";
 
-import type { Question } from "@/types/quiz";
-import { optionStyle } from "@/lib/themes";
+import type { Question, Theme } from "@/types/quiz";
+import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
+import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { MediaImage } from "@/components/ui/MediaImage";
 
 export type StageMode = "solo" | "host" | "preview";
@@ -15,6 +16,8 @@ interface Props {
   mode: StageMode;
   /** Phone-shaped play: one tile per row, whatever the layout says. */
   narrow?: boolean;
+  /** Supplies the tile palette, label colour, and marker style. */
+  theme: Theme;
 }
 
 const TEXT: Record<StageMode, string> = {
@@ -29,7 +32,19 @@ const PAD: Record<StageMode, string> = {
   preview: "p-1.5 min-h-8",
 };
 
-export function AnswerGrid({ question, selected, revealed, interactive, onPick, mode, narrow = false }: Props) {
+export function AnswerGrid({
+  question,
+  selected,
+  revealed,
+  interactive,
+  onPick,
+  mode,
+  narrow = false,
+  theme,
+}: Props) {
+  const ageBand = themeAgeBand(theme);
+  const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
+  const wrongColor = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
   const columns = narrow || question.layout === "list" ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
 
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";
@@ -37,7 +52,8 @@ export function AnswerGrid({ question, selected, revealed, interactive, onPick, 
   return (
     <div className={`grid w-full ${columns} ${gap}`} role={question.kind === "multi-select" ? "group" : undefined}>
       {question.options.map((option, index) => {
-        const style = optionStyle(index);
+        const bg = optionColor(index, { band: ageBand, colors: theme.optionColors, override: option.color });
+        const marker = optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
         const isPicked = selected.includes(option.id);
 
         // Once revealed, the correct answer always lights up — including when
@@ -57,17 +73,30 @@ export function AnswerGrid({ question, selected, revealed, interactive, onPick, 
               interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
             } ${faded ? "opacity-35 saturate-50" : "opacity-100"} ${
               isPicked && !revealed ? "ring-4 ring-white/70" : ""
-            } ${showCorrect ? "ring-4 ring-white shadow-[0_0_40px_-6px_rgba(34,197,94,0.9)]" : ""} ${
-              showWrong ? "ring-4 ring-white/40" : ""
-            }`}
+            } ${showWrong ? "ring-4 ring-white/40" : ""}`}
             style={{
-              background: showCorrect ? "var(--color-good)" : showWrong ? "var(--color-bad)" : style.bg,
-              color: "#fff",
+              // The correct tile's white ring and glow ship as one box-shadow:
+              // Tailwind's ring is itself a box-shadow, so an inline one would
+              // otherwise wipe it out. The glow follows the reveal colour.
+              boxShadow: showCorrect
+                ? `0 0 0 4px #ffffff, 0 0 40px -6px ${withAlpha(correctColor, 0.9)}`
+                : undefined,
+              background: showCorrect ? correctColor : showWrong ? wrongColor : bg,
+              // Every state picks text that stays readable on whatever colour it
+              // landed on — the reveal colours are author-settable now, so
+              // hardcoding white here would break on a pale one.
+              color: showCorrect
+                ? readableTextOn(correctColor)
+                : showWrong
+                  ? readableTextOn(wrongColor)
+                  : (theme.optionTextColor ?? readableTextOn(bg)),
             }}
           >
-            <span aria-hidden className={`shrink-0 opacity-90 ${mode === "preview" ? "text-xs" : "text-2xl"}`}>
-              {style.shape}
-            </span>
+            {marker && (
+              <span aria-hidden className={`shrink-0 opacity-90 ${mode === "preview" ? "text-xs" : "text-2xl"}`}>
+                {marker}
+              </span>
+            )}
 
             {option.media && (
               <MediaImage

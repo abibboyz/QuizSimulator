@@ -1,4 +1,18 @@
 import type { BgAnimation, FontChoice, Theme, ThemePreset } from "@/types/quiz";
+import { AGE_BANDS } from "@/lib/ageBands";
+import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, withAlpha } from "@/lib/color";
+
+// Palettes and colour maths live in their own modules; re-exported here so the
+// components that already import them from "@/lib/themes" keep working.
+export { OPTION_STYLES, optionPalette, optionStyle } from "@/lib/ageBands";
+export {
+  DEFAULT_CORRECT_COLOR,
+  DEFAULT_WRONG_COLOR,
+  contrastRatio,
+  readableTextOn,
+  relativeLuminance,
+  withAlpha,
+} from "@/lib/color";
 
 export interface PresetDefinition {
   id: ThemePreset;
@@ -32,25 +46,20 @@ export const FONT_CHOICES: { id: FontChoice; label: string; varName: string }[] 
   { id: "mono", label: "Mono", varName: "var(--font-mono)" },
 ];
 
-/**
- * The fixed answer-tile palette. Quiz games lean on stable colour+shape pairs so
- * players can lock onto an answer before they've finished reading it.
- */
-export const OPTION_STYLES = [
-  { bg: "#e11d48", shape: "▲", name: "red" },
-  { bg: "#2563eb", shape: "◆", name: "blue" },
-  { bg: "#f59e0b", shape: "●", name: "amber" },
-  { bg: "#16a34a", shape: "■", name: "green" },
-  { bg: "#9333ea", shape: "★", name: "purple" },
-  { bg: "#0891b2", shape: "⬢", name: "cyan" },
-];
-
-export function optionStyle(index: number) {
-  return OPTION_STYLES[index % OPTION_STYLES.length];
-}
+/** Age bands double as theme presets so `getPreset` can resolve their glow. */
+const BAND_PRESETS: PresetDefinition[] = AGE_BANDS.map((band) => ({
+  id: band.id,
+  label: band.label,
+  accent: band.accent,
+  surface: band.surface,
+  glow: band.glow,
+  // Bands never move the background animation, so this is only ever read as a
+  // value, never applied. See ThemePanel.
+  defaultBg: "none",
+}));
 
 export function getPreset(id: ThemePreset): PresetDefinition {
-  return THEME_PRESETS.find((p) => p.id === id) ?? THEME_PRESETS[0];
+  return [...THEME_PRESETS, ...BAND_PRESETS].find((p) => p.id === id) ?? THEME_PRESETS[0];
 }
 
 export const DEFAULT_THEME: Theme = {
@@ -74,32 +83,16 @@ export function themeVars(theme: Theme): React.CSSProperties {
     "--accent-soft": withAlpha(theme.accent, 0.16),
     "--accent-line": withAlpha(theme.accent, 0.35),
     "--quiz-font": font.varName,
+    // Each falls back to the value that was hardcoded before these were
+    // configurable, so a quiz saved without them renders exactly as it did.
+    "--prompt-color": theme.promptColor ?? "#e9ebf4",
+    "--title-color": theme.titleColor ?? "#e9ebf4",
+    "--explanation-color": theme.explanationColor ?? "#c7cbdd",
+    // Overriding the globals inside the themed surface, so the timer ring and
+    // the results breakdown follow the quiz's reveal colours too. Builder
+    // chrome sits outside ThemeShell and keeps the standard green/red.
+    "--color-good": theme.correctColor ?? DEFAULT_CORRECT_COLOR,
+    "--color-bad": theme.wrongColor ?? DEFAULT_WRONG_COLOR,
   } as React.CSSProperties;
 }
 
-/** #rrggbb -> rgba(). Falls back to the input if it isn't a plain hex colour. */
-export function withAlpha(hex: string, alpha: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return hex;
-  const int = parseInt(m[1], 16);
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-/**
- * Relative luminance, used to decide whether text on a custom accent should be
- * black or white. Keeps the builder honest when someone picks a pale accent.
- */
-export function readableTextOn(hex: string): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return "#ffffff";
-  const int = parseInt(m[1], 16);
-  const channels = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  });
-  const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
-  return luminance > 0.45 ? "#0a0a0a" : "#ffffff";
-}

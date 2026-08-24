@@ -1,24 +1,38 @@
 "use client";
 
-import type { Quiz, QuizSettings } from "@/types/quiz";
+import type { Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { Field, Input, Textarea, Toggle } from "@/components/ui/Field";
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
 
 interface Props {
   quiz: Quiz;
   onChangeQuiz: (patch: Partial<Quiz>) => void;
   onChangeSettings: (patch: Partial<QuizSettings>) => void;
+  /** The title colour is theme-wide, so its swatch patches the theme. */
+  onChangeTheme: (theme: Theme) => void;
 }
 
-export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings }: Props) {
+export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTheme }: Props) {
   const { settings } = quiz;
 
   return (
     <div className="space-y-5">
-      <Field label="Quiz title">
+      <Field
+        label="Quiz title"
+        action={
+          <ColorSwatch
+            label="Title colour"
+            value={quiz.theme.titleColor}
+            fallback="#e9ebf4"
+            onChange={(titleColor) => onChangeTheme({ ...quiz.theme, titleColor })}
+          />
+        }
+      >
         <Input
           value={quiz.title}
           onChange={(event) => onChangeQuiz({ title: event.target.value })}
           placeholder="Name your quiz"
+          aria-label="Quiz title"
         />
       </Field>
 

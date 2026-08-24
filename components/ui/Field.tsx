@@ -5,12 +5,42 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 const BASE =
   "focus-ring w-full rounded-xl border border-ink-600 bg-ink-900/70 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 transition focus:border-ink-500";
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({
+  label,
+  hint,
+  action,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** Control shown on the label row, e.g. a colour swatch for this field's text. */
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  const labelText = <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">{label}</span>;
+  const hintText = hint && <span className="mt-1 block text-xs text-ink-500">{hint}</span>;
+
+  // With an action, the wrapper can't be a <label> — that would put a second
+  // interactive control inside it and clicking the swatch would also focus the
+  // input. Callers passing an action give their control its own aria-label.
+  if (action) {
+    return (
+      <div className="block">
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          {labelText}
+          {action}
+        </div>
+        {children}
+        {hintText}
+      </div>
+    );
+  }
+
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-400">{label}</span>
+      <span className="mb-1.5 block">{labelText}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-ink-500">{hint}</span>}
+      {hintText}
     </label>
   );
 }

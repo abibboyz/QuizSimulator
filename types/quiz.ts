@@ -19,7 +19,20 @@ export interface Option {
   text: string;
   media?: MediaRef;
   correct: boolean;
+  /**
+   * Replaces this one answer's marker — any character or emoji. Blank falls
+   * back to whatever `Theme.optionMarker` produces for its position.
+   */
+  icon?: string;
+  /**
+   * Replaces this one answer's tile colour. Blank falls back to the quiz-wide
+   * `Theme.optionColors`, and then to the palette for its position.
+   */
+  color?: string;
 }
+
+/** What to draw in the little badge on each answer tile. */
+export type OptionMarker = "shapes" | "letters" | "numbers" | "bullets" | "none";
 
 export interface Question {
   id: string;
@@ -35,7 +48,10 @@ export interface Question {
   points?: number;
 }
 
-export type ThemePreset = "neon" | "sunset" | "forest" | "candy" | "mono";
+/** Audience the quiz is coloured for. Affects palette only, never gameplay. */
+export type AgeBand = "3-5" | "6-8" | "9-12" | "13-16";
+
+export type ThemePreset = "neon" | "sunset" | "forest" | "candy" | "mono" | AgeBand;
 
 export type BgAnimation = "aurora" | "particles" | "shapes" | "starfield" | "none";
 
@@ -54,6 +70,27 @@ export interface Theme {
   bgImageFit: BgImageFit;
   /** 0–1 black overlay over the picture, so bright images don't eat the text. */
   bgImageDim: number;
+  /**
+   * Per-element text colours. All optional — unset means "use the built-in
+   * default", which is what keeps quizzes saved before these existed looking
+   * exactly as they did.
+   */
+  promptColor?: string;
+  titleColor?: string;
+  /** Unset means each tile picks black or white by contrast against its own colour. */
+  optionTextColor?: string;
+  explanationColor?: string;
+  /** Marker style for every answer tile. Unset means the default shapes. */
+  optionMarker?: OptionMarker;
+  /**
+   * Quiz-wide answer tile colours, one per palette slot. Unset — or a blank
+   * entry — leaves that slot to the age band's palette.
+   */
+  optionColors?: string[];
+  /** Colour a correct answer turns on reveal. Unset means green. */
+  correctColor?: string;
+  /** Colour a wrong pick turns on reveal. Unset means red. */
+  wrongColor?: string;
 }
 
 export interface QuizSettings {

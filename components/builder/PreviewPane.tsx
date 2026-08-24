@@ -57,6 +57,7 @@ export function PreviewPane({ quiz, question, index }: Props) {
             interactive={false}
             onPick={() => {}}
             mode="preview"
+            theme={quiz.theme}
           />
         </div>
       </div>

@@ -234,7 +234,13 @@ function EditView() {
 
         <section className="glass min-w-0 rounded-2xl p-5">
           {active ? (
-            <QuestionEditor quiz={quiz} question={active} index={activeIndex} onChange={updateQuestion} />
+            <QuestionEditor
+              quiz={quiz}
+              question={active}
+              index={activeIndex}
+              onChange={updateQuestion}
+              onChangeTheme={patchTheme}
+            />
           ) : (
             <p className="text-ink-400">Add a question to get started.</p>
           )}
@@ -265,7 +271,12 @@ function EditView() {
               ))}
             {tab === "theme" && <ThemePanel theme={quiz.theme} onChange={patchTheme} />}
             {tab === "settings" && (
-              <SettingsPanel quiz={quiz} onChangeQuiz={patchQuiz} onChangeSettings={patchSettings} />
+              <SettingsPanel
+                quiz={quiz}
+                onChangeQuiz={patchQuiz}
+                onChangeSettings={patchSettings}
+                onChangeTheme={patchTheme}
+              />
             )}
           </div>
         </aside>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Question } from "@/types/quiz";
+import type { Question, Theme } from "@/types/quiz";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 
@@ -18,6 +18,8 @@ interface Props {
   narrow?: boolean;
   /** Timer, score, and anything else that belongs on the stage's top rail. */
   header?: ReactNode;
+  /** Supplies the answer tiles' palette, label colour, and marker style. */
+  theme: Theme;
 }
 
 const PROMPT_TEXT: Record<StageMode, string> = {
@@ -48,6 +50,7 @@ export function QuestionStage({
   mode,
   narrow = false,
   header,
+  theme,
 }: Props) {
   const imageLeads = question.layout === "image-top" && !!question.media;
   // Host mode packs tighter: everything has to clear a 720p projector without
@@ -82,7 +85,10 @@ export function QuestionStage({
       )}
 
       <div className={imageLeads ? "" : "flex flex-col items-center gap-4"}>
-        <h2 className={`stage-prompt text-center font-bold text-ink-100 ${PROMPT_TEXT[mode]}`}>
+        <h2
+          className={`stage-prompt text-center font-bold ${PROMPT_TEXT[mode]}`}
+          style={{ color: "var(--prompt-color)" }}
+        >
           {question.prompt || <span className="text-ink-500">Untitled question</span>}
         </h2>
 
@@ -112,13 +118,15 @@ export function QuestionStage({
         onPick={onPick}
         mode={mode}
         narrow={narrow}
+        theme={theme}
       />
 
       {revealed && question.explanation && (
         <div
-          className={`animate-pop rounded-2xl border border-ink-600 bg-ink-900/80 text-center text-ink-200 ${
+          className={`animate-pop rounded-2xl border border-ink-600 bg-ink-900/80 text-center ${
             mode === "host" ? "px-5 py-2.5 text-lg" : mode === "solo" ? "px-5 py-4 text-sm" : "px-2 py-1 text-[9px]"
           }`}
+          style={{ color: "var(--explanation-color)" }}
         >
           {question.explanation}
         </div>
