@@ -4,7 +4,8 @@
  * context is created lazily on the first play() call.
  */
 
-import type { CueSound } from "@/types/quiz";
+import type { CueSound, MediaRef } from "@/types/quiz";
+import { getMedia } from "@/lib/storage";
 
 let ctx: AudioContext | null = null;
 let muted = false;
@@ -176,11 +177,85 @@ export const SOUNDS: Record<CueSound, { label: string; play: () => void }> = {
   buzz: { label: "Time-up buzz", play: playBuzz },
   fanfare: { label: "Fanfare", play: playFanfare },
   consolation: { label: "Consolation", play: playConsolation },
+  // Its player needs the cue's file, so the registry entry is a placeholder —
+  // playCue routes it to playSample instead of calling this.
+  custom: { label: "Custom sound…", play: () => {} },
 };
 
 export const SOUND_IDS = Object.keys(SOUNDS) as CueSound[];
 
-export function playCue(sound: CueSound | null) {
+export function playCue(sound: CueSound | null, media?: MediaRef) {
   if (!sound) return;
+  if (sound === "custom") {
+    void playSample(media);
+    return;
+  }
   SOUNDS[sound]?.play();
+}
+
+/* ---------------------------------------------------------- custom sounds */
+
+/**
+ * Uploaded sounds play through the same AudioContext as the synthesized ones,
+ * so they inherit the mute gate and the gesture unlock for free. Decoding is
+ * the slow part, so every buffer is kept after its first use — a cue that fires
+ * once per question would otherwise decode once per question.
+ */
+const samples = new Map<string, AudioBuffer>();
+
+function sampleKey(ref: MediaRef): string {
+  return ref.kind === "stored" ? ref.id : ref.url;
+}
+
+async function bytesFor(ref: MediaRef): Promise<ArrayBuffer | null> {
+  if (ref.kind === "url") {
+    const response = await fetch(ref.url);
+    return response.ok ? await response.arrayBuffer() : null;
+  }
+  const record = await getMedia(ref.id);
+  return record ? await record.blob.arrayBuffer() : null;
+}
+
+async function bufferFor(ac: AudioContext, ref: MediaRef): Promise<AudioBuffer | null> {
+  const key = sampleKey(ref);
+  const cached = samples.get(key);
+  if (cached) return cached;
+
+  try {
+    const bytes = await bytesFor(ref);
+    if (!bytes) return null;
+    const decoded = await ac.decodeAudioData(bytes);
+    samples.set(key, decoded);
+    return decoded;
+  } catch {
+    // A missing or unsupported file must not take the run down with it.
+    return null;
+  }
+}
+
+export async function playSample(ref: MediaRef | undefined) {
+  const ac = audio();
+  if (!ac || !ref) return;
+
+  const buffer = await bufferFor(ac, ref);
+  if (!buffer) return;
+
+  const source = ac.createBufferSource();
+  const env = ac.createGain();
+  source.buffer = buffer;
+  env.gain.value = 0.9;
+  source.connect(env).connect(ac.destination);
+  source.start();
+}
+
+/**
+ * Decodes ahead of time so the first fire isn't late. Called when a quiz loads;
+ * a cue that lands 40ms after the moment it belongs to reads as broken.
+ */
+export function primeSamples(refs: (MediaRef | undefined)[]) {
+  const ac = audio();
+  if (!ac) return;
+  for (const ref of refs) {
+    if (ref && !samples.has(sampleKey(ref))) void bufferFor(ac, ref);
+  }
 }

@@ -67,7 +67,7 @@ export function CuePlayer({ cue, onDone, soundOn, onMidpoint }: Props) {
   }, [reduced]);
 
   useEffect(() => {
-    if (soundRef.current) playCue(cue.sound);
+    if (soundRef.current) playCue(cue.sound, cue.soundMedia);
 
     // Confetti is a canvas burst rather than a rendered element, so it fires
     // here alongside the sound instead of in the tree below.

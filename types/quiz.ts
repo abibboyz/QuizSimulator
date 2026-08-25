@@ -35,13 +35,17 @@ export type CueSound =
   | "riser"
   | "buzz"
   | "fanfare"
-  | "consolation";
+  | "consolation"
+  /** Whatever the author uploaded, mirroring the "image" animation. */
+  | "custom";
 
 export interface Cue {
   animation: CueAnimation | null;
   /** Only read when `animation` is "image". */
   media?: MediaRef;
   sound: CueSound | null;
+  /** Only read when `sound` is "custom". */
+  soundMedia?: MediaRef;
   /** How long the overlay holds before the run carries on. */
   durationMs: number;
 }

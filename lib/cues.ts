@@ -51,9 +51,11 @@ export function cueHoldMs(cue: Cue): number {
  */
 export function cueEnabled(cue: Cue | null | undefined): cue is Cue {
   if (!cue) return false;
-  if (cue.sound) return true;
-  if (cue.animation === "image") return !!cue.media;
-  return !!cue.animation;
+  // "custom" and "image" are both promises of an upload; without one there is
+  // nothing to play or draw, so they don't count on their own.
+  const hasSound = cue.sound === "custom" ? !!cue.soundMedia : !!cue.sound;
+  const hasMotion = cue.animation === "image" ? !!cue.media : !!cue.animation;
+  return hasSound || hasMotion;
 }
 
 export function resolveCue(
@@ -85,7 +87,9 @@ export function activeCue(
  */
 export function cueSetRefs(cues: CueSet | undefined): MediaRef[] {
   if (!cues) return [];
-  return Object.values(cues).flatMap((cue) => (cue?.media ? [cue.media] : []));
+  return Object.values(cues).flatMap((cue) =>
+    [cue?.media, cue?.soundMedia].filter((ref): ref is MediaRef => !!ref),
+  );
 }
 
 export function quizCueRefs(quiz: Pick<Quiz, "settings" | "questions">): MediaRef[] {
@@ -103,7 +107,7 @@ export function mapCueSet(
   if (!cues) return cues;
   const next: CueSet = {};
   for (const [slot, cue] of Object.entries(cues) as [CueSlot, Cue | null][]) {
-    next[slot] = cue ? { ...cue, media: swap(cue.media) } : cue;
+    next[slot] = cue ? { ...cue, media: swap(cue.media), soundMedia: swap(cue.soundMedia) } : cue;
   }
   return next;
 }

@@ -7,6 +7,7 @@ import { DEFAULT_CUE_MS } from "@/lib/cues";
 import { SOUND_IDS, SOUNDS, playCue } from "@/lib/sound";
 import { Input, Select } from "@/components/ui/Field";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
+import { AudioDropZone } from "@/components/builder/AudioDropZone";
 import { CuePlayer } from "@/components/play/CuePlayer";
 
 interface Props {
@@ -168,8 +169,8 @@ export function CueEditor({ label, hint, cue, onChange, inherits }: Props) {
           </Select>
           <button
             type="button"
-            disabled={!current.sound}
-            onClick={() => playCue(current.sound)}
+            disabled={!current.sound || (current.sound === "custom" && !current.soundMedia)}
+            onClick={() => playCue(current.sound, current.soundMedia)}
             aria-label={`Preview the ${label} sound`}
             className="focus-ring shrink-0 rounded-xl border border-ink-600 px-3 text-sm text-ink-200 transition hover:border-ink-500 disabled:opacity-40"
           >
@@ -194,6 +195,19 @@ export function CueEditor({ label, hint, cue, onChange, inherits }: Props) {
           />
           <span className="shrink-0">ms</span>
         </label>
+      )}
+
+      {current.sound === "custom" && (
+        <div className="space-y-1">
+          <AudioDropZone
+            media={current.soundMedia}
+            onChange={(soundMedia) => set({ soundMedia })}
+            label="Cue sound"
+          />
+          {!current.soundMedia && (
+            <p className="text-xs text-ink-500">Pick a sound file — without one this cue stays silent.</p>
+          )}
+        </div>
       )}
 
       {needsMedia(current.animation) && (

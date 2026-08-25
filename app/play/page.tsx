@@ -8,7 +8,7 @@ import type { Cue, CueSlot } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
 import { useCountdown } from "@/hooks/useCountdown";
-import { initSound, playCorrect, playSelect, playWhoosh, playWrong } from "@/lib/sound";
+import { initSound, playCorrect, playSelect, playWhoosh, playWrong, primeSamples } from "@/lib/sound";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -74,6 +74,14 @@ function PlayView() {
         setMissing(true);
       } else {
         session.start(found);
+        // Decode any uploaded cue sounds now: a celebration that lands 40ms
+        // after the answer it belongs to reads as broken.
+        primeSamples(
+          [
+            ...Object.values(found.settings.cues ?? {}),
+            ...found.questions.flatMap((q) => Object.values(q.cues ?? {})),
+          ].map((cue) => cue?.soundMedia),
+        );
       }
       setLoaded(true);
     });

@@ -154,3 +154,40 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/* ------------------------------------------------------------------ audio */
+
+/**
+ * Audio is stored byte-for-byte — there is no equivalent of downscaling, and
+ * re-encoding in the browser would mean shipping a codec. The cap is tighter
+ * than the animation one because a cue fires repeatedly during a run and every
+ * byte also lands in the export as base64.
+ */
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+
+export async function putAudio(file: File | Blob): Promise<MediaRef> {
+  if (!file.type.startsWith("audio/")) {
+    throw new MediaError("That file isn't a sound.");
+  }
+  if (file.size > MAX_AUDIO_BYTES) {
+    throw new MediaError(
+      `That sound is ${formatBytes(file.size)}. Keep it under ${formatBytes(MAX_AUDIO_BYTES)} so the quiz stays quick to load and export.`,
+    );
+  }
+
+  // Width and height are meaningless for a sound, but the media store is shared
+  // with images so that every blob is reachable by one garbage collector rather
+  // than two. Zeroes are the honest value.
+  const id = newId();
+  await putMediaRecord({ id, blob: file, w: 0, h: 0, createdAt: Date.now() });
+  return { kind: "stored", id, w: 0, h: 0 };
+}
+
+/** Pulls an audio file out of a drop or paste, ignoring anything else. */
+export function audioFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  for (const item of Array.from(data.files)) {
+    if (item.type.startsWith("audio/")) return item;
+  }
+  return null;
+}

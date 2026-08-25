@@ -162,3 +162,47 @@ test("a custom override with nothing chosen plays nothing", () => {
   const empty = cue({ animation: null, sound: null });
   assert.equal(activeCue(quiz({ correct: cue() }), question({ correct: empty }), "correct"), null);
 });
+
+/* ---------------------------------------------------------- custom sounds */
+
+test("a custom sound with no file uploaded plays nothing", () => {
+  // Same rule as an "image" animation with no picture: choosing the option is
+  // a promise of an upload, not the upload itself.
+  assert.equal(cueEnabled(cue({ animation: null, sound: "custom" })), false);
+  const withFile = cue({ animation: null, sound: "custom", soundMedia: { kind: "url", url: "a.mp3" } });
+  assert.equal(cueEnabled(withFile), true);
+});
+
+test("a custom sound with no file still counts if the cue has motion", () => {
+  assert.equal(cueEnabled(cue({ animation: "shake", sound: "custom" })), true);
+});
+
+test("uploaded sounds are collected so the garbage collector spares them", () => {
+  const art: MediaRef = { kind: "stored", id: "art", w: 1, h: 1 };
+  const clip: MediaRef = { kind: "stored", id: "clip", w: 0, h: 0 };
+
+  const refs = cueSetRefs({ correct: cue({ animation: "image", media: art, sound: "custom", soundMedia: clip }) });
+  assert.deepEqual(
+    refs.map((r) => (r.kind === "stored" ? r.id : r.url)),
+    ["art", "clip"],
+    "both halves of a cue are reachable",
+  );
+});
+
+test("remapping rewrites a cue's sound file as well as its picture", () => {
+  const remapped = mapCueSet(
+    {
+      correct: cue({
+        animation: "image",
+        media: { kind: "stored", id: "oldArt", w: 1, h: 1 },
+        sound: "custom",
+        soundMedia: { kind: "stored", id: "oldClip", w: 0, h: 0 },
+      }),
+    },
+    (ref) => (ref && ref.kind === "stored" ? { ...ref, id: `new-${ref.id}` } : ref),
+  );
+
+  const slot = remapped?.correct;
+  assert.equal(slot?.media?.kind === "stored" && slot.media.id, "new-oldArt");
+  assert.equal(slot?.soundMedia?.kind === "stored" && slot.soundMedia.id, "new-oldClip");
+});
