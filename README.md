@@ -27,6 +27,7 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 - Theme each quiz: five palettes, custom accent and stage colours, three fonts, and five animated backgrounds (aurora, particles, floating shapes, starfield, none)
 - **Background image with GIF support** — drop in a picture or an animated GIF, choose fill/fit/tile, and dial in a dim level so the question stays readable. Animated files (GIF, APNG, animated WebP) are stored untouched so they keep moving; everything else is downscaled
 - Live preview that renders the real play stage, so what you design is what plays
+- **Motion & sound cues** — quiz-wide defaults plus per-question overrides, with optional custom cue audio
 - Autosaves as you type
 
 **Solo play** (`/play/[quizId]`)
@@ -52,6 +53,24 @@ Two checkboxes under **Settings → Host mode** make it run itself:
 - **Auto-advance after reveal** — moves to the next question after a delay you set
 
 With both on, you press play once and the whole quiz runs hands-free. Arrow keys still take over at any point, and it always stops on the last question rather than running off the end.
+
+## Motion & sound
+
+Quizzes can play a short animation and/or sound at named moments in a run:
+
+| Slot | When it fires |
+| --- | --- |
+| **Quiz start** (`intro`) | Before the first question |
+| **Correct answer** | When a player gets one right |
+| **Wrong answer** | When a player misses |
+| **Between questions** | After an answer, before the next question |
+| **Results** (`outro`) | When the quiz finishes |
+
+Defaults live under **Settings → Motion & sound** (quiz-wide). Each question has its own **Motion & sound** section for `correct` / `wrong` / `between` overrides — leave a row on the quiz default to inherit it, or set it to silent to opt out.
+
+Built-in motion includes countdown, confetti, stars, pulse ring, shake, stamp, and a custom image/GIF. Built-in sounds (start, correct, wrong, whoosh, riser, buzz, fanfare, consolation) are synthesized in the browser. Pick **Custom sound…** on a cue to upload your own file through the audio drop zone; it travels with **Export** / **Import** like images.
+
+New and sample quizzes ship with a small **post pack** (countdown + start, confetti + correct, shake + wrong, pulse + whoosh, stars + fanfare). Use **Apply post pack** in Settings to restore it on an existing quiz.
 
 ## Scoring
 
@@ -82,7 +101,7 @@ Deploys are picked up automatically: pages are fetched network-first, so a new v
 
 In this browser, in IndexedDB — not localStorage, because images would blow through its ~5MB cap. Images are downscaled to 1600px and re-encoded as WebP on the way in, which takes a 6MB phone photo down to a couple of hundred KB with no visible loss on a projector.
 
-**Export** writes one self-contained `.json` with the images inlined, so a single file is the whole quiz. **Import** validates it, rebuilds the images, and regenerates every id so importing a quiz you already have can't collide with it.
+**Export** writes one self-contained `.json` with the images (and any custom cue audio) inlined — a quiz backup/share file, **not** a video export. **Import** validates it, rebuilds the media, and regenerates every id so importing a quiz you already have can't collide with it.
 
 Deleting a quiz garbage-collects any images nothing else references.
 
@@ -108,10 +127,10 @@ Node's built-in runner, no dependencies. Coverage is thin — it covers the auto
 
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti. Sound effects are synthesized with the Web Audio API, so there are no audio files to ship.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti. Built-in cue sounds are synthesized with the Web Audio API (nothing to ship for those); authors can also drop in custom cue audio via **AudioDropZone**, which is stored with the quiz like images.
 
 ## Not built yet
 
 - Free-form canvas layout (drag elements anywhere on a slide)
 - Multi-device live join, where players answer on their phones with a room code — this one needs a realtime backend, which is why it isn't here
-- Audio and video clips in questions
+- Audio and video clips *as question content* (custom sounds on cues already work)
