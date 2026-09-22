@@ -47,6 +47,17 @@ export function createQuestion(kind: QuestionKind = "multiple-choice"): Question
     };
   }
 
+  if (kind === "image-choice") {
+    return {
+      id: newId(),
+      kind,
+      layout: "grid",
+      prompt: "",
+      optionGap: 12,
+      options: [createOption("", true), createOption(), createOption(), createOption()],
+    };
+  }
+
   return {
     id: newId(),
     kind,
@@ -85,7 +96,8 @@ export function duplicateQuestion(question: Question): Question {
 
 /**
  * Switching question kind has to keep the options sane: true/false collapses to
- * a fixed pair, and multi-select relaxes the single-correct rule.
+ * a fixed pair, image-choice / multiple-choice collapse to a single correct,
+ * and multi-select relaxes the single-correct rule.
  */
 export function convertKind(question: Question, kind: QuestionKind): Question {
   if (kind === question.kind) return question;
@@ -107,15 +119,17 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
       ? [createOption("", true), createOption(), createOption(), createOption()]
       : question.options;
 
-  if (kind === "multiple-choice") {
+  if (kind === "multiple-choice" || kind === "image-choice") {
     // Collapse to exactly one correct answer — the first one marked, or the first option.
     const firstCorrect = base.findIndex((o) => o.correct);
     const keep = firstCorrect === -1 ? 0 : firstCorrect;
     return {
       ...question,
       kind,
-      layout: question.layout === "big-text" ? "grid" : question.layout,
+      // Image answers always play as a responsive image grid; never big-text.
+      layout: kind === "image-choice" || question.layout === "big-text" ? "grid" : question.layout,
       options: base.map((o, i) => ({ ...o, correct: i === keep })),
+      optionGap: kind === "image-choice" ? (question.optionGap ?? 12) : question.optionGap,
     };
   }
 

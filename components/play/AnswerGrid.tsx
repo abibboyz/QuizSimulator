@@ -32,6 +32,15 @@ const PAD: Record<StageMode, string> = {
   preview: "p-1.5 min-h-8",
 };
 
+/** Min tile width so 4 and 100 image answers both fit without horizontal scroll. */
+function imageChoiceMinPx(count: number): number {
+  if (count <= 4) return 140;
+  if (count <= 9) return 96;
+  if (count <= 25) return 64;
+  if (count <= 49) return 48;
+  return 36;
+}
+
 export function AnswerGrid({
   question,
   selected,
@@ -45,6 +54,88 @@ export function AnswerGrid({
   const ageBand = themeAgeBand(theme);
   const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
   const wrongColor = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
+
+  // Image answers ignore list / big-text column rules and use an auto-fit grid
+  // sized from option count + gap so 4 and 100 tiles both stay usable.
+  if (question.kind === "image-choice") {
+    const count = question.options.length;
+    const gapPx = question.optionGap ?? 12;
+    const minPx = imageChoiceMinPx(count);
+    const gap = mode === "preview" ? Math.max(2, Math.round(gapPx / 2)) : gapPx;
+    const captionText =
+      mode === "host" ? "text-sm md:text-base" : mode === "solo" ? "text-xs md:text-sm" : "text-[8px]";
+    const tilePad = mode === "preview" ? "p-1" : mode === "host" ? "p-2" : "p-1.5";
+
+    return (
+      <div
+        className="w-full"
+        style={{
+          display: "grid",
+          gap: `${gap}px`,
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minPx}px), 1fr))`,
+        }}
+      >
+        {question.options.map((option, index) => {
+          const bg = optionColor(index, { band: ageBand, colors: theme.optionColors, override: option.color });
+          const isPicked = selected.includes(option.id);
+          const showCorrect = revealed && option.correct;
+          const showWrong = revealed && isPicked && !option.correct;
+          const faded = revealed && !option.correct && !isPicked;
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              disabled={!interactive}
+              onClick={() => onPick(option.id)}
+              aria-pressed={isPicked}
+              className={`focus-ring relative flex flex-col overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
+                mode === "preview" ? "" : "animate-tile-in"
+              } ${tilePad} ${
+                interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
+              } ${faded ? "opacity-35 saturate-50" : "opacity-100"} ${
+                isPicked && !revealed ? "ring-4 ring-white/70" : ""
+              } ${showWrong ? "ring-4 ring-white/40" : ""}`}
+              style={{
+                animationDelay: mode === "preview" ? undefined : `${Math.min(index, 4) * 45}ms`,
+                boxShadow: showCorrect
+                  ? `0 0 0 4px #ffffff, 0 0 40px -6px ${withAlpha(correctColor, 0.9)}`
+                  : undefined,
+                background: showCorrect ? correctColor : showWrong ? wrongColor : bg,
+                color: showCorrect
+                  ? readableTextOn(correctColor)
+                  : showWrong
+                    ? readableTextOn(wrongColor)
+                    : (theme.optionTextColor ?? readableTextOn(bg)),
+              }}
+            >
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-black/20">
+                {option.media ? (
+                  <MediaImage media={option.media} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="grid h-full w-full place-items-center opacity-40">?</span>
+                )}
+                {revealed && (option.correct || isPicked) && (
+                  <span
+                    aria-hidden
+                    className={`absolute right-1 top-1 rounded-full bg-black/50 px-1.5 leading-none ${
+                      mode === "preview" ? "text-[8px]" : "text-sm"
+                    }`}
+                  >
+                    {option.correct ? "✓" : "✕"}
+                  </span>
+                )}
+              </div>
+              {option.text.trim() && (
+                <span className={`mt-1.5 min-w-0 break-words text-center ${captionText}`}>{option.text}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   const columns = narrow || question.layout === "list" ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
 
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";

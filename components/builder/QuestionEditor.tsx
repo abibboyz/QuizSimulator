@@ -26,6 +26,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "multiple-choice", label: "Multiple choice" },
   { id: "true-false", label: "True / False" },
   { id: "multi-select", label: "Pick all that apply" },
+  { id: "image-choice", label: "Image answers" },
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -124,6 +125,23 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           />
         }
       />
+
+      {question.kind === "image-choice" && (
+        <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
+          <Input
+            type="number"
+            min={0}
+            max={48}
+            value={question.optionGap ?? 12}
+            onChange={(event) => {
+              const raw = Number(event.target.value);
+              const clamped = Number.isFinite(raw) ? Math.min(48, Math.max(0, Math.round(raw))) : 12;
+              onChange({ ...question, optionGap: clamped });
+            }}
+            aria-label="Gap between image tiles in pixels"
+          />
+        </Field>
+      )}
 
       <Field
         label="Explanation"

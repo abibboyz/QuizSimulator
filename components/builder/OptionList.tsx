@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/Field";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
 const MAX_OPTIONS = 6;
+const MAX_IMAGE_OPTIONS = 100;
 
 interface Props {
   question: Question;
@@ -42,6 +43,8 @@ export function OptionList({ question, onChange, theme, action }: Props) {
   const ageBand = themeAgeBand(theme);
   const fixed = question.kind === "true-false";
   const multi = question.kind === "multi-select";
+  const imageLed = question.kind === "image-choice";
+  const maxOptions = imageLed ? MAX_IMAGE_OPTIONS : MAX_OPTIONS;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -81,6 +84,7 @@ export function OptionList({ question, onChange, theme, action }: Props) {
       option={option}
       index={index}
       multi={multi}
+      imageLed={imageLed}
       ageBand={ageBand}
       marker={theme.optionMarker}
       textColor={theme.optionTextColor}
@@ -100,11 +104,13 @@ export function OptionList({ question, onChange, theme, action }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Answers {multi && <span className="text-ink-500">· mark every correct one</span>}
+          Answers{" "}
+          {multi && <span className="text-ink-500">· mark every correct one</span>}
+          {imageLed && <span className="text-ink-500">· image tiles · text optional</span>}
         </span>
         <span className="flex items-center gap-1">
           {action}
-          {!fixed && question.options.length < MAX_OPTIONS && (
+          {!fixed && question.options.length < maxOptions && (
             <button
               type="button"
               onClick={() => onChange({ ...question, options: [...question.options, createOption()] })}
@@ -138,6 +144,8 @@ interface RowProps {
   option: Option;
   index: number;
   multi: boolean;
+  /** Image-answer rows lead with media; caption text is optional. */
+  imageLed: boolean;
   ageBand?: AgeBand;
   marker?: OptionMarker;
   /** Quiz-wide answer text colour; unset means each badge picks its own. */
@@ -158,6 +166,7 @@ function OptionRow({
   option,
   index,
   multi,
+  imageLed,
   ageBand,
   marker,
   textColor,
@@ -235,14 +244,27 @@ function OptionRow({
         ✓
       </button>
 
-      <Input
-        value={option.text}
-        onChange={(event) => onText(event.target.value)}
-        placeholder={`Answer ${index + 1}`}
-        className="flex-1"
-      />
-
-      <MediaDropZone media={option.media} onChange={onMedia} compact />
+      {imageLed ? (
+        <>
+          <MediaDropZone media={option.media} onChange={onMedia} compact />
+          <Input
+            value={option.text}
+            onChange={(event) => onText(event.target.value)}
+            placeholder="Caption (optional)"
+            className="flex-1 placeholder:text-ink-600"
+          />
+        </>
+      ) : (
+        <>
+          <Input
+            value={option.text}
+            onChange={(event) => onText(event.target.value)}
+            placeholder={`Answer ${index + 1}`}
+            className="flex-1"
+          />
+          <MediaDropZone media={option.media} onChange={onMedia} compact />
+        </>
+      )}
 
       <button
         type="button"

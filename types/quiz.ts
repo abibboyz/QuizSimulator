@@ -76,7 +76,7 @@ export type ProgressPulse = "none" | "heartbeat" | "throb" | "flash";
  */
 export type QuizProgressStyle = "none" | "bar" | "segments" | "dots" | "mascot";
 
-export type QuestionKind = "multiple-choice" | "true-false" | "multi-select";
+export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice";
 
 export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
 
@@ -108,6 +108,11 @@ export interface Question {
   media?: MediaRef;
   explanation?: string;
   options: Option[];
+  /**
+   * Gap in pixels between answer tiles. Used by `image-choice` (and ignored by
+   * other kinds). Unset means 12.
+   */
+  optionGap?: number;
   /** Overrides the quiz-level timer. `null` means untimed. */
   timerSeconds?: number | null;
   /** Overrides the quiz-level base points. */
@@ -260,7 +265,34 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
     if (q.options.length < 2) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} needs at least 2 answers.` });
     }
-    if (!q.options.some((o) => o.correct)) {
+    if (q.kind === "image-choice") {
+      if (q.options.length > 100) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message: `${label} has too many answers (max 100 for image answers).`,
+        });
+      }
+      const withMedia = q.options.filter((o) => o.media).length;
+      if (withMedia < 2) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message: `${label} needs at least 2 answers with images.`,
+        });
+      }
+      const correctCount = q.options.filter((o) => o.correct).length;
+      if (correctCount !== 1) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message:
+            correctCount === 0
+              ? `${label} has no correct answer marked.`
+              : `${label} must have exactly one correct answer.`,
+        });
+      }
+    } else if (!q.options.some((o) => o.correct)) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no correct answer marked.` });
     }
     if (q.options.some((o) => !o.text.trim() && !o.media)) {
