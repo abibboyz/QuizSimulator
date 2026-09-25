@@ -63,6 +63,7 @@ export function QuestionStage({
         <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
           Question {index + 1} of {total}
           {question.kind === "multi-select" && <span className="ml-2 text-ink-400">· pick all that apply</span>}
+          {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· pick an image</span>}
         </span>
         {header}
       </div>

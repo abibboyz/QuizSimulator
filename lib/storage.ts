@@ -67,6 +67,20 @@ function hydrate(quiz: Quiz): Quiz {
     ...quiz,
     theme: { ...DEFAULT_THEME, ...quiz.theme },
     settings: { ...DEFAULT_SETTINGS, ...quiz.settings },
+    questions: quiz.questions.map(normalizeKind),
+  };
+}
+
+/** Older builds saved a picture-round kind. Those questions are image answers now. */
+function normalizeKind(question: Quiz["questions"][number]): Quiz["questions"][number] {
+  if ((question.kind as string) !== "image-identification") return question;
+  const marked = question.options.findIndex((option) => option.correct);
+  const keep = marked === -1 ? 0 : marked;
+  return {
+    ...question,
+    kind: "image-choice",
+    layout: question.layout === "big-text" ? "grid" : question.layout,
+    options: question.options.map((option, index) => ({ ...option, correct: index === keep })),
   };
 }
 

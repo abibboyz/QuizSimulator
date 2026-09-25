@@ -35,7 +35,7 @@ const KIND_LABEL: Record<Question["kind"], string> = {
   "multiple-choice": "Choice",
   "true-false": "True/False",
   "multi-select": "Multi",
-  "image-choice": "Images",
+  "image-choice": "Image",
 };
 
 export function QuestionList({ questions, activeId, invalidIds, onSelect, onReorder, onDuplicate, onDelete }: Props) {

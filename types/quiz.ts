@@ -259,7 +259,8 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
 
   quiz.questions.forEach((q, i) => {
     const label = `Question ${i + 1}`;
-    if (!q.prompt.trim() && !q.media) {
+    const hasPicture = !!q.media || (q.kind === "image-choice" && q.options.some((option) => option.media));
+    if (!q.prompt.trim() && !hasPicture) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no prompt or image.` });
     }
     if (q.options.length < 2) {

@@ -26,7 +26,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "multiple-choice", label: "Multiple choice" },
   { id: "true-false", label: "True / False" },
   { id: "multi-select", label: "Pick all that apply" },
-  { id: "image-choice", label: "Image answers" },
+  { id: "image-choice", label: "Image" },
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -54,6 +54,9 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   // Paste an image from the clipboard straight onto the question. This is the
   // difference between adding twenty screenshots comfortably and giving up.
   useEffect(() => {
+    // Image questions paste onto their own grid, which has its own listener.
+    if (question.kind === "image-choice") return;
+
     const onPaste = async (event: ClipboardEvent) => {
       const file = imageFromTransfer(event.clipboardData);
       if (!file) return;
@@ -107,7 +110,14 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
-      <Field label="Image" hint="Drag one in, click to browse, or just paste from your clipboard.">
+      <Field
+        label={question.kind === "image-choice" ? "Prompt image" : "Image"}
+        hint={
+          question.kind === "image-choice"
+            ? "Optional picture above the question. The grid below is the set of images players see."
+            : "Drag one in, click to browse, or just paste from your clipboard."
+        }
+      >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
 
@@ -164,6 +174,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
+      {question.kind !== "image-choice" && (
       <div>
         <span className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-400">Layout</span>
         <div className="grid grid-cols-2 gap-2">
@@ -184,6 +195,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           ))}
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Timer" hint={`Quiz default: ${quiz.settings.timerSeconds ?? "none"}`}>
