@@ -16,8 +16,9 @@ import { QuestionEditor } from "@/components/builder/QuestionEditor";
 import { ThemePanel } from "@/components/builder/ThemePanel";
 import { SettingsPanel } from "@/components/builder/SettingsPanel";
 import { PreviewPane } from "@/components/builder/PreviewPane";
+import { AnimationsPanel } from "@/components/builder/AnimationsPanel";
 
-type Tab = "preview" | "theme" | "settings";
+type Tab = "preview" | "theme" | "settings" | "animate";
 type SaveState = "clean" | "saving" | "saved";
 
 // useSearchParams needs a Suspense boundary above it.
@@ -234,6 +235,9 @@ function EditView() {
             <Button variant="outline" size="sm" onClick={() => addQuestion("image-choice")}>
               + Image
             </Button>
+            <Button variant="outline" size="sm" className="col-span-2" onClick={() => addQuestion("reveal")}>
+              + Reveal
+            </Button>
           </div>
         </aside>
 
@@ -253,7 +257,7 @@ function EditView() {
 
         <aside className="space-y-3">
           <div className="flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
-            {(["preview", "theme", "settings"] as Tab[]).map((id) => (
+            {(["preview", "theme", "settings", "animate"] as Tab[]).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -283,6 +287,7 @@ function EditView() {
                 onChangeTheme={patchTheme}
               />
             )}
+            {tab === "animate" && <AnimationsPanel quiz={quiz} onChangeSettings={patchSettings} />}
           </div>
         </aside>
       </main>
