@@ -72,6 +72,18 @@ Built-in motion includes countdown, confetti, stars, pulse ring, shake, stamp, a
 
 New and sample quizzes ship with a small **post pack** (countdown + start, confetti + correct, shake + wrong, pulse + whoosh, stars + fanfare). Use **Apply post pack** in Settings to restore it on an existing quiz.
 
+## Exporting a video
+
+**Export video** (dashboard card, the builder header, and the solo intro screen — in both web and mobile view) renders the quiz exactly as a solo run auto-plays — countdown, tile-in, timer ticks, select ring, reveal colours, cues, confetti, results — to a video file you can upload straight to Shorts / Reels / TikTok / YouTube or drop into an editor.
+
+- **Framing:** Vertical 9:16 (the mobile layout) or Horizontal 16:9 (the web layout), at 1080p, 1440p or 4K (4K is much slower and not every encoder supports it — unsupported options are greyed out). 30 or 60 fps.
+- **Answers:** *Show correct pick* (a player locks in the right answer with a second left, so you see the select ring and a correct reveal) or *Let the clock run out* (exactly what auto-play does when nobody touches it).
+- **Format:** MP4 (H.264 + AAC) where the browser can encode it, otherwise WebM (VP9/VP8 + Opus). Sound — the same synthesized blips and custom cue sounds the app plays — is rendered offline and muxed in.
+
+Everything happens in the browser: each frame is drawn to a canvas at *t = frame / fps* from the same timing constants the play screen uses (`lib/playTiming.ts`), encoded with WebCodecs, and muxed with `mp4-muxer` / `webm-muxer`. Nothing is uploaded, and it doesn't matter how fast your device is — a slow device just takes longer. The exporter is a separate chunk downloaded the first time you open it; after that it works offline like the rest of the app.
+
+Not in the video: the mute button, Submit/Next buttons and keyboard hints (their space is kept). Shuffle is ignored so the same quiz always exports the same video; animated GIFs show their first frame; web (URL) images only appear if their host allows cross-origin access.
+
 ## Scoring
 
 ```
@@ -127,7 +139,7 @@ Node's built-in runner, no dependencies. Coverage is thin — it covers the auto
 
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti. Built-in cue sounds are synthesized with the Web Audio API (nothing to ship for those); authors can also drop in custom cue audio via **AudioDropZone**, which is stored with the quiz like images.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti · mp4-muxer + webm-muxer (video export, lazy-loaded). Built-in cue sounds are synthesized with the Web Audio API (nothing to ship for those); authors can also drop in custom cue audio via **AudioDropZone**, which is stored with the quiz like images.
 
 ## Not built yet
 
