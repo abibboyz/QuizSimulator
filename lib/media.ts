@@ -135,18 +135,24 @@ function fit(width: number, height: number, max: number) {
 
 /** Pulls the first image out of a drop or paste event, if there is one. */
 export function imageFromTransfer(data: DataTransfer | null): File | null {
-  if (!data) return null;
+  return imagesFromTransfer(data)[0] ?? null;
+}
 
+/** Every image in a drop or paste, in the order the browser reported them. */
+export function imagesFromTransfer(data: DataTransfer | null): File[] {
+  if (!data) return [];
+
+  const fromFiles = Array.from(data.files ?? []).filter((file) => file.type.startsWith("image/"));
+  if (fromFiles.length) return fromFiles;
+
+  const fromItems: File[] = [];
   for (const item of Array.from(data.items ?? [])) {
     if (item.kind === "file" && item.type.startsWith("image/")) {
       const file = item.getAsFile();
-      if (file) return file;
+      if (file) fromItems.push(file);
     }
   }
-  for (const file of Array.from(data.files ?? [])) {
-    if (file.type.startsWith("image/")) return file;
-  }
-  return null;
+  return fromItems;
 }
 
 export function formatBytes(bytes: number): string {

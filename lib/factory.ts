@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import type { Option, Question, QuestionKind, Quiz, QuizSettings } from "@/types/quiz";
+import { DEFAULT_IMAGE_GAP } from "@/lib/imageChoice";
 import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { POST_PACK_CUES } from "@/lib/cues";
@@ -47,6 +48,19 @@ export function createQuestion(kind: QuestionKind = "multiple-choice"): Question
     };
   }
 
+  if (kind === "image-choice") {
+    return {
+      id: newId(),
+      kind,
+      layout: "grid",
+      prompt: "",
+      optionGap: DEFAULT_IMAGE_GAP,
+      // Two to start, so the grid opens on the large-tile case. Adding more
+      // shrinks the pictures; a hundred is the small end of the same grid.
+      options: [createOption("", true), createOption()],
+    };
+  }
+
   return {
     id: newId(),
     kind,
@@ -83,9 +97,22 @@ export function duplicateQuestion(question: Question): Question {
   };
 }
 
+/** Text answers stay a short list. Image questions are the only kind that
+ *  carries a large set, so leaving that kind has to shed the extras. */
+const TEXT_OPTION_CAP = 6;
+
+function capTextOptions(options: Option[]): Option[] {
+  if (options.length <= TEXT_OPTION_CAP) return options;
+  const sliced = options.slice(0, TEXT_OPTION_CAP);
+  if (sliced.some((option) => option.correct) || !options.some((option) => option.correct)) return sliced;
+  const correct = options.find((option) => option.correct)!;
+  return [correct, ...sliced.slice(0, TEXT_OPTION_CAP - 1)];
+}
+
 /**
  * Switching question kind has to keep the options sane: true/false collapses to
- * a fixed pair, and multi-select relaxes the single-correct rule.
+ * a fixed pair, image-choice / multiple-choice collapse to a single correct,
+ * and multi-select relaxes the single-correct rule.
  */
 export function convertKind(question: Question, kind: QuestionKind): Question {
   if (kind === question.kind) return question;
@@ -107,17 +134,25 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
       ? [createOption("", true), createOption(), createOption(), createOption()]
       : question.options;
 
-  if (kind === "multiple-choice") {
+  if (kind === "multiple-choice" || kind === "image-choice") {
     // Collapse to exactly one correct answer — the first one marked, or the first option.
     const firstCorrect = base.findIndex((o) => o.correct);
     const keep = firstCorrect === -1 ? 0 : firstCorrect;
+    const options = base.map((o, i) => ({ ...o, correct: i === keep }));
     return {
       ...question,
       kind,
-      layout: question.layout === "big-text" ? "grid" : question.layout,
-      options: base.map((o, i) => ({ ...o, correct: i === keep })),
+      // Image answers always play as a responsive image grid; never big-text.
+      layout: kind === "image-choice" || question.layout === "big-text" ? "grid" : question.layout,
+      options: kind === "image-choice" ? options : capTextOptions(options),
+      optionGap: kind === "image-choice" ? (question.optionGap ?? DEFAULT_IMAGE_GAP) : question.optionGap,
     };
   }
 
-  return { ...question, kind, layout: question.layout === "big-text" ? "grid" : question.layout, options: base };
+  return {
+    ...question,
+    kind,
+    layout: question.layout === "big-text" ? "grid" : question.layout,
+    options: capTextOptions(base),
+  };
 }

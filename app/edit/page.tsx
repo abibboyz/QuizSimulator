@@ -219,7 +219,7 @@ function EditView() {
             onDelete={remove}
           />
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" size="sm" onClick={() => addQuestion("multiple-choice")}>
               + Choice
             </Button>
@@ -228,6 +228,9 @@ function EditView() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => addQuestion("multi-select")}>
               + Multi
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => addQuestion("image-choice")}>
+              + Image
             </Button>
           </div>
         </aside>

@@ -25,6 +25,7 @@ import { readableTextOn } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Input } from "@/components/ui/Field";
+import { ImageAnswerGrid } from "@/components/builder/ImageAnswerGrid";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
 const MAX_OPTIONS = 6;
@@ -38,7 +39,16 @@ interface Props {
   action?: ReactNode;
 }
 
-export function OptionList({ question, onChange, theme, action }: Props) {
+export function OptionList(props: Props) {
+  // A separate component so switching to Image does not change how many hooks
+  // the text-answer list calls. Choice, true/false, and multi-select stay here.
+  if (props.question.kind === "image-choice") {
+    return <ImageAnswerGrid question={props.question} onChange={props.onChange} action={props.action} />;
+  }
+  return <TextOptionList {...props} />;
+}
+
+function TextOptionList({ question, onChange, theme, action }: Props) {
   const ageBand = themeAgeBand(theme);
   const fixed = question.kind === "true-false";
   const multi = question.kind === "multi-select";

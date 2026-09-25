@@ -20,7 +20,7 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 
 **Template builder** (`/edit/[quizId]`)
 
-- Three question types: multiple choice, true/false, and pick-all-that-apply
+- Four question types: multiple choice, true/false, pick-all-that-apply, and **image** (a numbered picture grid, up to 100 images, one correct — no answer bullets)
 - Drag questions to reorder them, drag answers within a question; arrow buttons do the same job on touch screens and from the keyboard
 - Images on questions *and* on individual answers — drag one in, click to browse, or **paste straight from the clipboard**
 - Four layouts per question: grid, list, image-first, big type
