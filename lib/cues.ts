@@ -35,6 +35,24 @@ export const CUE_SLOT_LABELS: Record<CueSlot, { label: string; hint: string }> =
 };
 
 /**
+ * A ready-made set of quiz-wide cues so new and sample quizzes aren't silent.
+ * Ids match the catalogs in `animations.ts` / `sound.ts`; durations match each
+ * animation's default hold time.
+ */
+export const POST_PACK_CUES: CueSet = {
+  intro: { animation: "countdown", sound: "start", durationMs: 3200 },
+  correct: { animation: "confetti", sound: "correct", durationMs: 1600 },
+  wrong: { animation: "shake", sound: "wrong", durationMs: 600 },
+  between: { animation: "pulse-ring", sound: "whoosh", durationMs: 900 },
+  outro: { animation: "stars", sound: "fanfare", durationMs: 1600 },
+};
+
+/** Replace quiz-wide cues with {@link POST_PACK_CUES}. Does not touch per-question overrides. */
+export function applyPostPack<T extends { cues: CueSet }>(settings: T): T {
+  return { ...settings, cues: { ...POST_PACK_CUES } };
+}
+
+/**
  * Clamped so a hand-edited or imported value can't stall the run or flash past
  * before anyone sees it.
  */

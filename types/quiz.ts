@@ -185,8 +185,8 @@ export interface QuizSettings {
   /** Seconds the answer stays up before solo play moves on after a timeout. */
   timeoutRevealSeconds: number;
   /**
-   * Quiz-wide animation and sound cues. Empty by default — a quiz stays exactly
-   * as quiet as it is today until an author sets something.
+   * Quiz-wide animation and sound cues. New quizzes start with a small post pack
+   * (countdown, confetti, etc.); clear a slot to silence it.
    */
   cues: CueSet;
   progressStyle: ProgressStyle;

@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import type { Option, Question, QuestionKind, Quiz, QuizSettings } from "@/types/quiz";
 import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { POST_PACK_CUES } from "@/lib/cues";
 
 export function newId(): string {
   return nanoid(12);
@@ -20,9 +21,8 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   autoAdvanceSeconds: null,
   autoAdvanceOnTimeout: true,
   timeoutRevealSeconds: 5,
-  // Nothing is cued until an author asks for it, so a new quiz plays exactly
-  // like one built before cues existed.
-  cues: {},
+  // Sensible motion + sound out of the box; authors can clear or swap any slot.
+  cues: { ...POST_PACK_CUES },
   progressStyle: "ring",
   progressPulse: "none",
   progressMascot: "\u{1F41B}",

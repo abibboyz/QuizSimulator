@@ -4,7 +4,7 @@ import type { Cue, CueSlot, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { Field, Input, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { CueEditor } from "@/components/builder/CueEditor";
-import { CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
+import { applyPostPack, CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
 import { ProgressPanel } from "@/components/builder/ProgressPanel";
 
 interface Props {
@@ -125,10 +125,22 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
       <ProgressPanel settings={settings} onChange={onChangeSettings} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
-        <p className="text-xs text-ink-500">
-          Plays at each moment of a run. Nothing is set until you set it.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
+            <p className="text-xs text-ink-500">
+              Quiz-wide cues for each moment of a run. Per-question overrides live on each
+              question → Motion &amp; sound.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onChangeSettings(applyPostPack(settings))}
+            className="focus-ring shrink-0 rounded-lg border border-ink-600 px-2.5 py-1 text-xs text-ink-300 transition hover:border-ink-500 hover:text-ink-100"
+          >
+            Apply post pack
+          </button>
+        </div>
 
         {CUE_SLOTS.map((slot) => (
           <CueEditor
