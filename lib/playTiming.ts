@@ -110,3 +110,45 @@ export function timerTickKind(elapsedMs: number, limitMs: number, secondsLeft: n
   if (secondsLeft <= 10) return "tick";
   return null;
 }
+
+/* ------------------------------------------------ question / answer motion */
+
+/**
+ * Opt-in entrance/exit effects for the question block and the answer tiles
+ * (`lib/stageMotion.ts`). The `default` effect ignores all of this and keeps
+ * using QUESTION_SWAP / TILE_IN above, which is what keeps existing quizzes
+ * pixel-identical.
+ */
+export const STAGE_MOTION = {
+  /** Travel for the slide effects, in CSS px. */
+  slidePx: 40,
+  /** How far `bounce` drops from, in CSS px. */
+  bouncePx: 60,
+  /** `pop` grows from / shrinks to this scale. */
+  popScale: 0.5,
+  /** `zoom` settles from / grows to this scale. */
+  zoomScale: 1.35,
+  /** `flip` swings in from / out to this many degrees around the x axis. */
+  flipDeg: 80,
+  /** `typewriter` never types faster than this many ms per character. */
+  typewriterMsPerChar: 30,
+  /** …and never takes longer than this in total. */
+  typewriterMaxMs: 4000,
+  /** Custom answer stagger stops growing after this many tiles (the default tile-in caps at 4). */
+  maxStaggerSteps: 10,
+  /** Clamp for authored durations. */
+  minDurationMs: 100,
+  maxDurationMs: 3000,
+  maxStaggerMs: 400,
+};
+
+/* ------------------------------------------------------------------ reveal */
+
+/** Reveal questions: defaults and clamps for the uncovering animation (`lib/reveal.ts`). */
+export const REVEAL_TIMING = {
+  defaultMs: 1200,
+  minMs: 200,
+  maxMs: 6000,
+  /** Tiles / shatter: each tile's own turn takes this share of the whole reveal; the rest is the sweep. */
+  tileSpan: 0.45,
+};

@@ -5,7 +5,7 @@
  */
 
 import type { MediaRef, Quiz } from "@/types/quiz";
-import { SCHEMA_VERSION } from "@/types/quiz";
+import { SCHEMA_VERSION, schemaVersionFor } from "@/types/quiz";
 import { newId } from "@/lib/factory";
 import { collectRefs, getMedia, putMediaRecord, remapMedia, saveQuiz } from "@/lib/storage";
 
@@ -31,7 +31,8 @@ export async function buildBundle(quiz: Quiz): Promise<QuizBundle> {
     media[ref.id] = { dataUrl: await blobToDataUrl(record.blob), w: record.w, h: record.h };
   }
 
-  return { app: APP_TAG, schemaVersion: SCHEMA_VERSION, exportedAt: Date.now(), quiz, media };
+  // Stamped with the oldest schema that can carry it, so older builds still open files that use nothing new.
+  return { app: APP_TAG, schemaVersion: schemaVersionFor(quiz), exportedAt: Date.now(), quiz, media };
 }
 
 export async function exportQuizFile(quiz: Quiz): Promise<number> {
