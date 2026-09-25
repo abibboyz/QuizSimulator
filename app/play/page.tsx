@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
 import { MuteButton } from "@/components/ui/MuteButton";
+import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { CuePlayer } from "@/components/play/CuePlayer";
 import { activeCue } from "@/lib/cues";
 import { useMuted } from "@/hooks/useMuted";
@@ -399,6 +400,12 @@ function PlayView() {
           >
             Start quiz
           </Button>
+          <ExportVideoButton
+            quiz={quiz}
+            defaultFraming={mobile ? "vertical" : "horizontal"}
+            variant="outline"
+            size="sm"
+          />
           <Link href="/" className="text-sm text-ink-400 underline-offset-4 hover:underline">
             Back to all quizzes
           </Link>

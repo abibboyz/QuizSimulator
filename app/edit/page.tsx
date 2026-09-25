@@ -8,6 +8,7 @@ import { validateQuiz } from "@/types/quiz";
 import { getQuiz, saveQuiz } from "@/lib/storage";
 import { createQuestion, duplicateQuestion } from "@/lib/factory";
 import { exportQuizFile } from "@/lib/transfer";
+import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { themeVars } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
 import { QuestionList } from "@/components/builder/QuestionList";
@@ -176,10 +177,11 @@ function EditView() {
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </span>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" onClick={() => exportQuizFile(quiz)}>
               Export
             </Button>
+            <ExportVideoButton quiz={quiz} />
             <Link href={`/host?quiz=${quiz.id}`}>
               <Button variant="outline" size="sm">
                 Host
