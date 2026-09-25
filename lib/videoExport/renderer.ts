@@ -29,10 +29,8 @@ import {
   QUESTION_SWAP,
   SCORE_TWEEN_MS,
   STAR_LANES,
-  TILE_IN,
   TILE_STATE_MS,
   countdownBeatTransitionS,
-  tileDelayMs,
 } from "@/lib/playTiming";
 import {
   alpha,
@@ -51,6 +49,9 @@ import {
   tailwindEase,
 } from "@/lib/videoExport/motion";
 import { sceneAt, type CueInstance, type QuestionRun, type Timeline } from "@/lib/videoExport/timeline";
+import { answerPoseAt, questionPoseAt, typewriterChars, type Pose } from "@/lib/stageMotion";
+import { captionPose, resolveReveal, revealAspect, revealFallbackColor, revealProgress } from "@/lib/reveal";
+import { createRevealEnv, drawReveal, type RevealDrawEnv } from "@/lib/revealDraw";
 
 /* ---------------------------------------------------------------- framing */
 
@@ -107,7 +108,6 @@ const INK = {
 };
 
 const swapEase = cubicBezier(QUESTION_SWAP.ease);
-const tileInEase = cubicBezier(TILE_IN.ease);
 const popEase = cubicBezier(POP_IN.ease);
 const CONFETTI_COLORS = ["#26ccff", "#a25afd", "#ff5e7e", "#88ff5a", "#fcff42", "#ffa62d", "#ff36ff"].map(parseColor);
 
@@ -155,6 +155,7 @@ export class FrameRenderer {
   private readonly quizFont: string;
 
   private readonly filterOK: boolean;
+  private readonly revealEnv: RevealDrawEnv;
   private scratch: HTMLCanvasElement | null = null;
   private readonly wrapCache = new Map<string, string[]>();
   private readonly metricCache = new Map<string, { ascent: number; descent: number }>();
@@ -196,6 +197,7 @@ export class FrameRenderer {
     this.ctx.filter = "blur(1px)";
     this.filterOK = this.ctx.filter === "blur(1px)";
     this.ctx.filter = "none";
+    this.revealEnv = createRevealEnv(revealFallbackColor(this.accent), this.quizFont, this.filterOK);
 
     this.seedDots();
     this.buildReachedSteps();
@@ -682,41 +684,141 @@ export class FrameRenderer {
 
   /* ------------------------------------------------------ question stage */
 
+  /** ms since the question started leaving, or null (the last question never leaves: results replace it). */
+  private sinceExit(run: QuestionRun, t: number): number | null {
+    return run.animateOut && t >= run.exitAt ? t - run.exitAt : null;
+  }
+
   private questionStageBox(run: QuestionRun, t: number, CW: number): Box {
     const { md } = this;
     const q = run.question;
     const revealed = t >= run.revealAt;
     const gap = md ? 32 : 24;
+    const isReveal = q.kind === "reveal";
+
+    // QuestionStage's question block pose (identity for `default`, whose motion is the stage swap).
+    const sinceMount = t - run.mountAt;
+    const sinceExit = this.sinceExit(run, t);
+    const qPose = questionPoseAt(run.motion.question, sinceMount, sinceExit);
+    const posed = (box: Box): Box => ({
+      w: box.w,
+      h: box.h,
+      draw: (x, y) => this.withPose(qPose, x + box.w / 2, y + box.h / 2, 1, () => box.draw(x, y)),
+    });
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
 
     const imageLeads = q.layout === "image-top" && !!q.media;
     if (imageLeads) {
-      const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
-      if (media) parts.push(this.centered(media, CW));
+      const media = isReveal ? this.revealBox(run, t, CW, this.H * 0.26) : this.mediaBox(q.media, CW, this.H * 0.26, 16);
+      if (media) parts.push(posed(isReveal ? media : this.centered(media, CW)));
     }
 
-    const promptBox = this.textBox(q.prompt || "Untitled question", CW, {
+    const promptBox = this.promptBox(run, sinceMount, CW);
+    if (!imageLeads && q.media) {
+      const media = isReveal ? this.revealBox(run, t, CW, this.H * 0.22) : this.mediaBox(q.media, CW, this.H * 0.22, 16);
+      parts.push(
+        posed(this.stack([promptBox, ...(media ? [isReveal ? media : this.centered(media, CW)] : [])], 16, CW)),
+      );
+    } else {
+      parts.push(posed(promptBox));
+    }
+
+    parts.push(q.kind === "image-choice" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW));
+
+    if (revealed && q.explanation) {
+      // The explanation takes the question's exit but not its entrance (it arrives with the answer).
+      const ePose = questionPoseAt({ ...run.motion.question, enter: "none" }, sinceMount, sinceExit);
+      const card = this.explanationBox(q.explanation, run.revealAt, t, CW);
+      parts.push({
+        w: card.w,
+        h: card.h,
+        draw: (x, y) => this.withPose(ePose, x + card.w / 2, y + card.h / 2, 1, () => card.draw(x, y)),
+      });
+    }
+
+    return this.stack(parts, gap, CW);
+  }
+
+  /** The prompt, typed out character by character for the `typewriter` entrance. */
+  private promptBox(run: QuestionRun, sinceMount: number, CW: number): Box {
+    const { md } = this;
+    const q = run.question;
+    const opts = {
       size: md ? 30 : 20,
       lh: md ? 41.25 : 27.5,
       weight: 700,
       color: q.prompt ? this.promptColor : INK[500],
       family: this.quizFont,
-      align: "center",
+      align: "center" as Align,
       balance: true,
-    });
-    if (!imageLeads && q.media) {
-      const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
-      parts.push(this.stack([promptBox, ...(media ? [this.centered(media, CW)] : [])], 16, CW));
-    } else {
-      parts.push(promptBox);
-    }
+    };
+    const full = this.textBox(q.prompt || "Untitled question", CW, opts);
+    const m = run.motion.question;
+    if (m.enter !== "typewriter" || !q.prompt) return full;
+    const typed = typewriterChars(q.prompt, m, sinceMount);
+    if (typed >= [...q.prompt].length) return full;
 
-    parts.push(q.kind === "image-choice" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW));
+    // Same lines as the full prompt; the untyped rest keeps its space, like the
+    // stage's invisible remainder, so nothing reflows while it types.
+    const font = this.font(opts.weight, opts.size, opts.family);
+    const lines = this.balance(q.prompt, font, CW);
+    return {
+      w: CW,
+      h: lines.length * opts.lh,
+      draw: (x, y) => {
+        let left = typed;
+        lines.forEach((line, i) => {
+          if (left <= 0) return;
+          const chars = [...line];
+          const shown = chars.slice(0, left).join("");
+          const lineW = this.measure(line, font);
+          this.drawLine(shown, x + (CW - lineW) / 2, y + i * opts.lh, opts.lh, font, opts.color, "left");
+          left -= chars.length + 1; // the space the line broke on
+        });
+      },
+    };
+  }
 
-    if (revealed && q.explanation) parts.push(this.explanationBox(q.explanation, run.revealAt, t, CW));
+  /**
+   * A Reveal question's picture (RevealPicture): `min(100%, maxH × aspect)`
+   * wide at the picture's own aspect, uncovered by `drawReveal` from the
+   * answer reveal, with the caption's space held underneath from the start.
+   */
+  private revealBox(run: QuestionRun, t: number, CW: number, maxH: number): Box {
+    const q = run.question;
+    const settings = resolveReveal(q);
+    const image = q.media ? this.image(q.media) : null;
+    const cover = settings.cover ? this.image(settings.cover) : null;
+    const aspect = revealAspect(q.media, image);
+    const w = Math.min(CW, maxH * aspect);
+    const h = w / aspect;
+    const sinceReveal = t >= run.revealAt ? t - run.revealAt : null;
+    const p = revealProgress(sinceReveal, settings.durationMs);
 
-    return this.stack(parts, gap, CW);
+    let captionLines: string[] = [];
+    const capSize = this.md ? 24 : 18;
+    const capLh = this.md ? 32 : 28;
+    const capFont = this.font(700, capSize, this.quizFont);
+    if (settings.caption) captionLines = this.wrap(settings.caption, capFont, CW);
+    const capH = captionLines.length ? 8 + captionLines.length * capLh : 0;
+    const cap = captionPose(sinceReveal, settings.durationMs);
+
+    return {
+      w: CW,
+      h: h + capH,
+      draw: (x, y) => {
+        drawReveal(this.ctx, x + (CW - w) / 2, y, w, h, 16, settings, p, image, cover, this.revealEnv);
+        if (!captionLines.length || cap.opacity <= 0) return;
+        const top = y + h + 8;
+        const pose: Pose = { opacity: cap.opacity, x: 0, y: cap.y, scale: cap.scale, rotateX: 0 };
+        this.withPose(pose, x + CW / 2, top + (captionLines.length * capLh) / 2, 1, () =>
+          captionLines.forEach((line, i) =>
+            this.drawLine(line, x + CW / 2, top + i * capLh, capLh, capFont, this.promptColor, "center"),
+          ),
+        );
+      },
+    };
   }
 
   /** "Question 1 of 8" on the left; streak, score and the timer on the right. */
@@ -1019,10 +1121,12 @@ export class FrameRenderer {
 
   /* ------------------------------------------------------------- answers */
 
-  /** `.animate-tile-in`, staggered, from when the question mounted. */
-  private tileIn(run: QuestionRun, index: number, t: number) {
-    const e = tileInEase(clamp01((t - run.mountAt - tileDelayMs(index)) / TILE_IN.durationMs));
-    return { opacity: e, dy: 10 * (1 - e), scale: lerp(0.97, 1, e) };
+  /**
+   * Answer tile `index`'s pose: `.animate-tile-in` (staggered from mount) for
+   * the default look, or the chosen entrance/exit — lib/stageMotion either way.
+   */
+  private tilePose(run: QuestionRun, index: number, t: number): Pose {
+    return answerPoseAt(run.motion.answers, index, t - run.mountAt, this.sinceExit(run, t));
   }
 
   private pickedAt(run: QuestionRun, optionId: string): number | null {
@@ -1125,11 +1229,11 @@ export class FrameRenderer {
     const ring = revealed ? lerp(ringBefore, showCorrect ? 1 : showWrong ? 0.4 : 0, rp) : ringBefore;
     const glow = showCorrect ? rp : 0;
 
-    const tin = this.tileIn(run, i, t);
-    const opacity = tin.opacity * (faded ? lerp(1, 0.35, rp) : 1);
+    const tin = this.tilePose(run, i, t);
+    const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
 
-    this.withTransform(x + w / 2, y + h / 2 + tin.dy, tin.scale, 0, opacity, () => {
+    this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
       if (glow > 0) this.glowShadow(x, y, w, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
       if (ring > 0) this.fillRing(x, y, w, h, r, 4, `rgba(255,255,255,${ring})`);
       this.fillRR(x, y, w, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
@@ -1202,10 +1306,10 @@ export class FrameRenderer {
             const showWrong = revealed && isPicked && !option.correct;
             const faded = revealed && !option.correct && !isPicked;
             const pickP = pickAt !== null && t >= pickAt ? tailwindEase(clamp01((t - pickAt) / TILE_STATE_MS)) : 0;
-            const tin = this.tileIn(run, i, t);
-            const opacity = tin.opacity * (faded ? lerp(1, 0.35, rp) : 1);
+            const tin = this.tilePose(run, i, t);
+            const opacity = faded ? lerp(1, 0.35, rp) : 1;
 
-            this.withTransform(tx + colW / 2, ry + rowH[r] / 2 + tin.dy, tin.scale, 0, opacity, () => {
+            this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
               const rad = 6; // rounded-md
               if (showCorrect) {
                 this.glowShadow(tx, ry, colW, boxH, rad, 6, 28, withAlpha(this.good, 0.9 * rp));
@@ -1268,7 +1372,8 @@ export class FrameRenderer {
       w: CW,
       h,
       draw: (x, y) => {
-        this.withTransform(x + CW / 2, y + h / 2 + 8 * (1 - p), lerp(0.97, 1, p), 0, p, () => {
+        const pop: Pose = { opacity: p, x: 0, y: 8 * (1 - p), scale: lerp(0.97, 1, p), rotateX: 0 };
+        this.withPose(pop, x + CW / 2, y + h / 2, 1, () => {
           this.fillRR(x, y, CW, h, 16, withAlpha(INK[900], 0.8));
           this.strokeRR(x + 0.5, y + 0.5, CW - 1, h - 1, 15.5, INK[600], 1);
           lines.forEach((line, i) =>
@@ -1712,6 +1817,27 @@ export class FrameRenderer {
       ctx.translate(cx, cy);
       if (rotateDeg) ctx.rotate((rotateDeg * Math.PI) / 180);
       if (scale !== 1) ctx.scale(scale, scale);
+      ctx.translate(-cx, -cy);
+    }
+    draw();
+    ctx.restore();
+  }
+
+  /**
+   * Applies a lib/stageMotion pose about (cx, cy): opacity, a real translate,
+   * scale, and rotateX as vertical foreshortening (cos θ) — the canvas stand-in
+   * for the stage's `perspective(800px) rotateX()`.
+   */
+  private withPose(pose: Pose, cx: number, cy: number, opacity: number, draw: () => void) {
+    const alphaOut = pose.opacity * opacity;
+    if (alphaOut <= 0.001) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalAlpha *= alphaOut;
+    const sy = pose.scale * Math.cos((pose.rotateX * Math.PI) / 180);
+    if (pose.x || pose.y || pose.scale !== 1 || sy !== pose.scale) {
+      ctx.translate(cx + pose.x, cy + pose.y);
+      ctx.scale(pose.scale, sy);
       ctx.translate(-cx, -cy);
     }
     draw();
