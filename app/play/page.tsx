@@ -25,6 +25,7 @@ import { CuePlayer } from "@/components/play/CuePlayer";
 import { activeCue } from "@/lib/cues";
 import { useMuted } from "@/hooks/useMuted";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -263,7 +264,7 @@ function PlayView() {
   // With instant reveal switched off, roll straight into the next question.
   useEffect(() => {
     if (phase !== "revealed" || !quiz || quiz.settings.revealAfterEach) return;
-    const id = window.setTimeout(() => goNextRef.current(false), 220);
+    const id = window.setTimeout(() => goNextRef.current(false), REVEAL_OFF_HOLD_MS);
     return () => window.clearTimeout(id);
   }, [phase, quiz]);
 
@@ -423,10 +424,10 @@ function PlayView() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={question.id}
-              initial={reduced ? false : { opacity: 0, x: 36 }}
+              initial={reduced ? false : { opacity: 0, x: QUESTION_SWAP.offsetPx }}
               animate={reduced ? {} : { opacity: 1, x: 0 }}
-              exit={reduced ? {} : { opacity: 0, x: -36 }}
-              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.3, 1] }}
+              exit={reduced ? {} : { opacity: 0, x: -QUESTION_SWAP.offsetPx }}
+              transition={{ duration: QUESTION_SWAP.durationS, ease: QUESTION_SWAP.ease }}
             >
               <QuestionStage
                 question={question}

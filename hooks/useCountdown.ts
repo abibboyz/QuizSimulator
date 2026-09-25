@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { playHeartbeat, playTick, playUrgentTick } from "@/lib/sound";
+import { timerTickKind } from "@/lib/playTiming";
 
 interface Result {
   elapsedMs: number;
@@ -73,10 +74,11 @@ export function useCountdown(
       if (soundRef.current && secondsLeft !== lastTickRef.current && secondsLeft >= 0) {
         lastTickRef.current = secondsLeft;
         const heart = tickRef.current === "heartbeat";
-        if (elapsed / limit > 0.75) {
+        const kind = timerTickKind(elapsed, limit, secondsLeft);
+        if (kind === "urgent") {
           if (heart) playHeartbeat();
           else playUrgentTick();
-        } else if (secondsLeft <= 10) {
+        } else if (kind === "tick") {
           if (heart) playHeartbeat();
           else playTick();
         }

@@ -11,6 +11,7 @@ import { useAnimatedNumber } from "@/hooks/useAnimatedNumber";
 import { Button } from "@/components/ui/Button";
 import { playFanfare } from "@/lib/sound";
 import { CuePlayer } from "@/components/play/CuePlayer";
+import { RESULTS_CONFETTI } from "@/lib/playTiming";
 
 interface Props {
   quiz: Quiz;
@@ -57,9 +58,8 @@ export function ResultsScreen({
 
     // Two bursts from the lower corners reads as celebration without covering
     // the score the player actually came here to see.
-    const common = { particleCount: 70, spread: 70, startVelocity: 45, ticks: 180 } as const;
-    confetti({ ...common, origin: { x: 0.1, y: 0.9 }, angle: 60 });
-    confetti({ ...common, origin: { x: 0.9, y: 0.9 }, angle: 120 });
+    const { bursts, ...common } = RESULTS_CONFETTI;
+    for (const { x, y, angle } of bursts) confetti({ ...common, origin: { x, y }, angle });
   }, [verdict.celebrate, reduced, soundOn, outroCue]);
 
   return (

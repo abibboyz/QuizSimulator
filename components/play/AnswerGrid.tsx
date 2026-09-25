@@ -5,6 +5,7 @@ import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha }
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceGridStyle } from "@/lib/imageChoice";
 import { MediaImage } from "@/components/ui/MediaImage";
+import { tileDelayMs } from "@/lib/playTiming";
 
 export type StageMode = "solo" | "host" | "preview";
 
@@ -78,7 +79,7 @@ export function AnswerGrid({
               } ${interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"} ${
                 faded ? "opacity-35 saturate-50" : "opacity-100"
               }`}
-              style={{ animationDelay: mode === "preview" ? undefined : `${Math.min(index, 4) * 45}ms` }}
+              style={{ animationDelay: mode === "preview" ? undefined : `${tileDelayMs(index)}ms` }}
             >
               <span
                 className={`relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white ${
@@ -157,7 +158,7 @@ export function AnswerGrid({
             style={{
               // Tiles land one after another rather than all at once. Capped so a
               // six-answer question doesn't make the last one feel late.
-              animationDelay: mode === "preview" ? undefined : `${Math.min(index, 4) * 45}ms`,
+              animationDelay: mode === "preview" ? undefined : `${tileDelayMs(index)}ms`,
               // The correct tile's white ring and glow ship as one box-shadow:
               // Tailwind's ring is itself a box-shadow, so an inline one would
               // otherwise wipe it out. The glow follows the reveal colour.
