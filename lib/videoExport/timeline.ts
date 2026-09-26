@@ -32,6 +32,8 @@ import {
   type ConfettiPreset,
 } from "@/lib/playTiming";
 import { CUE_SOUND_RECIPES, type RecipeId } from "@/lib/sound";
+import { exitPhaseMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut, type ResolvedMotion } from "@/lib/stageMotion";
+import { resolveReveal } from "@/lib/reveal";
 
 /* ----------------------------------------------------------------- options */
 
@@ -132,6 +134,12 @@ export interface QuestionRun {
   exitAt: number;
   /** False for the last question: the results screen replaces the stage outright. */
   animateOut: boolean;
+  /** Quiz-wide animation settings with this question's overrides (lib/stageMotion). */
+  motion: ResolvedMotion;
+  /** How long it takes to leave: custom exits, then the stage swap if it uses one. */
+  exitMs: number;
+  /** When the stage swap-out starts, after `exitAt` (custom exits play first). */
+  swapOutDelayMs: number;
 }
 
 export interface Timeline {
@@ -280,6 +288,12 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (feedback) showCue(feedback, correct ? "correct" : "wrong", revealAt);
     else audio.push({ at: revealAt, recipe: correct ? "correct" : "wrong" });
 
+    // A Reveal question's picture uncovers with the answer, with its own sound (play page's reveal effect).
+    if (question.kind === "reveal" && settings.revealAfterEach) {
+      const sound = resolveReveal(question).sound;
+      if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
+    }
+
     const holdSeconds = revealHoldSeconds(settings);
     const timeoutBar = shouldAutoAdvanceAfterTimeout(settings, "revealed", {
       questionId: question.id,
@@ -310,6 +324,9 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       nextLiveAt = advanceAt;
     }
 
+    const motion = resolveMotion(settings, question);
+    const exitMs = exitPhaseMs(motion, question.options.length);
+
     runs.push({
       index,
       question,
@@ -334,10 +351,15 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       advanceAt,
       exitAt: swapAt,
       animateOut: !isLast,
+      motion,
+      exitMs,
+      swapOutDelayMs: swapOutDelayMs(motion, question.options.length),
     });
 
     enterAt = swapAt;
-    mountAt = swapAt + SWAP_MS;
+    // AnimatePresence mode="wait": the next question mounts once this one has
+    // finished leaving — SWAP_MS for today's default look.
+    mountAt = swapAt + exitMs;
     liveAt = nextLiveAt;
     if (between) endPending(nextLiveAt);
     clock = swapAt;
@@ -431,15 +453,18 @@ export function sceneAt(timeline: Timeline, t: number): Scene {
   // one is still on its way out.
   if (index > 0 && t < run.mountAt) {
     const previous = timeline.questions[index - 1];
+    // `progress` is the stage swap-out's; custom exits read the clock themselves.
     return {
       kind: "stage",
       index,
       shown: previous,
-      motion: "exit",
-      progress: clamp01((t - previous.exitAt) / SWAP_MS),
+      motion: usesSwapOut(previous.motion) ? "exit" : "still",
+      progress: usesSwapOut(previous.motion)
+        ? clamp01((t - previous.exitAt - previous.swapOutDelayMs) / SWAP_MS)
+        : 1,
     };
   }
-  if (run.animateIn && t < run.mountAt + SWAP_MS) {
+  if (run.animateIn && usesSwapIn(run.motion) && t < run.mountAt + SWAP_MS) {
     return { kind: "stage", index, shown: run, motion: "enter", progress: clamp01((t - run.mountAt) / SWAP_MS) };
   }
   return { kind: "stage", index, shown: run, motion: "still", progress: 1 };

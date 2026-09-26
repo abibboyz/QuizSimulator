@@ -1,11 +1,12 @@
 "use client";
 
-import type { Question, Theme } from "@/types/quiz";
+import type { ElementMotion, Question, Theme } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceGridStyle } from "@/lib/imageChoice";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { tileDelayMs } from "@/lib/playTiming";
+import { answerPoseAt, isRestPose, type Pose } from "@/lib/stageMotion";
 
 export type StageMode = "solo" | "host" | "preview";
 
@@ -20,6 +21,43 @@ interface Props {
   narrow?: boolean;
   /** Supplies the tile palette, label colour, and marker style. */
   theme: Theme;
+  /** Resolved answer animation. Omitted or all-`default` keeps the CSS tile-in exactly as before. */
+  motion?: ElementMotion;
+  /** Stage clock (lib/stageMotion inputs): ms since the question mounted / started leaving. */
+  sinceMount?: number;
+  sinceExit?: number | null;
+}
+
+/**
+ * Per-tile animation. `default` entrances stay on the `.animate-tile-in` CSS
+ * (so the look is byte-for-byte today's); anything else is an inline pose
+ * computed from the stage clock, with CSS transitions switched off while it
+ * runs so the pose is exactly f(t) rather than chasing it.
+ */
+function tileMotion(
+  motion: ElementMotion | undefined,
+  index: number,
+  sinceMount: number,
+  sinceExit: number | null,
+  faded: boolean,
+): { cssTileIn: boolean; style?: { opacity: number; transform: string; transition: string } } {
+  if (!motion || (motion.enter === "default" && motion.exit === "default")) return { cssTileIn: true };
+  const cssTileIn = motion.enter === "default";
+  const pose: Pose = answerPoseAt(cssTileIn ? { ...motion, enter: "none" } : motion, index, sinceMount, sinceExit);
+  if (isRestPose(pose)) return { cssTileIn };
+  const parts: string[] = [];
+  if (pose.rotateX) parts.push("perspective(800px)");
+  if (pose.x || pose.y) parts.push(`translate(${pose.x.toFixed(2)}px, ${pose.y.toFixed(2)}px)`);
+  if (pose.scale !== 1) parts.push(`scale(${pose.scale.toFixed(4)})`);
+  if (pose.rotateX) parts.push(`rotateX(${pose.rotateX.toFixed(2)}deg)`);
+  return {
+    cssTileIn,
+    style: {
+      opacity: pose.opacity * (faded ? 0.35 : 1),
+      transform: parts.join(" ") || "none",
+      transition: "none",
+    },
+  };
 }
 
 const TEXT: Record<StageMode, string> = {
@@ -43,6 +81,9 @@ export function AnswerGrid({
   mode,
   narrow = false,
   theme,
+  motion,
+  sinceMount = Infinity,
+  sinceExit = null,
 }: Props) {
   const ageBand = themeAgeBand(theme);
   const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
@@ -66,6 +107,8 @@ export function AnswerGrid({
           const showCorrect = revealed && option.correct;
           const showWrong = revealed && isPicked && !option.correct;
           const faded = revealed && !option.correct && !isPicked;
+          const anim = tileMotion(motion, index, sinceMount, sinceExit, faded);
+          const tileIn = mode !== "preview" && anim.cssTileIn;
 
           return (
             <button
@@ -75,11 +118,11 @@ export function AnswerGrid({
               onClick={() => onPick(option.id)}
               aria-pressed={isPicked}
               className={`focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
-                mode === "preview" ? "" : "animate-tile-in"
+                tileIn ? "animate-tile-in" : ""
               } ${interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"} ${
                 faded ? "opacity-35 saturate-50" : "opacity-100"
               }`}
-              style={{ animationDelay: mode === "preview" ? undefined : `${tileDelayMs(index)}ms` }}
+              style={{ animationDelay: tileIn ? `${tileDelayMs(index)}ms` : undefined, ...anim.style }}
             >
               <span
                 className={`relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white ${
@@ -140,6 +183,8 @@ export function AnswerGrid({
         const showCorrect = revealed && option.correct;
         const showWrong = revealed && isPicked && !option.correct;
         const faded = revealed && !option.correct && !isPicked;
+        const anim = tileMotion(motion, index, sinceMount, sinceExit, faded);
+        const tileIn = mode !== "preview" && anim.cssTileIn;
 
         return (
           <button
@@ -149,7 +194,7 @@ export function AnswerGrid({
             onClick={() => onPick(option.id)}
             aria-pressed={isPicked}
             className={`focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
-              mode === "preview" ? "" : "animate-tile-in"
+              tileIn ? "animate-tile-in" : ""
             } ${PAD[mode]} ${TEXT[mode]} ${
               interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
             } ${faded ? "opacity-35 saturate-50" : "opacity-100"} ${
@@ -158,7 +203,7 @@ export function AnswerGrid({
             style={{
               // Tiles land one after another rather than all at once. Capped so a
               // six-answer question doesn't make the last one feel late.
-              animationDelay: mode === "preview" ? undefined : `${tileDelayMs(index)}ms`,
+              animationDelay: tileIn ? `${tileDelayMs(index)}ms` : undefined,
               // The correct tile's white ring and glow ship as one box-shadow:
               // Tailwind's ring is itself a box-shadow, so an inline one would
               // otherwise wipe it out. The glow follows the reveal colour.
@@ -174,6 +219,7 @@ export function AnswerGrid({
                 : showWrong
                   ? readableTextOn(wrongColor)
                   : (theme.optionTextColor ?? readableTextOn(bg)),
+              ...anim.style,
             }}
           >
             {marker && (

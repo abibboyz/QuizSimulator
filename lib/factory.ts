@@ -4,6 +4,7 @@ import { DEFAULT_IMAGE_GAP } from "@/lib/imageChoice";
 import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { POST_PACK_CUES } from "@/lib/cues";
+import { REVEAL_DEFAULTS } from "@/lib/reveal";
 
 export function newId(): string {
   return nanoid(12);
@@ -61,6 +62,17 @@ export function createQuestion(kind: QuestionKind = "multiple-choice"): Question
     };
   }
 
+  if (kind === "reveal") {
+    return {
+      id: newId(),
+      kind,
+      layout: "grid",
+      prompt: "",
+      options: [createOption("", true), createOption(), createOption(), createOption()],
+      reveal: { ...REVEAL_DEFAULTS },
+    };
+  }
+
   return {
     id: newId(),
     kind,
@@ -94,6 +106,15 @@ export function duplicateQuestion(question: Question): Question {
     // Copied rather than shared: editing the duplicate's cues must not reach
     // back into the question it came from.
     cues: question.cues ? { ...question.cues } : undefined,
+    ...(question.reveal ? { reveal: { ...question.reveal } } : {}),
+    ...(question.motion
+      ? {
+          motion: {
+            ...(question.motion.question ? { question: { ...question.motion.question } } : {}),
+            ...(question.motion.answers ? { answers: { ...question.motion.answers } } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -134,7 +155,7 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
       ? [createOption("", true), createOption(), createOption(), createOption()]
       : question.options;
 
-  if (kind === "multiple-choice" || kind === "image-choice") {
+  if (kind === "multiple-choice" || kind === "image-choice" || kind === "reveal") {
     // Collapse to exactly one correct answer — the first one marked, or the first option.
     const firstCorrect = base.findIndex((o) => o.correct);
     const keep = firstCorrect === -1 ? 0 : firstCorrect;
@@ -146,6 +167,8 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
       layout: kind === "image-choice" || question.layout === "big-text" ? "grid" : question.layout,
       options: kind === "image-choice" ? options : capTextOptions(options),
       optionGap: kind === "image-choice" ? (question.optionGap ?? DEFAULT_IMAGE_GAP) : question.optionGap,
+      // Reveal keeps any settings from an earlier round trip through the kind.
+      ...(kind === "reveal" ? { reveal: question.reveal ?? { ...REVEAL_DEFAULTS } } : {}),
     };
   }
 

@@ -156,6 +156,13 @@ export const RECIPES = {
     { freq: 493.88, duration: 0.2, type: "triangle", gain: 0.16, delay: 0.16 },
     { freq: 392, duration: 0.42, type: "triangle", gain: 0.18, delay: 0.32 },
   ],
+  // A soft upward sweep under a quick sparkle — "here it is", for uncovering a picture.
+  reveal: [
+    { freq: 440, duration: 0.36, type: "sine", gain: 0.07, slideTo: 1320 },
+    ...[1046.5, 1318.5, 1568, 2093].map(
+      (freq, i): ToneOptions => ({ freq, duration: 0.18, type: "triangle", gain: 0.09, delay: 0.12 + i * 0.06 }),
+    ),
+  ],
   heartbeat: [
     { freq: 90, duration: 0.11, type: "sine", gain: 0.16 },
     { freq: 76, duration: 0.15, type: "sine", gain: 0.12, delay: 0.14 },
@@ -217,6 +224,11 @@ export function playConsolation() {
   playRecipe(RECIPES.consolation);
 }
 
+/** Uncovering a hidden picture (Reveal questions). */
+export function playReveal() {
+  playRecipe(RECIPES.reveal);
+}
+
 export function playHeartbeat() {
   playRecipe(RECIPES.heartbeat);
 }
@@ -234,6 +246,7 @@ export const CUE_SOUND_RECIPES: Record<Exclude<CueSound, "custom">, RecipeId> = 
   buzz: "buzz",
   fanfare: "fanfare",
   consolation: "consolation",
+  reveal: "reveal",
 };
 
 /**
@@ -249,6 +262,7 @@ export const SOUNDS: Record<CueSound, { label: string; play: () => void }> = {
   buzz: { label: "Time-up buzz", play: playBuzz },
   fanfare: { label: "Fanfare", play: playFanfare },
   consolation: { label: "Consolation", play: playConsolation },
+  reveal: { label: "Reveal sparkle", play: playReveal },
   // Its player needs the cue's file, so the registry entry is a placeholder —
   // playCue routes it to playSample instead of calling this.
   custom: { label: "Custom sound…", play: () => {} },

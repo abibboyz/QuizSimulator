@@ -22,6 +22,7 @@ export function imageRefs(quiz: Quiz): MediaRef[] {
   for (const q of quiz.questions) {
     if (q.media) refs.push(q.media);
     for (const o of q.options) if (o.media) refs.push(o.media);
+    if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
     refs.push(...cueImages(q.cues));
   }
   const seen = new Set<string>();

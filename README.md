@@ -21,6 +21,7 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 **Template builder** (`/edit/[quizId]`)
 
 - Four question types: multiple choice, true/false, pick-all-that-apply, and **image** (a numbered picture grid, up to 100 images, one correct — no answer bullets)
+- **Reveal** questions: a hidden picture that's uncovered with an animation when the answer is revealed (see [Reveal questions & animations](#reveal-questions--animations))
 - Drag questions to reorder them, drag answers within a question; arrow buttons do the same job on touch screens and from the keyboard
 - Images on questions *and* on individual answers — drag one in, click to browse, or **paste straight from the clipboard**
 - Four layouts per question: grid, list, image-first, big type
@@ -71,6 +72,22 @@ Defaults live under **Settings → Motion & sound** (quiz-wide). Each question h
 Built-in motion includes countdown, confetti, stars, pulse ring, shake, stamp, and a custom image/GIF. Built-in sounds (start, correct, wrong, whoosh, riser, buzz, fanfare, consolation) are synthesized in the browser. Pick **Custom sound…** on a cue to upload your own file through the audio drop zone; it travels with **Export** / **Import** like images.
 
 New and sample quizzes ship with a small **post pack** (countdown + start, confetti + correct, shake + wrong, pulse + whoosh, stars + fanfare). Use **Apply post pack** in Settings to restore it on an existing quiz.
+
+## Reveal questions & animations
+
+**Reveal** (Quiz Blitz style) is its own question type: a normal set of answers with exactly one correct, plus an answer picture that stays hidden while the clock runs and is uncovered when the answer is revealed, with an optional caption ("It's the Eiffel Tower!") popping in underneath. It's answered like multiple choice, so scoring, streaks, host mode and auto-play all work unchanged.
+
+Everything lives in the question's **Animations** section (and the builder's **Animate** tab for quiz-wide defaults):
+
+- **Reveal animation:** tile flip, pixelate → sharp, blur → sharp, zoom out from a crop, curtain, wipe (← → ↑ ↓), iris/spotlight, shatter, cross-fade, card flip. Duration (default 1.2 s), tiles across, zoom level and focus point where they apply, plus a live preview with Play / Cover.
+- **Cover:** drop in a cover image, or leave it empty and the picture is hidden behind a solid colour (the theme accent, or one you pick) or a heavily blurred copy of itself. Pixelate, blur and zoom hide the picture on their own. Any aspect ratio works — the picture is fitted, never cropped.
+- **Reveal sound:** a synthesized "Reveal sparkle" by default (no audio file), any built-in sound, or silent.
+
+**Question and answer animations** are separate settings: entrance and exit for the question (text and picture) and for the answer tiles. Entrances: fade, slide from each side, pop, zoom, bounce, flip, typewriter (question text only). Exits: fade, slide, pop, zoom, flip. Each has duration and easing; answers also have a stagger. Set them once for the quiz under **Animate**, then override any question — each row has a **Use global** switch, and **Reset to global** clears a question's overrides. The default for everything is *Default (today's look)*, so existing quizzes play exactly as before.
+
+Every animation is a pure function of elapsed time (`lib/stageMotion.ts`, `lib/reveal.ts`, timing constants in `lib/playTiming.ts`), so the video exporter draws the same frames the play screen shows.
+
+Files that use none of this are still saved as schema version 1, so older copies of the app can open them; quizzes that use Reveal or custom animations are stamped version 2.
 
 ## Exporting a video
 

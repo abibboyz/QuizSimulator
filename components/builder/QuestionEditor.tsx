@@ -12,6 +12,7 @@ import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { OptionList } from "@/components/builder/OptionList";
 import { CueEditor, describeCue } from "@/components/builder/CueEditor";
 import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
+import { AnimationSection } from "@/components/builder/AnimationSection";
 
 interface Props {
   quiz: Quiz;
@@ -27,6 +28,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "true-false", label: "True / False" },
   { id: "multi-select", label: "Pick all that apply" },
   { id: "image-choice", label: "Image" },
+  { id: "reveal", label: "Reveal (hidden picture)" },
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -110,6 +112,9 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
+      {/* A Reveal question's picture is the thing being revealed, so it lives
+          with the rest of the reveal settings below. */}
+      {question.kind !== "reveal" && (
       <Field
         label={question.kind === "image-choice" ? "Prompt image" : "Image"}
         hint={
@@ -120,6 +125,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
+      )}
 
       <OptionList
         question={question}
@@ -230,6 +236,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           />
         </Field>
       </div>
+
+      <AnimationSection quiz={quiz} question={question} onChange={onChange} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
