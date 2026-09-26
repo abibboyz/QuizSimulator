@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "node --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
@@ -17,10 +18,12 @@
     "canvas-confetti": "^1.9.4",
     "idb": "^8.0.3",
     "motion": "^13.1.1",
+    "mp4-muxer": "^5.2.2",
     "nanoid": "^6.0.1",
     "next": "^16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "webm-muxer": "^5.1.4",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

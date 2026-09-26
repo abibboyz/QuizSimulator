@@ -12,11 +12,12 @@
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { MediaRef, Quiz, QuizSummary } from "@/types/quiz";
+import type { Quiz, QuizSummary } from "@/types/quiz";
 import { toSummary } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
-import { mapCueSet, quizCueRefs } from "@/lib/cues";
+import { collectRefs, remapMedia } from "@/lib/mediaRefs";
+import { normalizeRevealQuestion } from "@/lib/reveal";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -73,15 +74,15 @@ function hydrate(quiz: Quiz): Quiz {
 
 /** Older builds saved a picture-round kind. Those questions are image answers now. */
 function normalizeKind(question: Quiz["questions"][number]): Quiz["questions"][number] {
-  if ((question.kind as string) !== "image-identification") return question;
+  if ((question.kind as string) !== "image-identification") return normalizeRevealQuestion(question);
   const marked = question.options.findIndex((option) => option.correct);
   const keep = marked === -1 ? 0 : marked;
-  return {
+  return normalizeRevealQuestion({
     ...question,
     kind: "image-choice",
     layout: question.layout === "big-text" ? "grid" : question.layout,
     options: question.options.map((option, index) => ({ ...option, correct: index === keep })),
-  };
+  });
 }
 
 export async function listQuizzes(): Promise<QuizSummary[]> {
@@ -144,47 +145,8 @@ export async function deleteMedia(id: string): Promise<void> {
   await (await db()).delete("media", id);
 }
 
-/**
- * Every media reference used anywhere in a quiz — including the theme's
- * background picture and every cue's. Miss one and the garbage collector
- * deletes it out from under a saved quiz.
- */
-export function collectRefs(quiz: Quiz): MediaRef[] {
-  const refs: MediaRef[] = [];
-  if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
-  for (const q of quiz.questions) {
-    if (q.media) refs.push(q.media);
-    for (const o of q.options) if (o.media) refs.push(o.media);
-  }
-  refs.push(...quizCueRefs(quiz));
-  if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
-  return refs;
-}
-
-/** Rewrites stored-media ids through a mapping (used when copying/importing). */
-export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
-  const swap = (ref?: MediaRef): MediaRef | undefined => {
-    if (!ref || ref.kind !== "stored") return ref;
-    const next = remap.get(ref.id);
-    return next ? { ...ref, id: next } : ref;
-  };
-
-  return {
-    ...quiz,
-    theme: { ...quiz.theme, bgImage: swap(quiz.theme?.bgImage) },
-    settings: {
-      ...quiz.settings,
-      cues: mapCueSet(quiz.settings?.cues, swap) ?? {},
-      progressMascotMedia: swap(quiz.settings?.progressMascotMedia),
-    },
-    questions: quiz.questions.map((q) => ({
-      ...q,
-      media: swap(q.media),
-      options: q.options.map((o) => ({ ...o, media: swap(o.media) })),
-      cues: mapCueSet(q.cues, swap),
-    })),
-  };
-}
+// Pure (no IndexedDB), so they live where `node --test` can reach them.
+export { collectRefs, remapMedia } from "@/lib/mediaRefs";
 
 /**
  * Drops media blobs no quiz references any more. Cheap enough to run on delete;

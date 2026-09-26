@@ -12,6 +12,7 @@ import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { OptionList } from "@/components/builder/OptionList";
 import { CueEditor, describeCue } from "@/components/builder/CueEditor";
 import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
+import { AnimationSection } from "@/components/builder/AnimationSection";
 
 interface Props {
   quiz: Quiz;
@@ -27,6 +28,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "true-false", label: "True / False" },
   { id: "multi-select", label: "Pick all that apply" },
   { id: "image-choice", label: "Image" },
+  { id: "reveal", label: "Reveal (covered images)" },
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -55,7 +57,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   // difference between adding twenty screenshots comfortably and giving up.
   useEffect(() => {
     // Image questions paste onto their own grid, which has its own listener.
-    if (question.kind === "image-choice") return;
+    if (question.kind === "image-choice" || question.kind === "reveal") return;
 
     const onPaste = async (event: ClipboardEvent) => {
       const file = imageFromTransfer(event.clipboardData);
@@ -110,6 +112,9 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
+      {/* A Reveal question's picture is the thing being revealed, so it lives
+          with the rest of the reveal settings below. */}
+      {question.kind !== "reveal" && (
       <Field
         label={question.kind === "image-choice" ? "Prompt image" : "Image"}
         hint={
@@ -120,6 +125,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
+      )}
 
       <OptionList
         question={question}
@@ -136,7 +142,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         }
       />
 
-      {question.kind === "image-choice" && (
+      {(question.kind === "image-choice" || question.kind === "reveal") && (
         <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
           <Input
             type="number"
@@ -174,7 +180,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
-      {question.kind !== "image-choice" && (
+      {question.kind !== "image-choice" && question.kind !== "reveal" && (
       <div>
         <span className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-400">Layout</span>
         <div className="grid grid-cols-2 gap-2">
@@ -230,6 +236,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           />
         </Field>
       </div>
+
+      <AnimationSection quiz={quiz} question={question} onChange={onChange} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>

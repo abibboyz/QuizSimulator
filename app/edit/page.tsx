@@ -8,6 +8,7 @@ import { validateQuiz } from "@/types/quiz";
 import { getQuiz, saveQuiz } from "@/lib/storage";
 import { createQuestion, duplicateQuestion } from "@/lib/factory";
 import { exportQuizFile } from "@/lib/transfer";
+import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { themeVars } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
 import { QuestionList } from "@/components/builder/QuestionList";
@@ -15,8 +16,9 @@ import { QuestionEditor } from "@/components/builder/QuestionEditor";
 import { ThemePanel } from "@/components/builder/ThemePanel";
 import { SettingsPanel } from "@/components/builder/SettingsPanel";
 import { PreviewPane } from "@/components/builder/PreviewPane";
+import { AnimationsPanel } from "@/components/builder/AnimationsPanel";
 
-type Tab = "preview" | "theme" | "settings";
+type Tab = "preview" | "theme" | "settings" | "animate";
 type SaveState = "clean" | "saving" | "saved";
 
 // useSearchParams needs a Suspense boundary above it.
@@ -176,10 +178,11 @@ function EditView() {
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </span>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" onClick={() => exportQuizFile(quiz)}>
               Export
             </Button>
+            <ExportVideoButton quiz={quiz} />
             <Link href={`/host?quiz=${quiz.id}`}>
               <Button variant="outline" size="sm">
                 Host
@@ -232,6 +235,9 @@ function EditView() {
             <Button variant="outline" size="sm" onClick={() => addQuestion("image-choice")}>
               + Image
             </Button>
+            <Button variant="outline" size="sm" className="col-span-2" onClick={() => addQuestion("reveal")}>
+              + Reveal
+            </Button>
           </div>
         </aside>
 
@@ -251,7 +257,7 @@ function EditView() {
 
         <aside className="space-y-3">
           <div className="flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
-            {(["preview", "theme", "settings"] as Tab[]).map((id) => (
+            {(["preview", "theme", "settings", "animate"] as Tab[]).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -281,6 +287,7 @@ function EditView() {
                 onChangeTheme={patchTheme}
               />
             )}
+            {tab === "animate" && <AnimationsPanel quiz={quiz} onChangeSettings={patchSettings} />}
           </div>
         </aside>
       </main>
