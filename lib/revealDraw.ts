@@ -60,6 +60,25 @@ export function canvasFilterSupported(): boolean {
 
 const BACKDROP = "#0a0c16";
 
+/**
+ * How pictures sit in the box. `cover` (the default) fills it, cropping
+ * overflow. `contain` fits the whole picture on `backdrop` — what Reveal answer
+ * tiles use, so the uncover starts from, and lands on, exactly the tile the
+ * player saw (`object-contain` on `bg-white`) instead of jumping to a crop.
+ */
+export interface RevealFit {
+  fit?: "cover" | "contain";
+  backdrop?: string;
+}
+
+/** Reveal answer tiles: `aspect-[3/2] rounded-md bg-white` with `object-contain` pictures. */
+export const REVEAL_TILE: Readonly<Required<RevealFit> & { radius: number; aspect: number }> = Object.freeze({
+  fit: "contain",
+  backdrop: "#ffffff",
+  radius: 6,
+  aspect: 3 / 2,
+});
+
 function scratch(
   env: RevealDrawEnv,
   key: string,
@@ -128,9 +147,29 @@ function blurInto(
   ctx.restore();
 }
 
-function imageLayer(env: RevealDrawEnv, image: RevealSource | null, W: number, H: number): Scratch {
+function drawContainFit(ctx: CanvasRenderingContext2D, img: RevealSource, w: number, h: number, backdrop: string) {
+  ctx.fillStyle = backdrop;
+  ctx.fillRect(0, 0, w, h);
+  const scale = Math.min(w / img.width, h / img.height);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  ctx.drawImage(img.source, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
+function drawFit(ctx: CanvasRenderingContext2D, img: RevealSource, w: number, h: number, fit: Required<RevealFit>) {
+  if (fit.fit === "contain") drawContainFit(ctx, img, w, h, fit.backdrop);
+  else drawCoverFit(ctx, img, w, h);
+}
+
+function imageLayer(
+  env: RevealDrawEnv,
+  image: RevealSource | null,
+  W: number,
+  H: number,
+  fit: Required<RevealFit>,
+): Scratch {
   const { canvas, ctx } = scratch(env, "image", W, H);
-  if (image) drawCoverFit(ctx, image, W, H);
+  if (image) drawFit(ctx, image, W, H, fit);
   else {
     ctx.fillStyle = "#1d2136";
     ctx.fillRect(0, 0, W, H);
@@ -145,10 +184,11 @@ function coverLayer(
   image: Scratch,
   W: number,
   H: number,
+  fit: Required<RevealFit>,
 ): Scratch {
   const { canvas, ctx } = scratch(env, "cover", W, H);
   if (cover) {
-    drawCoverFit(ctx, cover, W, H);
+    drawFit(ctx, cover, W, H, fit);
     return canvas;
   }
   if (settings.coverFallback === "blur") {
@@ -186,6 +226,7 @@ function drawPictureBased(
   H: number,
   cssW: number,
   cssH: number,
+  fit: Required<RevealFit>,
 ) {
   if (settings.animation === "pixelate") {
     const blocks = pixelBlocks(p, settings.tiles, cssW);
@@ -208,7 +249,7 @@ function drawPictureBased(
   }
   // zoom: crop from the original picture for full sharpness while cropped in.
   const win = zoomWindow(p, settings.zoom, settings.focusX, settings.focusY);
-  if (source) {
+  if (source && fit.fit === "cover") {
     // Map the window through the same cover-fit the image layer uses.
     const scale = Math.max(W / source.width, H / source.height);
     const offX = (source.width * scale - W) / 2;
@@ -237,28 +278,30 @@ export function drawReveal(
   image: RevealSource | null,
   cover: RevealSource | null,
   env: RevealDrawEnv,
+  fitOptions: RevealFit = {},
 ) {
   if (w <= 0 || h <= 0) return;
+  const fit: Required<RevealFit> = { fit: fitOptions.fit ?? "cover", backdrop: fitOptions.backdrop ?? BACKDROP };
   // Work at device resolution: the layers are sized to what the box covers on screen.
   const m = ctx.getTransform();
   const k = Math.max(0.01, Math.hypot(m.a, m.b));
   const W = Math.max(1, Math.round(w * k));
   const H = Math.max(1, Math.round(h * k));
 
-  const img = imageLayer(env, image, W, H);
+  const img = imageLayer(env, image, W, H, fit);
   const info = REVEAL_ANIMATIONS[settings.animation];
 
   const out = scratch(env, "out", W, H);
   const o = out.ctx;
-  o.fillStyle = BACKDROP;
+  o.fillStyle = fit.backdrop;
   o.fillRect(0, 0, W, H);
 
   if (p >= 1) {
     o.drawImage(img, 0, 0);
   } else if (!info.usesCover) {
-    drawPictureBased(env, o, settings, p, img, image, W, H, w, h);
+    drawPictureBased(env, o, settings, p, img, image, W, H, w, h, fit);
   } else {
-    const cov = coverLayer(env, settings, cover, img, W, H);
+    const cov = coverLayer(env, settings, cover, img, W, H, fit);
     if (p <= 0) o.drawImage(cov, 0, 0);
     else drawCoverBased(o, settings, p, img, cov, W, H);
   }

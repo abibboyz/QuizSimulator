@@ -58,6 +58,12 @@ export function MediaDropZone({ media, onChange, compact = false, label = "Image
           <MediaImage
             media={media}
             className={compact ? "h-10 w-10 object-cover" : "max-h-48 w-full bg-ink-950 object-contain"}
+            // Holds the picture's space while it loads, so the panel doesn't jump when it arrives.
+            style={
+              !compact && media.kind === "stored" && media.w && media.h
+                ? { aspectRatio: `${media.w} / ${media.h}` }
+                : undefined
+            }
           />
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-ink-950/80 opacity-0 transition group-hover:opacity-100">
             {!compact && (

@@ -6,7 +6,8 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Button } from "@/components/ui/Button";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
-import { RevealPicture } from "@/components/play/RevealPicture";
+import { RevealCaption, RevealPicture } from "@/components/play/RevealPicture";
+import { REVEAL_TILE } from "@/lib/revealDraw";
 import {
   REVEAL_ANIMATION_IDS,
   REVEAL_ANIMATIONS,
@@ -68,13 +69,26 @@ export function RevealEditor({ question, theme, onChange }: Props) {
       </Field>
 
       <div className="rounded-xl border border-ink-700 bg-ink-950/60 p-3">
-        <RevealPicture
-          question={{ media: answerMedia, reveal: question.reveal }}
-          theme={theme}
-          revealKey={revealKey}
-          maxHeight="12rem"
-          captionClass="text-base"
-        />
+        {/* The same tile the correct answer uncovers in play (3:2, contain on white), so the
+            preview shows the real crop, corners and start frame. */}
+        <div className="mx-auto w-full max-w-[16rem]">
+          <div className="relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white">
+            <RevealPicture
+              question={{ media: answerMedia, reveal: question.reveal }}
+              theme={theme}
+              revealKey={revealKey}
+              maxHeight="100%"
+              fill
+              radius={REVEAL_TILE.radius}
+              fit={REVEAL_TILE}
+            />
+          </div>
+          <RevealCaption
+            settings={settings}
+            revealKey={revealKey}
+            className="mt-2 text-center text-xs font-bold md:text-sm"
+          />
+        </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] text-ink-500">
             {answerMedia

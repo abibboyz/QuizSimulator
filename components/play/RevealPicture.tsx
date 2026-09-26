@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Question, Theme } from "@/types/quiz";
+import type { Question, RevealSettings, Theme } from "@/types/quiz";
 import { useMediaUrl } from "@/hooks/useMediaUrl";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
 import { captionPose, resolveReveal, revealAspect, revealFallbackColor, revealProgress } from "@/lib/reveal";
-import { createRevealEnv, drawReveal, type RevealDrawEnv, type RevealSource } from "@/lib/revealDraw";
+import { createRevealEnv, drawReveal, type RevealDrawEnv, type RevealFit, type RevealSource } from "@/lib/revealDraw";
 import { POP_IN } from "@/lib/playTiming";
+import { canvasBackingSize } from "@/lib/canvasSize";
 
 interface Props {
   question: Pick<Question, "media" | "reveal">;
@@ -22,6 +23,18 @@ interface Props {
   className?: string;
   /** Fill the parent box instead of sizing to the picture's own aspect. */
   fill?: boolean;
+  /** Corner radius drawn on the canvas, in CSS px. Match the box it sits in. */
+  radius?: number;
+  /** How pictures sit in the box; answer tiles use REVEAL_TILE (contain on white). Pass a stable object. */
+  fit?: RevealFit;
+}
+
+/** How long a reveal waits for its pictures to decode before going ahead without them. */
+const SOURCE_WAIT_MS = 1500;
+
+function refKey(ref: Question["media"]): string {
+  if (!ref) return "";
+  return ref.kind === "stored" ? `s:${ref.id}` : `u:${ref.url}`;
 }
 
 /** Decodes a URL into something a canvas can draw, with its natural size. */
@@ -62,6 +75,8 @@ export function RevealPicture({
   captionClass = null,
   className = "",
   fill = false,
+  radius = 16,
+  fit,
 }: Props) {
   const reveal = question.reveal;
   const settings = useMemo(() => resolveReveal({ reveal }), [reveal]);
@@ -69,7 +84,21 @@ export function RevealPicture({
   const cover = useLoadedImage(useMediaUrl(settings.cover));
   const aspect = revealAspect(question.media, image);
 
-  const elapsed = useElapsedSince(revealKey, settings.durationMs + POP_IN.durationMs, instant);
+  // Don't start (or draw) until both pictures are decoded. Starting straight
+  // away drew the first frames of the uncover over a placeholder and the colour
+  // fallback — a visible flash — while the exporter always has its pictures.
+  // A picture that never arrives (deleted media) stops holding things up.
+  const sourcesKey = `${refKey(question.media)}|${refKey(settings.cover)}`;
+  const sourcesReady = (!question.media || !!image) && (!settings.cover || !!cover);
+  const [gaveUpOn, setGaveUpOn] = useState<string | null>(null);
+  useEffect(() => {
+    if (sourcesReady) return;
+    const id = window.setTimeout(() => setGaveUpOn(sourcesKey), SOURCE_WAIT_MS);
+    return () => window.clearTimeout(id);
+  }, [sourcesReady, sourcesKey]);
+  const ready = sourcesReady || gaveUpOn === sourcesKey;
+
+  const elapsed = useElapsedSince(ready ? revealKey : null, settings.durationMs + POP_IN.durationMs, instant);
   const progress = revealProgress(elapsed, settings.durationMs);
   const caption = captionClass !== null && settings.caption ? settings.caption : null;
   const capPose = captionPose(elapsed, settings.durationMs);
@@ -79,6 +108,8 @@ export function RevealPicture({
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
   // Follow the box's laid-out size so the canvas stays sharp at any width or DPR.
+  // The canvas is absolutely positioned in both layouts, so its backing store
+  // can't feed back into the size being observed (see lib/canvasSize.ts).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -95,9 +126,15 @@ export function RevealPicture({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !size || size.w <= 0 || size.h <= 0) return;
-    const dpr = Math.min(3, window.devicePixelRatio || 1);
-    const W = Math.round(size.w * dpr);
-    const H = Math.round(size.h * dpr);
+    if (!ready) {
+      // Transparent until the pictures are in: whatever sits under the canvas (the tile's cover) shows through.
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    const { width: W, height: H } = canvasBackingSize(size.w, size.h, window.devicePixelRatio || 1);
+    // Map CSS px onto the rounded backing store exactly, per axis.
+    const sx = W / size.w;
+    const sy = H / size.h;
     if (canvas.width !== W || canvas.height !== H) {
       canvas.width = W;
       canvas.height = H;
@@ -112,9 +149,9 @@ export function RevealPicture({
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawReveal(ctx, 0, 0, size.w, size.h, 16, settings, progress, image, cover, envRef.current);
-  }, [size, settings, progress, image, cover, theme.accent]);
+    ctx.setTransform(sx, 0, 0, sy, 0, 0);
+    drawReveal(ctx, 0, 0, size.w, size.h, radius, settings, progress, image, cover, envRef.current, fit);
+  }, [size, settings, progress, image, cover, theme.accent, radius, fit, ready]);
 
   const shown = progress >= 1;
 
@@ -139,7 +176,7 @@ export function RevealPicture({
           ref={canvasRef}
           role="img"
           aria-label={shown ? question.media?.alt || "The answer picture" : "A hidden picture"}
-          className="block h-full w-full rounded-2xl"
+          className="absolute inset-0 block h-full w-full rounded-2xl"
         />
       </div>
       {caption && (
@@ -157,5 +194,37 @@ export function RevealPicture({
         </p>
       )}
     </div>
+  );
+}
+
+interface CaptionProps {
+  settings: Pick<RevealSettings, "caption" | "durationMs">;
+  /** Non-null once the answer is out; the caption pops in after the uncover finishes. */
+  revealKey: string | null;
+  instant?: boolean;
+  className?: string;
+}
+
+/**
+ * A Reveal question's caption under the answer grid. Its space is held from
+ * the start (nothing jumps when it lands), and it pops in with `captionPose`
+ * once the uncover finishes — the same function and moment the exporter uses.
+ */
+export function RevealCaption({ settings, revealKey, instant = false, className = "" }: CaptionProps) {
+  const elapsed = useElapsedSince(revealKey, settings.durationMs + POP_IN.durationMs, instant);
+  if (!settings.caption) return null;
+  const pose = captionPose(elapsed, settings.durationMs);
+  return (
+    <p
+      className={className}
+      style={{
+        color: "var(--prompt-color, #e9ebf4)",
+        visibility: pose.opacity > 0 ? "visible" : "hidden",
+        opacity: pose.opacity,
+        transform: pose.opacity < 1 ? `translateY(${pose.y}px) scale(${pose.scale})` : undefined,
+      }}
+    >
+      {settings.caption}
+    </p>
   );
 }

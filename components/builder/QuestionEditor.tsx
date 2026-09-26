@@ -237,7 +237,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         </Field>
       </div>
 
-      <AnimationSection quiz={quiz} question={question} onChange={onChange} />
+      {/* Keyed so preview state (a played reveal, a replay counter) never carries over to another question. */}
+      <AnimationSection key={question.id} quiz={quiz} question={question} onChange={onChange} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Motion &amp; sound</h3>
