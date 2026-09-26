@@ -68,7 +68,10 @@ export function createQuestion(kind: QuestionKind = "multiple-choice"): Question
       kind,
       layout: "grid",
       prompt: "",
-      options: [createOption("", true), createOption(), createOption(), createOption()],
+      optionGap: DEFAULT_IMAGE_GAP,
+      // Same opening grid as an image question. Play covers every tile with one
+      // shared picture (or "?") until the correct image is revealed.
+      options: [createOption("", true), createOption()],
       reveal: { ...REVEAL_DEFAULTS },
     };
   }
@@ -160,13 +163,14 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
     const firstCorrect = base.findIndex((o) => o.correct);
     const keep = firstCorrect === -1 ? 0 : firstCorrect;
     const options = base.map((o, i) => ({ ...o, correct: i === keep }));
+    const imageAnswers = kind === "image-choice" || kind === "reveal";
     return {
       ...question,
       kind,
       // Image answers always play as a responsive image grid; never big-text.
-      layout: kind === "image-choice" || question.layout === "big-text" ? "grid" : question.layout,
-      options: kind === "image-choice" ? options : capTextOptions(options),
-      optionGap: kind === "image-choice" ? (question.optionGap ?? DEFAULT_IMAGE_GAP) : question.optionGap,
+      layout: imageAnswers || question.layout === "big-text" ? "grid" : question.layout,
+      options: imageAnswers ? options : capTextOptions(options),
+      optionGap: imageAnswers ? (question.optionGap ?? DEFAULT_IMAGE_GAP) : question.optionGap,
       // Reveal keeps any settings from an earlier round trip through the kind.
       ...(kind === "reveal" ? { reveal: question.reveal ?? { ...REVEAL_DEFAULTS } } : {}),
     };

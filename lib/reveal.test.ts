@@ -8,7 +8,9 @@ import {
   irisRadius,
   pixelBlocks,
   blurRadius,
+  normalizeRevealQuestion,
   resolveReveal,
+  revealAnswerMedia,
   revealAspect,
   revealFallbackColor,
   revealProgress,
@@ -22,17 +24,18 @@ import {
 } from "./reveal.ts";
 import { validateQuiz, type Question, type Quiz, type RevealSettings } from "../types/quiz.ts";
 
+const picture = (id: string) => ({ kind: "stored" as const, id, w: 800, h: 600 });
+
 const revealQuestion = (over: Partial<Question> = {}): Question => ({
   id: "r1",
   kind: "reveal",
   layout: "grid",
   prompt: "Which landmark is this?",
-  media: { kind: "stored", id: "answer", w: 1600, h: 900 },
   options: [
-    { id: "a", text: "Eiffel Tower", correct: true },
-    { id: "b", text: "Big Ben", correct: false },
-    { id: "c", text: "Colosseum", correct: false },
-    { id: "d", text: "Taj Mahal", correct: false },
+    { id: "a", text: "Eiffel Tower", correct: true, media: picture("eiffel") },
+    { id: "b", text: "Big Ben", correct: false, media: picture("ben") },
+    { id: "c", text: "Colosseum", correct: false, media: picture("colosseum") },
+    { id: "d", text: "Taj Mahal", correct: false, media: picture("taj") },
   ],
   reveal: { animation: "shatter", cover: { kind: "stored", id: "cover", w: 800, h: 800 }, caption: "It's Paris" },
   ...over,
@@ -105,11 +108,28 @@ test("every reveal animation has catalogue info and resolves as itself", () => {
 
 /* ------------------------------------------------------------ validation */
 
-test("validateQuiz: a Reveal question needs an answer picture and exactly one correct answer", () => {
+test("a legacy answer picture belongs to the correct option, and a shared cover is optional", () => {
+  const legacy: Question = {
+    ...revealQuestion(),
+    media: picture("answer"),
+    options: revealQuestion().options.map((option) => ({ ...option, media: undefined })),
+  };
+  const normalized = normalizeRevealQuestion(legacy);
+  assert.equal(normalized.media, undefined);
+  assert.deepEqual(normalized.options[0].media, picture("answer"));
+  assert.equal(normalized.options[1].media, undefined);
+  const uncovered = revealAnswerMedia(legacy, legacy.options[0]);
+  assert.equal(uncovered && uncovered.kind === "stored" ? uncovered.id : "", "answer");
+  assert.equal(revealAnswerMedia(legacy, legacy.options[1]), undefined);
+  assert.deepEqual(validateQuiz(quiz([revealQuestion({ reveal: { animation: "tiles" } })])), []);
+});
+
+test("validateQuiz: a Reveal question needs image answers and exactly one correct answer", () => {
   assert.deepEqual(validateQuiz(quiz([revealQuestion()])), []);
 
-  const noPicture = validateQuiz(quiz([revealQuestion({ media: undefined })]));
-  assert.ok(noPicture.some((i) => /answer picture to reveal/.test(i.message)));
+  const noPicture = revealQuestion();
+  noPicture.options = noPicture.options.map((option) => ({ ...option, media: undefined }));
+  assert.ok(validateQuiz(quiz([noPicture])).some((i) => /at least 2 answers with images/.test(i.message)));
 
   const twoCorrect = revealQuestion();
   twoCorrect.options[1] = { ...twoCorrect.options[1], correct: true };

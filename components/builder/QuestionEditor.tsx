@@ -28,7 +28,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "true-false", label: "True / False" },
   { id: "multi-select", label: "Pick all that apply" },
   { id: "image-choice", label: "Image" },
-  { id: "reveal", label: "Reveal (hidden picture)" },
+  { id: "reveal", label: "Reveal (covered images)" },
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -57,7 +57,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   // difference between adding twenty screenshots comfortably and giving up.
   useEffect(() => {
     // Image questions paste onto their own grid, which has its own listener.
-    if (question.kind === "image-choice") return;
+    if (question.kind === "image-choice" || question.kind === "reveal") return;
 
     const onPaste = async (event: ClipboardEvent) => {
       const file = imageFromTransfer(event.clipboardData);
@@ -142,7 +142,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         }
       />
 
-      {question.kind === "image-choice" && (
+      {(question.kind === "image-choice" || question.kind === "reveal") && (
         <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
           <Input
             type="number"
@@ -180,7 +180,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
-      {question.kind !== "image-choice" && (
+      {question.kind !== "image-choice" && question.kind !== "reveal" && (
       <div>
         <span className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-400">Layout</span>
         <div className="grid grid-cols-2 gap-2">

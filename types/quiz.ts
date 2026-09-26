@@ -253,9 +253,9 @@ export interface Question {
   /** Overrides the quiz-wide cues, slot by slot. */
   cues?: CueSet;
   /**
-   * Reveal questions: how `media` (the answer picture) is covered and then
-   * uncovered. Ignored by other kinds, but kept so switching kind back and
-   * forth doesn't lose it.
+   * Reveal questions: one cover for every image answer, and how the correct
+   * picture is uncovered. Ignored by other kinds, but kept so switching kind
+   * back and forth doesn't lose it.
    */
   reveal?: Partial<RevealSettings>;
   /** Overrides the quiz-wide question/answer animations. Absent = use the quiz's. */
@@ -402,7 +402,9 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
 
   quiz.questions.forEach((q, i) => {
     const label = `Question ${i + 1}`;
-    const hasPicture = !!q.media || (q.kind === "image-choice" && q.options.some((option) => option.media));
+    const hasPicture =
+      !!q.media ||
+      ((q.kind === "image-choice" || q.kind === "reveal") && q.options.some((option) => option.media));
     if (!q.prompt.trim() && !hasPicture) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no prompt or image.` });
     }
@@ -437,11 +439,19 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
         });
       }
     } else if (q.kind === "reveal") {
-      if (!q.media) {
+      if (q.options.length > 100) {
         issues.push({
           questionId: q.id,
           severity: "error",
-          message: `${label} needs an answer picture to reveal.`,
+          message: `${label} has too many answers (max 100 for image answers).`,
+        });
+      }
+      const withMedia = q.options.filter((o) => o.media).length;
+      if (withMedia < 2) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message: `${label} needs at least 2 answers with images.`,
         });
       }
       const correctCount = q.options.filter((o) => o.correct).length;

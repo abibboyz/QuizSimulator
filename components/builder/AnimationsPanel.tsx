@@ -79,8 +79,8 @@ export function AnimationsPanel({ quiz, onChangeSettings }: Props) {
         <h4 className="font-semibold uppercase tracking-widest text-ink-400">Reveal questions</h4>
         <p>
           {reveals === 0
-            ? "Add one with “+ Reveal”: a picture hidden under a cover that comes off when the answer is shown."
-            : `${reveals} Reveal ${reveals === 1 ? "question" : "questions"}. Each picks its own cover and reveal animation in its Animations & reveal section.`}
+            ? "Add one with “+ Reveal”: image answers under one shared cover (or “?”) until the correct picture is shown."
+            : `${reveals} Reveal ${reveals === 1 ? "question" : "questions"}. Each uses one cover for every answer, and uncovers only the correct picture.`}
         </p>
       </div>
     </div>

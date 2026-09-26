@@ -20,6 +20,8 @@ interface Props {
   /** Caption text size; the caption is left out entirely when null. */
   captionClass?: string | null;
   className?: string;
+  /** Fill the parent box instead of sizing to the picture's own aspect. */
+  fill?: boolean;
 }
 
 /** Decodes a URL into something a canvas can draw, with its natural size. */
@@ -59,6 +61,7 @@ export function RevealPicture({
   instant = false,
   captionClass = null,
   className = "",
+  fill = false,
 }: Props) {
   const reveal = question.reveal;
   const settings = useMemo(() => resolveReveal({ reveal }), [reveal]);
@@ -114,6 +117,17 @@ export function RevealPicture({
   }, [size, settings, progress, image, cover, theme.accent]);
 
   const shown = progress >= 1;
+
+  if (fill) {
+    return (
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={shown ? question.media?.alt || "The answer picture" : "A hidden picture"}
+        className={`absolute inset-0 h-full w-full ${className}`}
+      />
+    );
+  }
 
   return (
     <div className={`flex flex-col items-center ${className}`}>

@@ -11,7 +11,7 @@
  * Runtime imports are relative with extensions so `node --test` can load this.
  */
 
-import type { CueSound, MediaRef, Question, RevealAnimation, RevealSettings } from "@/types/quiz";
+import type { CueSound, MediaRef, Option, Question, RevealAnimation, RevealSettings } from "@/types/quiz";
 import { POP_IN, REVEAL_TIMING } from "./playTiming.ts";
 import { clamp01, cubicBezier, lerp, mixColor, mulberry32 } from "./videoExport/motion.ts";
 
@@ -88,6 +88,38 @@ const BUILT_IN_SOUNDS: Record<Exclude<CueSound, "custom">, true> = {
  * Fills a stored partial with defaults and clamps it, so a missing, half
  * written, or hand-edited `reveal` still plays sensibly.
  */
+/**
+ * The picture a Reveal answer uncovers. Older Reveal questions stored that
+ * one picture on the question itself; it belongs to the correct answer.
+ */
+export function revealAnswerMedia(
+  question: Pick<Question, "media" | "options">,
+  option: Option,
+): MediaRef | undefined {
+  if (option.media) return option.media;
+  if (option.correct && question.media && !question.options.some((item) => item.media)) return question.media;
+  return undefined;
+}
+
+/**
+ * Moves a legacy answer picture onto the correct option so the builder shows
+ * it as an image answer. Questions that already have answer images are left
+ * alone, including their prompt picture.
+ */
+export function normalizeRevealQuestion<T extends Question>(question: T): T {
+  if (question.kind !== "reveal" || !question.media || question.options.some((option) => option.media)) {
+    return question;
+  }
+  const marked = question.options.findIndex((option) => option.correct);
+  const keep = marked === -1 ? 0 : marked;
+  const media = question.media;
+  return {
+    ...question,
+    media: undefined,
+    options: question.options.map((option, index) => (index === keep ? { ...option, media } : option)),
+  };
+}
+
 export function resolveReveal(question: Pick<Question, "reveal">): RevealSettings {
   const raw = (
     question.reveal && typeof question.reveal === "object" ? question.reveal : {}

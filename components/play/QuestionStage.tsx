@@ -5,7 +5,6 @@ import { usePresence } from "motion/react";
 import type { Question, Theme } from "@/types/quiz";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
-import { RevealPicture } from "@/components/play/RevealPicture";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
@@ -40,19 +39,6 @@ interface Props {
   motion?: ResolvedMotion;
 }
 
-const CAPTION_TEXT: Record<StageMode, string> = {
-  host: "text-3xl",
-  solo: "text-lg md:text-2xl",
-  preview: "text-[9px]",
-};
-
-/** Reveal pictures keep one size throughout: shrinking at the reveal would undercut the reveal. */
-function revealMaxHeight(mode: StageMode, leads: boolean): string {
-  if (mode === "host") return leads ? "32vh" : "20vh";
-  if (mode === "solo") return leads ? "26vh" : "22vh";
-  return leads ? "3rem" : "2.5rem";
-}
-
 const PROMPT_TEXT: Record<StageMode, string> = {
   host: "text-4xl md:text-6xl leading-tight",
   solo: "text-xl md:text-3xl leading-snug",
@@ -84,8 +70,10 @@ export function QuestionStage({
   theme,
   motion,
 }: Props) {
-  const imageLeads = question.layout === "image-top" && !!question.media;
   const isReveal = question.kind === "reveal";
+  // A Reveal question's pictures are the answers. Its prompt image stays hidden
+  // so the covered grid is the only thing that can give the answer away.
+  const imageLeads = question.layout === "image-top" && !!question.media && !isReveal;
   const reduced = useReducedMotion();
 
   // Stage animation clocks. With default motion both spans are 0, so neither
@@ -128,25 +116,12 @@ export function QuestionStage({
           Question {index + 1} of {total}
           {question.kind === "multi-select" && <span className="ml-2 text-ink-400">· pick all that apply</span>}
           {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· pick an image</span>}
+          {question.kind === "reveal" && <span className="ml-2 text-ink-400">· pick a cover</span>}
         </span>
         {header}
       </div>
 
-      {imageLeads && isReveal && (
-        <div className="flex justify-center" style={questionStyle}>
-          <RevealPicture
-            question={question}
-            theme={theme}
-            revealKey={revealed ? "reveal" : null}
-            maxHeight={revealMaxHeight(mode, true)}
-            instant={mode === "preview" || reduced}
-            captionClass={CAPTION_TEXT[mode]}
-            className="w-full"
-          />
-        </div>
-      )}
-
-      {imageLeads && !isReveal && (
+      {imageLeads && (
         <div className="flex justify-center" style={questionStyle}>
           <MediaImage
             media={question.media}
@@ -181,18 +156,6 @@ export function QuestionStage({
             question.prompt || <span className="text-ink-500">Untitled question</span>
           )}
         </h2>
-
-        {!imageLeads && isReveal && question.media && (
-          <RevealPicture
-            question={question}
-            theme={theme}
-            revealKey={revealed ? "reveal" : null}
-            maxHeight={revealMaxHeight(mode, false)}
-            instant={mode === "preview" || reduced}
-            captionClass={CAPTION_TEXT[mode]}
-            className="w-full"
-          />
-        )}
 
         {!imageLeads && !isReveal && question.media && (
           // The picture gives up height once the answer is out, so the

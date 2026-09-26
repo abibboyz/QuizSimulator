@@ -520,12 +520,12 @@ function PlayView() {
             <p className="mt-4 text-center text-xs text-ink-500">
               {mobile
                 ? phase === "asking"
-                  ? question.kind === "image-choice"
+                  ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Tap an image"
                     : "Tap an answer"
                   : "Tap to keep going"
                 : phase === "asking"
-                  ? question.kind === "image-choice"
+                  ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Click an image"
                     : `Press 1–${question.options.length} to answer`
                   : "Press Enter for the next question"}

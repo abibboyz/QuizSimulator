@@ -17,6 +17,7 @@ import { toSummary } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { collectRefs, remapMedia } from "@/lib/mediaRefs";
+import { normalizeRevealQuestion } from "@/lib/reveal";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -73,15 +74,15 @@ function hydrate(quiz: Quiz): Quiz {
 
 /** Older builds saved a picture-round kind. Those questions are image answers now. */
 function normalizeKind(question: Quiz["questions"][number]): Quiz["questions"][number] {
-  if ((question.kind as string) !== "image-identification") return question;
+  if ((question.kind as string) !== "image-identification") return normalizeRevealQuestion(question);
   const marked = question.options.findIndex((option) => option.correct);
   const keep = marked === -1 ? 0 : marked;
-  return {
+  return normalizeRevealQuestion({
     ...question,
     kind: "image-choice",
     layout: question.layout === "big-text" ? "grid" : question.layout,
     options: question.options.map((option, index) => ({ ...option, correct: index === keep })),
-  };
+  });
 }
 
 export async function listQuizzes(): Promise<QuizSummary[]> {

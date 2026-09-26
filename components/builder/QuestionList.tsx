@@ -115,6 +115,9 @@ function QuestionRow({
   onDelete,
 }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: question.id });
+  const thumb =
+    question.media ??
+    (question.kind === "reveal" ? question.options.find((option) => option.correct)?.media : undefined);
 
   return (
     <li
@@ -137,9 +140,7 @@ function QuestionRow({
       <button type="button" onClick={onSelect} className="focus-ring flex min-w-0 flex-1 items-center gap-2 text-left">
         <span className="w-5 shrink-0 text-xs font-bold tabular-nums text-ink-500">{index + 1}</span>
 
-        {question.media && (
-          <MediaImage media={question.media} className="h-8 w-8 shrink-0 rounded-md object-cover" />
-        )}
+        {thumb && <MediaImage media={thumb} className="h-8 w-8 shrink-0 rounded-md object-cover" />}
 
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-ink-100">

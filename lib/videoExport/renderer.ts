@@ -50,7 +50,7 @@ import {
 } from "@/lib/videoExport/motion";
 import { sceneAt, type CueInstance, type QuestionRun, type Timeline } from "@/lib/videoExport/timeline";
 import { answerPoseAt, questionPoseAt, typewriterChars, type Pose } from "@/lib/stageMotion";
-import { captionPose, resolveReveal, revealAspect, revealFallbackColor, revealProgress } from "@/lib/reveal";
+import { captionPose, resolveReveal, revealAnswerMedia, revealFallbackColor, revealProgress } from "@/lib/reveal";
 import { createRevealEnv, drawReveal, type RevealDrawEnv } from "@/lib/revealDraw";
 
 /* ---------------------------------------------------------------- framing */
@@ -694,7 +694,6 @@ export class FrameRenderer {
     const q = run.question;
     const revealed = t >= run.revealAt;
     const gap = md ? 32 : 24;
-    const isReveal = q.kind === "reveal";
 
     // QuestionStage's question block pose (identity for `default`, whose motion is the stage swap).
     const sinceMount = t - run.mountAt;
@@ -708,23 +707,23 @@ export class FrameRenderer {
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
 
-    const imageLeads = q.layout === "image-top" && !!q.media;
+    const imageLeads = q.layout === "image-top" && !!q.media && q.kind !== "reveal";
     if (imageLeads) {
-      const media = isReveal ? this.revealBox(run, t, CW, this.H * 0.26) : this.mediaBox(q.media, CW, this.H * 0.26, 16);
-      if (media) parts.push(posed(isReveal ? media : this.centered(media, CW)));
+      const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
+      if (media) parts.push(posed(this.centered(media, CW)));
     }
 
     const promptBox = this.promptBox(run, sinceMount, CW);
-    if (!imageLeads && q.media) {
-      const media = isReveal ? this.revealBox(run, t, CW, this.H * 0.22) : this.mediaBox(q.media, CW, this.H * 0.22, 16);
-      parts.push(
-        posed(this.stack([promptBox, ...(media ? [isReveal ? media : this.centered(media, CW)] : [])], 16, CW)),
-      );
+    if (!imageLeads && q.media && q.kind !== "reveal") {
+      const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
+      parts.push(posed(this.stack([promptBox, ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
     } else {
       parts.push(posed(promptBox));
     }
 
-    parts.push(q.kind === "image-choice" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW));
+    parts.push(
+      q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW),
+    );
 
     if (revealed && q.explanation) {
       // The explanation takes the question's exit but not its entrance (it arrives with the answer).
@@ -780,47 +779,6 @@ export class FrameRenderer {
     };
   }
 
-  /**
-   * A Reveal question's picture (RevealPicture): `min(100%, maxH × aspect)`
-   * wide at the picture's own aspect, uncovered by `drawReveal` from the
-   * answer reveal, with the caption's space held underneath from the start.
-   */
-  private revealBox(run: QuestionRun, t: number, CW: number, maxH: number): Box {
-    const q = run.question;
-    const settings = resolveReveal(q);
-    const image = q.media ? this.image(q.media) : null;
-    const cover = settings.cover ? this.image(settings.cover) : null;
-    const aspect = revealAspect(q.media, image);
-    const w = Math.min(CW, maxH * aspect);
-    const h = w / aspect;
-    const sinceReveal = t >= run.revealAt ? t - run.revealAt : null;
-    const p = revealProgress(sinceReveal, settings.durationMs);
-
-    let captionLines: string[] = [];
-    const capSize = this.md ? 24 : 18;
-    const capLh = this.md ? 32 : 28;
-    const capFont = this.font(700, capSize, this.quizFont);
-    if (settings.caption) captionLines = this.wrap(settings.caption, capFont, CW);
-    const capH = captionLines.length ? 8 + captionLines.length * capLh : 0;
-    const cap = captionPose(sinceReveal, settings.durationMs);
-
-    return {
-      w: CW,
-      h: h + capH,
-      draw: (x, y) => {
-        drawReveal(this.ctx, x + (CW - w) / 2, y, w, h, 16, settings, p, image, cover, this.revealEnv);
-        if (!captionLines.length || cap.opacity <= 0) return;
-        const top = y + h + 8;
-        const pose: Pose = { opacity: cap.opacity, x: 0, y: cap.y, scale: cap.scale, rotateX: 0 };
-        this.withPose(pose, x + CW / 2, top + (captionLines.length * capLh) / 2, 1, () =>
-          captionLines.forEach((line, i) =>
-            this.drawLine(line, x + CW / 2, top + i * capLh, capLh, capFont, this.promptColor, "center"),
-          ),
-        );
-      },
-    };
-  }
-
   /** "Question 1 of 8" on the left; streak, score and the timer on the right. */
   private stageHeaderBox(run: QuestionRun, t: number, CW: number): Box {
     const q = run.question;
@@ -849,7 +807,13 @@ export class FrameRenderer {
     const metaFont = this.font(600, 12);
     const main = `QUESTION ${run.index + 1} OF ${this.timeline.questions.length}`;
     const extra =
-      q.kind === "multi-select" ? "· PICK ALL THAT APPLY" : q.kind === "image-choice" ? "· PICK AN IMAGE" : "";
+      q.kind === "multi-select"
+        ? "· PICK ALL THAT APPLY"
+        : q.kind === "image-choice"
+          ? "· PICK AN IMAGE"
+          : q.kind === "reveal"
+            ? "· PICK A COVER"
+            : "";
     const metaMax = Math.max(40, CW - groupW - 16);
     const mainW = this.measure(main, metaFont, 1.2);
     const extraW = extra ? this.measure(extra, metaFont, 1.2) : 0;
@@ -1281,6 +1245,10 @@ export class FrameRenderer {
     const capFont = this.font(600, this.md ? 14 : 12);
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
+    const revealSettings = q.kind === "reveal" ? resolveReveal(q) : null;
+    const coverImage = revealSettings?.cover ? this.image(revealSettings.cover) : null;
+    const sinceReveal = revealed ? t - run.revealAt : null;
+    const uncover = revealSettings ? revealProgress(sinceReveal, revealSettings.durationMs) : 0;
 
     const tiles = q.options.map((option, i) => {
       const caption = option.text.trim() ? this.wrap(option.text, capFont, colW) : [];
@@ -1289,7 +1257,15 @@ export class FrameRenderer {
     const rows: (typeof tiles)[] = [];
     for (let i = 0; i < tiles.length; i += cols) rows.push(tiles.slice(i, i + cols));
     const rowH = rows.map((row) => Math.max(...row.map((tile) => tile.h)));
-    const h = rowH.reduce((a, b) => a + b, 0) + gap * Math.max(0, rows.length - 1);
+    let revealCapLines: string[] = [];
+    let revealCapFont = "";
+    const revealCapLh = this.md ? 32 : 28;
+    if (revealSettings?.caption) {
+      revealCapFont = this.font(700, this.md ? 24 : 18, this.quizFont);
+      revealCapLines = this.wrap(revealSettings.caption, revealCapFont, CW);
+    }
+    const revealCapH = revealCapLines.length ? 8 + revealCapLines.length * revealCapLh : 0;
+    const h = rowH.reduce((a, b) => a + b, 0) + gap * Math.max(0, rows.length - 1) + revealCapH;
     const { ctx } = this;
 
     return {
@@ -1326,12 +1302,47 @@ export class FrameRenderer {
               ctx.clip();
               ctx.fillStyle = "#ffffff";
               ctx.fillRect(tx, ry, colW, boxH);
-              const img = option.media ? this.image(option.media) : null;
-              if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
-              if (img) this.drawContain(img, tx, ry, colW, boxH);
-              else if (!option.media)
-                this.drawLine("?", tx + colW / 2, ry + boxH / 2 - 12, 24, numFont, INK[500], "center");
-              ctx.filter = "none";
+              if (revealSettings) {
+                const answerRef = revealAnswerMedia(q, option);
+                if (revealed && option.correct) {
+                  const answer = answerRef ? this.image(answerRef) : null;
+                  drawReveal(
+                    ctx,
+                    tx,
+                    ry,
+                    colW,
+                    boxH,
+                    rad,
+                    revealSettings,
+                    uncover,
+                    answer,
+                    coverImage,
+                    this.revealEnv,
+                  );
+                } else if (coverImage) {
+                  if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
+                  this.drawContain(coverImage, tx, ry, colW, boxH);
+                  ctx.filter = "none";
+                } else {
+                  const qSize = Math.max(18, Math.round(boxH * 0.42));
+                  this.drawLine(
+                    "?",
+                    tx + colW / 2,
+                    ry + (boxH - qSize) / 2,
+                    qSize,
+                    this.font(700, qSize),
+                    INK[500],
+                    "center",
+                  );
+                }
+              } else {
+                const img = option.media ? this.image(option.media) : null;
+                if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
+                if (img) this.drawContain(img, tx, ry, colW, boxH);
+                else if (!option.media)
+                  this.drawLine("?", tx + colW / 2, ry + boxH / 2 - 12, 24, numFont, INK[500], "center");
+                ctx.filter = "none";
+              }
               ctx.restore();
 
               if (revealed && (option.correct || isPicked)) {
@@ -1358,6 +1369,17 @@ export class FrameRenderer {
           });
           ry += rowH[r] + gap;
         });
+        if (revealCapLines.length && revealSettings && revealCapFont) {
+          const cap = captionPose(sinceReveal, revealSettings.durationMs);
+          if (cap.opacity <= 0) return;
+          const top = ry + 8;
+          const pose: Pose = { opacity: cap.opacity, x: 0, y: cap.y, scale: cap.scale, rotateX: 0 };
+          this.withPose(pose, x + CW / 2, top + (revealCapLines.length * revealCapLh) / 2, 1, () =>
+            revealCapLines.forEach((line, i) =>
+              this.drawLine(line, x + CW / 2, top + i * revealCapLh, revealCapLh, revealCapFont, this.promptColor, "center"),
+            ),
+          );
+        }
       },
     };
   }

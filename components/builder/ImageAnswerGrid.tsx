@@ -223,6 +223,8 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
       </div>
       <p className="text-[11px] text-ink-500">
         Click an empty picture to upload it. + Add image adds one more answer. Bulk images adds several at once. Text under a picture is optional and only shows in play when you fill it in.
+        {question.kind === "reveal" &&
+          " In play, every answer wears the same cover — the picture you set, or “?” — until the correct one is revealed."}
       </p>
 
       <div

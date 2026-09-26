@@ -12,6 +12,7 @@ import {
   REVEAL_ANIMATIONS,
   REVEAL_DEFAULTS,
   resolveReveal,
+  revealAnswerMedia,
   revealFallbackColor,
 } from "@/lib/reveal";
 import { REVEAL_TIMING } from "@/lib/playTiming";
@@ -39,6 +40,8 @@ export function RevealEditor({ question, theme, onChange }: Props) {
   const settings = resolveReveal(question);
   const info = REVEAL_ANIMATIONS[settings.animation];
   const [run, setRun] = useState<number | null>(null);
+  const correct = question.options.find((option) => option.correct) ?? question.options[0];
+  const answerMedia = correct ? revealAnswerMedia(question, correct) : undefined;
 
   // Stores only what's set: a partial resolved against defaults on load.
   const patch = (next: Partial<RevealSettings>) => {
@@ -57,29 +60,16 @@ export function RevealEditor({ question, theme, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Answer picture" hint="Hidden until the answer is revealed. Any shape works.">
-          <MediaDropZone
-            media={question.media}
-            onChange={(media) => onChange({ ...question, media })}
-            label="Answer picture"
-          />
-        </Field>
-        <Field
-          label="Cover picture"
-          hint={
-            info.usesCover
-              ? "Optional. Without one the picture hides behind a colour or a heavy blur."
-              : "Not used by this animation: it works on the answer picture itself."
-          }
-        >
-          <MediaDropZone media={settings.cover} onChange={(cover) => patch({ cover })} label="Cover picture" />
-        </Field>
-      </div>
+      <Field
+        label="Cover picture"
+        hint="The same picture on every answer until the correct one is revealed. Leave empty to show “?”."
+      >
+        <MediaDropZone media={settings.cover} onChange={(cover) => patch({ cover })} label="Cover picture" />
+      </Field>
 
       <div className="rounded-xl border border-ink-700 bg-ink-950/60 p-3">
         <RevealPicture
-          question={question}
+          question={{ media: answerMedia, reveal: question.reveal }}
           theme={theme}
           revealKey={revealKey}
           maxHeight="12rem"
@@ -87,7 +77,9 @@ export function RevealEditor({ question, theme, onChange }: Props) {
         />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] text-ink-500">
-            {question.media ? "Preview uses the real stage drawing." : "Add an answer picture to preview."}
+            {answerMedia
+              ? "Preview uncovers the correct answer. Every answer uses this cover."
+              : "Add answer images and mark the correct one to preview."}
           </span>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => setRun(null)} disabled={run === null}>
