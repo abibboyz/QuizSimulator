@@ -371,6 +371,16 @@ export function swapOutDelayMs(motion: ResolvedMotion, answerCount: number): num
 }
 
 /**
+ * How long the next question's clock waits after the swap, so time spent
+ * watching the previous question's custom exits isn't taken off the timer.
+ * Only custom exits count: all-default motion keeps today's timing (the clock
+ * has always started as the 200ms stage swap begins), so this is 0 there.
+ */
+export function clockHoldMs(leaving: ResolvedMotion, answerCount: number): number {
+  return customExitMs(leaving, answerCount);
+}
+
+/**
  * How long the leaving question holds the stage before the next one mounts
  * (AnimatePresence mode="wait"): its custom exits, then the swap-out if the
  * question uses it. All-default is exactly today's QUESTION_SWAP duration.
