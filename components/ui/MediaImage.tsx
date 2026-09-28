@@ -8,22 +8,24 @@ interface Props {
   className?: string;
   /** Rendered while the blob is still coming out of IndexedDB. */
   fallback?: React.ReactNode;
+  /** Applied to the image and to its loading placeholder alike (e.g. an aspect-ratio that holds its space). */
+  style?: React.CSSProperties;
 }
 
 /**
  * Plain <img> rather than next/image: sources are blob: URLs created at runtime,
  * which the image optimizer can't fetch or resize.
  */
-export function MediaImage({ media, className = "", fallback = null }: Props) {
+export function MediaImage({ media, className = "", fallback = null, style }: Props) {
   const url = useMediaUrl(media);
 
   if (!media) return <>{fallback}</>;
   if (!url) {
-    return <div className={`animate-pulse rounded-xl bg-ink-800 ${className}`} aria-hidden />;
+    return <div className={`animate-pulse rounded-xl bg-ink-800 ${className}`} style={style} aria-hidden />;
   }
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={media.alt ?? ""} className={className} draggable={false} />
+    <img src={url} alt={media.alt ?? ""} className={className} style={style} draggable={false} />
   );
 }

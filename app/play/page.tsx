@@ -27,7 +27,7 @@ import { activeCue } from "@/lib/cues";
 import { useMuted } from "@/hooks/useMuted";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
-import { resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
+import { clockHoldMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
 
 // useSearchParams needs a Suspense boundary above it.
@@ -155,7 +155,23 @@ function PlayView() {
    * the overlay for the cue's second half — and it must not be on the clock, or
    * answerable through it, while the player still can't see it.
    */
-  const stageLive = phase === "asking" && !pending;
+  // The previous question's custom exits play before this one is on screen; its
+  // clock waits for them (0 for default motion, so today's timing is unchanged).
+  // Keyed by the session's per-question stamp, and derived during render so the
+  // clock never starts for a frame first.
+  const runKey = `${index}:${session.startedAt}`;
+  const leaving = index > 0 ? order[index - 1] : undefined;
+  const holdMs =
+    leaving && quiz && !reduced ? clockHoldMs(resolveMotion(quiz.settings, leaving), leaving.options.length) : 0;
+  const [releasedRun, setReleasedRun] = useState<string | null>(null);
+  const exitHeld = phase === "asking" && holdMs > 0 && releasedRun !== runKey;
+  useEffect(() => {
+    if (!exitHeld) return;
+    const id = window.setTimeout(() => setReleasedRun(runKey), holdMs);
+    return () => window.clearTimeout(id);
+  }, [exitHeld, holdMs, runKey]);
+
+  const stageLive = phase === "asking" && !pending && !exitHeld;
 
   const countdown = useCountdown(
     stageLive,
@@ -163,6 +179,8 @@ function PlayView() {
     soundOn,
     handleExpire,
     quiz?.settings.progressPulse === "heartbeat" ? "heartbeat" : "beep",
+    // Each question run gets its own clock: `startedAt` is stamped by the session on every advance/retry.
+    runKey,
   );
 
   // Mark the wall-clock start of each question so untimed play can still record

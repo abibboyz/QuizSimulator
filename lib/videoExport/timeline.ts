@@ -32,7 +32,15 @@ import {
   type ConfettiPreset,
 } from "@/lib/playTiming";
 import { CUE_SOUND_RECIPES, type RecipeId } from "@/lib/sound";
-import { exitPhaseMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut, type ResolvedMotion } from "@/lib/stageMotion";
+import {
+  clockHoldMs,
+  exitPhaseMs,
+  resolveMotion,
+  swapOutDelayMs,
+  usesSwapIn,
+  usesSwapOut,
+  type ResolvedMotion,
+} from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
 
 /* ----------------------------------------------------------------- options */
@@ -360,7 +368,8 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     // AnimatePresence mode="wait": the next question mounts once this one has
     // finished leaving — SWAP_MS for today's default look.
     mountAt = swapAt + exitMs;
-    liveAt = nextLiveAt;
+    // The next clock doesn't run while this question's custom exits play (play/page.tsx holds it the same way).
+    liveAt = Math.max(nextLiveAt, swapAt + clockHoldMs(motion, question.options.length));
     if (between) endPending(nextLiveAt);
     clock = swapAt;
   });

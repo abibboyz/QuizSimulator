@@ -6,7 +6,8 @@ import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceGridStyle } from "@/lib/imageChoice";
 import { revealAnswerMedia, resolveReveal } from "@/lib/reveal";
 import { MediaImage } from "@/components/ui/MediaImage";
-import { RevealPicture } from "@/components/play/RevealPicture";
+import { RevealCaption, RevealPicture } from "@/components/play/RevealPicture";
+import { REVEAL_TILE } from "@/lib/revealDraw";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { tileDelayMs } from "@/lib/playTiming";
 import { answerPoseAt, isRestPose, type Pose } from "@/lib/stageMotion";
@@ -146,7 +147,14 @@ export function AnswerGrid({
                         : undefined,
                   }}
                 >
-                  {showCorrect ? (
+                  {cover ? (
+                    <MediaImage media={cover} className="h-full w-full object-contain" />
+                  ) : (
+                    <span className={`grid h-full w-full place-items-center font-bold text-ink-500 ${markText}`}>?</span>
+                  )}
+                  {/* The uncover draws over the cover it replaces, so the cover stays on
+                      screen until the canvas has its pictures and paints its first frame. */}
+                  {showCorrect && (
                     <RevealPicture
                       question={{ media: answerMedia, reveal: question.reveal }}
                       theme={theme}
@@ -155,11 +163,9 @@ export function AnswerGrid({
                       instant={mode === "preview" || reduced}
                       captionClass={null}
                       fill
+                      radius={REVEAL_TILE.radius}
+                      fit={REVEAL_TILE}
                     />
-                  ) : cover ? (
-                    <MediaImage media={cover} className="h-full w-full object-contain" />
-                  ) : (
-                    <span className={`grid h-full w-full place-items-center font-bold text-ink-500 ${markText}`}>?</span>
                   )}
                   {revealed && (option.correct || isPicked) && (
                     <span
@@ -184,14 +190,12 @@ export function AnswerGrid({
             );
           })}
         </div>
-        {settings.caption && (
-          <p
-            className={`mt-2 text-center font-bold ${captionText}`}
-            style={{ color: "var(--prompt-color, #e9ebf4)", visibility: revealed ? "visible" : "hidden" }}
-          >
-            {settings.caption}
-          </p>
-        )}
+        <RevealCaption
+          settings={settings}
+          revealKey={revealed ? `${question.id}:reveal` : null}
+          instant={mode === "preview" || reduced}
+          className={`mt-2 text-center font-bold ${captionText}`}
+        />
       </div>
     );
   }

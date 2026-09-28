@@ -51,7 +51,7 @@ import {
 import { sceneAt, type CueInstance, type QuestionRun, type Timeline } from "@/lib/videoExport/timeline";
 import { answerPoseAt, questionPoseAt, typewriterChars, type Pose } from "@/lib/stageMotion";
 import { captionPose, resolveReveal, revealAnswerMedia, revealFallbackColor, revealProgress } from "@/lib/reveal";
-import { createRevealEnv, drawReveal, type RevealDrawEnv } from "@/lib/revealDraw";
+import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 
 /* ---------------------------------------------------------------- framing */
 
@@ -1259,9 +1259,10 @@ export class FrameRenderer {
     const rowH = rows.map((row) => Math.max(...row.map((tile) => tile.h)));
     let revealCapLines: string[] = [];
     let revealCapFont = "";
-    const revealCapLh = this.md ? 32 : 28;
+    // AnswerGrid's caption: `mt-2 font-bold text-xs md:text-sm` in the body font.
+    const revealCapLh = this.md ? 20 : 16;
     if (revealSettings?.caption) {
-      revealCapFont = this.font(700, this.md ? 24 : 18, this.quizFont);
+      revealCapFont = this.font(700, this.md ? 14 : 12);
       revealCapLines = this.wrap(revealSettings.caption, revealCapFont, CW);
     }
     const revealCapH = revealCapLines.length ? 8 + revealCapLines.length * revealCapLh : 0;
@@ -1318,19 +1319,21 @@ export class FrameRenderer {
                     answer,
                     coverImage,
                     this.revealEnv,
+                    REVEAL_TILE,
                   );
                 } else if (coverImage) {
                   if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
                   this.drawContain(coverImage, tx, ry, colW, boxH);
                   ctx.filter = "none";
                 } else {
-                  const qSize = Math.max(18, Math.round(boxH * 0.42));
+                  // No cover: `grid place-items-center font-bold text-3xl text-ink-500` (30px / 36px).
+                  const qLh = 36;
                   this.drawLine(
                     "?",
                     tx + colW / 2,
-                    ry + (boxH - qSize) / 2,
-                    qSize,
-                    this.font(700, qSize),
+                    ry + (boxH - qLh) / 2,
+                    qLh,
+                    this.font(700, 30),
                     INK[500],
                     "center",
                   );
@@ -1460,7 +1463,10 @@ export class FrameRenderer {
 
     const p = popEase(clamp01((t - results.start) / POP_IN.durationMs));
     let y = 40;
-    this.withTransform(x0 + CW / 2, y + header.h / 2 + 8 * (1 - p), lerp(0.97, 1, p), 0, p, () => header.draw(x0, y));
+    // `animate-pop`: translateY(8px) scale(0.97) → none. A real translate — offsetting only the
+    // scale pivot (as this used to) left the header static apart from the fade.
+    const headerPose: Pose = { opacity: 1, x: 0, y: 8 * (1 - p), scale: lerp(0.97, 1, p), rotateX: 0 };
+    this.withPose(headerPose, x0 + CW / 2, y + header.h / 2, p, () => header.draw(x0, y));
     y += header.h + 32;
 
     stats.forEach(([label, value, highlight], i) => {

@@ -85,7 +85,7 @@ Everything lives in the question's **Animations** section (and the builder's **A
 
 **Question and answer animations** are separate settings: entrance and exit for the question (text and picture) and for the answer tiles. Entrances: fade, slide from each side, pop, zoom, bounce, flip, typewriter (question text only). Exits: fade, slide, pop, zoom, flip. Each has duration and easing; answers also have a stagger. Set them once for the quiz under **Animate**, then override any question — each row has a **Use global** switch, and **Reset to global** clears a question's overrides. The default for everything is *Default (today's look)*, so existing quizzes play exactly as before.
 
-Every animation is a pure function of elapsed time (`lib/stageMotion.ts`, `lib/reveal.ts`, timing constants in `lib/playTiming.ts`), so the video exporter draws the same frames the play screen shows.
+Every animation is a pure function of elapsed time (`lib/stageMotion.ts`, `lib/reveal.ts`, timing constants in `lib/playTiming.ts`), so the video exporter draws the same frames the play screen shows. A question's timer never runs while the previous question's custom exit animations are still playing, live or in the video (with today's default look nothing changes).
 
 Files that use none of this are still saved as schema version 1, so older copies of the app can open them; quizzes that use Reveal or custom animations are stamped version 2.
 
@@ -136,7 +136,7 @@ Deleting a quiz garbage-collects any images nothing else references.
 
 ## Accessibility
 
-`prefers-reduced-motion` turns off the animated backgrounds and the confetti and collapses transitions — the app stays fully usable. Drag-and-drop has a keyboard path, and reordering also works through plain buttons.
+`prefers-reduced-motion` turns off the animated backgrounds and the confetti and collapses transitions — the app stays fully usable. Reveals and custom animations jump straight to their end state; the builder previews still animate when you press Play, and an exported video always shows the full animations. Drag-and-drop has a keyboard path, and reordering also works through plain buttons.
 
 ## Deploying
 
@@ -153,6 +153,15 @@ npm test
 ```
 
 Node's built-in runner, no dependencies. Coverage is thin — it covers the auto-advance rules in `lib/autoAdvance.ts`, where the "keep going after a timeout, but not after an answer" distinction is easy to break by accident.
+
+It also covers the Reveal/animation plumbing: reveal drawing and timing, canvas sizing (`lib/canvasSize.ts`, including a regression test for the builder cover preview that used to grow on its own), the per-question timer clock, and `lib/consistency.test.ts`, which checks that the builder, live play and the video export resolve the same animations and that every new field survives save/Export/Import.
+
+```bash
+npm run build && npx next start -p 3000 &
+BASE=http://localhost:3000 CHROME_PATH=/path/to/chrome npm run test:layout
+```
+
+`test:layout` is a headless-Chrome check (uses the `playwright-core` dev dependency and your installed Chrome): it seeds Reveal quizzes, opens the builder, play and host screens in web and mobile view, scrolls and resizes, and fails if any image or canvas changes size.
 
 ## Stack
 
