@@ -8,6 +8,7 @@ import { cueHoldMs } from "@/lib/cues";
 import { playCountdownBeep, playCue } from "@/lib/sound";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useMediaUrl } from "@/hooks/useMediaUrl";
+import { COUNTDOWN_BEATS, CUE_CONFETTI, STAR_LANES, countdownBeatTransitionS } from "@/lib/playTiming";
 
 interface Props {
   cue: Cue;
@@ -72,9 +73,8 @@ export function CuePlayer({ cue, onDone, soundOn, onMidpoint }: Props) {
     // Confetti is a canvas burst rather than a rendered element, so it fires
     // here alongside the sound instead of in the tree below.
     if (!reducedRef.current && cue.animation === "confetti") {
-      const common = { particleCount: 60, spread: 65, startVelocity: 42, ticks: 160 } as const;
-      confetti({ ...common, origin: { x: 0.15, y: 0.85 }, angle: 60 });
-      confetti({ ...common, origin: { x: 0.85, y: 0.85 }, angle: 120 });
+      const { bursts, ...common } = CUE_CONFETTI;
+      for (const { x, y, angle } of bursts) confetti({ ...common, origin: { x, y }, angle });
     }
 
     // With motion suppressed the visuals are skipped, so there is nothing to
@@ -104,7 +104,7 @@ export function CuePlayer({ cue, onDone, soundOn, onMidpoint }: Props) {
 
 /* ------------------------------------------------------------------ parts */
 
-const BEATS = ["3", "2", "1", "Go!"];
+const BEATS = COUNTDOWN_BEATS;
 
 function Countdown({ holdMs, soundOn }: { holdMs: number; soundOn: boolean }) {
   const [beat, setBeat] = useState(0);
@@ -133,7 +133,7 @@ function Countdown({ holdMs, soundOn }: { holdMs: number; soundOn: boolean }) {
           initial={{ scale: 0.4, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 1.6, opacity: 0 }}
-          transition={{ duration: Math.min(0.35, perBeat / 1000), ease: [0.2, 0.8, 0.3, 1] }}
+          transition={{ duration: countdownBeatTransitionS(perBeat), ease: [0.2, 0.8, 0.3, 1] }}
           className="stage-prompt font-extrabold tabular-nums"
           style={{ color: "var(--accent)", fontSize: "clamp(5rem, 22vw, 16rem)" }}
         >
@@ -144,9 +144,7 @@ function Countdown({ holdMs, soundOn }: { holdMs: number; soundOn: boolean }) {
   );
 }
 
-// Fixed offsets rather than Math.random(): a server/client mismatch would warn
-// on hydration, and a repeatable shower is easier to tune than a random one.
-const STAR_LANES = [6, 18, 29, 41, 52, 63, 74, 86, 94, 12, 36, 58, 81];
+// Fixed offsets rather than Math.random() — see STAR_LANES in lib/playTiming.
 
 function Stars({ holdMs }: { holdMs: number }) {
   return (

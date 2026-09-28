@@ -58,7 +58,7 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
-interface ToneOptions {
+export interface ToneOptions {
   freq: number;
   duration: number;
   type?: OscillatorType;
@@ -68,11 +68,19 @@ interface ToneOptions {
   slideTo?: number;
 }
 
-function tone({ freq, duration, type = "sine", gain = 0.2, delay = 0, slideTo }: ToneOptions) {
-  const ac = audio();
-  if (!ac) return;
-
-  const start = ac.currentTime + delay;
+/**
+ * Schedules one blip on any audio context — the live one below, or an
+ * OfflineAudioContext when a run is being rendered to a video file. Keeping a
+ * single implementation is what stops an exported soundtrack drifting from
+ * what the app actually plays.
+ */
+export function scheduleTone(
+  ac: BaseAudioContext,
+  destination: AudioNode,
+  { freq, duration, type = "sine", gain = 0.2, delay = 0, slideTo }: ToneOptions,
+  at: number,
+) {
+  const start = at + delay;
   const osc = ac.createOscillator();
   const env = ac.createGain();
 
@@ -87,82 +95,159 @@ function tone({ freq, duration, type = "sine", gain = 0.2, delay = 0, slideTo }:
   env.gain.exponentialRampToValueAtTime(gain, start + 0.012);
   env.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
-  osc.connect(env).connect(ac.destination);
+  osc.connect(env).connect(destination);
   osc.start(start);
   osc.stop(start + duration + 0.02);
 }
 
+function tone(options: ToneOptions) {
+  const ac = audio();
+  if (!ac) return;
+  scheduleTone(ac, ac.destination, options, ac.currentTime);
+}
+
+function playRecipe(recipe: readonly ToneOptions[]) {
+  recipe.forEach(tone);
+}
+
+/**
+ * Every synthesized sound as data: the blips it's made of, in order. The
+ * `play*` functions below just play these, and the video exporter schedules
+ * the very same lists offline.
+ */
+export const RECIPES = {
+  tick: [{ freq: 880, duration: 0.05, type: "square", gain: 0.045 }],
+  urgentTick: [{ freq: 1200, duration: 0.07, type: "square", gain: 0.08 }],
+  select: [{ freq: 520, duration: 0.09, type: "triangle", gain: 0.12 }],
+  // Major triad arpeggio, rising.
+  correct: [
+    { freq: 523.25, duration: 0.14, type: "triangle", gain: 0.18 },
+    { freq: 659.25, duration: 0.14, type: "triangle", gain: 0.18, delay: 0.09 },
+    { freq: 783.99, duration: 0.26, type: "triangle", gain: 0.2, delay: 0.18 },
+  ],
+  wrong: [{ freq: 220, duration: 0.32, type: "sawtooth", gain: 0.14, slideTo: 110 }],
+  whoosh: [{ freq: 320, duration: 0.22, type: "sine", gain: 0.09, slideTo: 720 }],
+  fanfare: [
+    ...[523.25, 659.25, 783.99, 1046.5].map(
+      (freq, i): ToneOptions => ({ freq, duration: 0.3, type: "triangle", gain: 0.2, delay: i * 0.11 }),
+    ),
+    { freq: 1318.5, duration: 0.6, type: "triangle", gain: 0.22, delay: 0.5 },
+  ],
+  // Two rising notes — "we're off", not "you won something".
+  start: [
+    { freq: 392, duration: 0.16, type: "triangle", gain: 0.16 },
+    { freq: 587.33, duration: 0.3, type: "triangle", gain: 0.18, delay: 0.12 },
+  ],
+  countdownBeep: [{ freq: 587.33, duration: 0.12, type: "square", gain: 0.11 }],
+  // The last beat of a 3-2-1 lands higher, as a go signal.
+  countdownGo: [{ freq: 880, duration: 0.34, type: "triangle", gain: 0.22, slideTo: 1174.66 }],
+  riser: [
+    { freq: 220, duration: 0.55, type: "triangle", gain: 0.14, slideTo: 880 },
+    { freq: 330, duration: 0.55, type: "sine", gain: 0.08, slideTo: 1320, delay: 0.04 },
+  ],
+  // Harsh and low — a timeout, not a wrong answer.
+  buzz: [
+    { freq: 160, duration: 0.4, type: "square", gain: 0.12 },
+    { freq: 155, duration: 0.4, type: "square", gain: 0.1, delay: 0.02 },
+  ],
+  // Falling, but resolved rather than mournful: "that's the round, try again".
+  consolation: [
+    { freq: 587.33, duration: 0.2, type: "triangle", gain: 0.16 },
+    { freq: 493.88, duration: 0.2, type: "triangle", gain: 0.16, delay: 0.16 },
+    { freq: 392, duration: 0.42, type: "triangle", gain: 0.18, delay: 0.32 },
+  ],
+  // A soft upward sweep under a quick sparkle — "here it is", for uncovering a picture.
+  reveal: [
+    { freq: 440, duration: 0.36, type: "sine", gain: 0.07, slideTo: 1320 },
+    ...[1046.5, 1318.5, 1568, 2093].map(
+      (freq, i): ToneOptions => ({ freq, duration: 0.18, type: "triangle", gain: 0.09, delay: 0.12 + i * 0.06 }),
+    ),
+  ],
+  heartbeat: [
+    { freq: 90, duration: 0.11, type: "sine", gain: 0.16 },
+    { freq: 76, duration: 0.15, type: "sine", gain: 0.12, delay: 0.14 },
+  ],
+} satisfies Record<string, readonly ToneOptions[]>;
+
+export type RecipeId = keyof typeof RECIPES;
+
 export function playTick() {
-  tone({ freq: 880, duration: 0.05, type: "square", gain: 0.045 });
+  playRecipe(RECIPES.tick);
 }
 
 export function playUrgentTick() {
-  tone({ freq: 1200, duration: 0.07, type: "square", gain: 0.08 });
+  playRecipe(RECIPES.urgentTick);
 }
 
 export function playSelect() {
-  tone({ freq: 520, duration: 0.09, type: "triangle", gain: 0.12 });
+  playRecipe(RECIPES.select);
 }
 
 export function playCorrect() {
-  // Major triad arpeggio, rising.
-  tone({ freq: 523.25, duration: 0.14, type: "triangle", gain: 0.18 });
-  tone({ freq: 659.25, duration: 0.14, type: "triangle", gain: 0.18, delay: 0.09 });
-  tone({ freq: 783.99, duration: 0.26, type: "triangle", gain: 0.2, delay: 0.18 });
+  playRecipe(RECIPES.correct);
 }
 
 export function playWrong() {
-  tone({ freq: 220, duration: 0.32, type: "sawtooth", gain: 0.14, slideTo: 110 });
+  playRecipe(RECIPES.wrong);
 }
 
 export function playWhoosh() {
-  tone({ freq: 320, duration: 0.22, type: "sine", gain: 0.09, slideTo: 720 });
+  playRecipe(RECIPES.whoosh);
 }
 
 export function playFanfare() {
-  const notes = [523.25, 659.25, 783.99, 1046.5];
-  notes.forEach((freq, i) => {
-    tone({ freq, duration: 0.3, type: "triangle", gain: 0.2, delay: i * 0.11 });
-  });
-  tone({ freq: 1318.5, duration: 0.6, type: "triangle", gain: 0.22, delay: 0.5 });
+  playRecipe(RECIPES.fanfare);
 }
 
 /* ------------------------------------------------------------- cue sounds */
 
 export function playStart() {
-  // Two rising notes — "we're off", not "you won something".
-  tone({ freq: 392, duration: 0.16, type: "triangle", gain: 0.16 });
-  tone({ freq: 587.33, duration: 0.3, type: "triangle", gain: 0.18, delay: 0.12 });
+  playRecipe(RECIPES.start);
 }
 
 /** One beat of a 3-2-1 counter. The last one lands higher, as a go signal. */
 export function playCountdownBeep(final = false) {
-  if (final) tone({ freq: 880, duration: 0.34, type: "triangle", gain: 0.22, slideTo: 1174.66 });
-  else tone({ freq: 587.33, duration: 0.12, type: "square", gain: 0.11 });
+  playRecipe(final ? RECIPES.countdownGo : RECIPES.countdownBeep);
 }
 
 export function playRiser() {
-  tone({ freq: 220, duration: 0.55, type: "triangle", gain: 0.14, slideTo: 880 });
-  tone({ freq: 330, duration: 0.55, type: "sine", gain: 0.08, slideTo: 1320, delay: 0.04 });
+  playRecipe(RECIPES.riser);
 }
 
 /** Harsh and low — a timeout, not a wrong answer. */
 export function playBuzz() {
-  tone({ freq: 160, duration: 0.4, type: "square", gain: 0.12 });
-  tone({ freq: 155, duration: 0.4, type: "square", gain: 0.1, delay: 0.02 });
+  playRecipe(RECIPES.buzz);
 }
 
 /** Falling, but resolved rather than mournful: "that's the round, try again". */
 export function playConsolation() {
-  tone({ freq: 587.33, duration: 0.2, type: "triangle", gain: 0.16 });
-  tone({ freq: 493.88, duration: 0.2, type: "triangle", gain: 0.16, delay: 0.16 });
-  tone({ freq: 392, duration: 0.42, type: "triangle", gain: 0.18, delay: 0.32 });
+  playRecipe(RECIPES.consolation);
+}
+
+/** Uncovering a hidden picture (Reveal questions). */
+export function playReveal() {
+  playRecipe(RECIPES.reveal);
 }
 
 export function playHeartbeat() {
-  tone({ freq: 90, duration: 0.11, type: "sine", gain: 0.16 });
-  tone({ freq: 76, duration: 0.15, type: "sine", gain: 0.12, delay: 0.14 });
+  playRecipe(RECIPES.heartbeat);
 }
+
+/**
+ * Which recipe each built-in cue sound plays. `custom` has none — it is the
+ * author's own file, played through `playSample`.
+ */
+export const CUE_SOUND_RECIPES: Record<Exclude<CueSound, "custom">, RecipeId> = {
+  start: "start",
+  correct: "correct",
+  wrong: "wrong",
+  whoosh: "whoosh",
+  riser: "riser",
+  buzz: "buzz",
+  fanfare: "fanfare",
+  consolation: "consolation",
+  reveal: "reveal",
+};
 
 /**
  * The sounds an author can attach to a cue, in the order they're offered.
@@ -177,6 +262,7 @@ export const SOUNDS: Record<CueSound, { label: string; play: () => void }> = {
   buzz: { label: "Time-up buzz", play: playBuzz },
   fanfare: { label: "Fanfare", play: playFanfare },
   consolation: { label: "Consolation", play: playConsolation },
+  reveal: { label: "Reveal sparkle", play: playReveal },
   // Its player needs the cue's file, so the registry entry is a placeholder —
   // playCue routes it to playSample instead of calling this.
   custom: { label: "Custom sound…", play: () => {} },

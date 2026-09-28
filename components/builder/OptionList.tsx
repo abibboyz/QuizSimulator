@@ -42,7 +42,7 @@ interface Props {
 export function OptionList(props: Props) {
   // A separate component so switching to Image does not change how many hooks
   // the text-answer list calls. Choice, true/false, and multi-select stay here.
-  if (props.question.kind === "image-choice") {
+  if (props.question.kind === "image-choice" || props.question.kind === "reveal") {
     return <ImageAnswerGrid question={props.question} onChange={props.onChange} action={props.action} />;
   }
   return <TextOptionList {...props} />;

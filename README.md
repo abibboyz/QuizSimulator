@@ -21,6 +21,7 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 **Template builder** (`/edit/[quizId]`)
 
 - Four question types: multiple choice, true/false, pick-all-that-apply, and **image** (a numbered picture grid, up to 100 images, one correct — no answer bullets)
+- **Reveal** questions: image answers under one shared cover (or “?”) until the correct picture is revealed (see [Reveal questions & animations](#reveal-questions--animations))
 - Drag questions to reorder them, drag answers within a question; arrow buttons do the same job on touch screens and from the keyboard
 - Images on questions *and* on individual answers — drag one in, click to browse, or **paste straight from the clipboard**
 - Four layouts per question: grid, list, image-first, big type
@@ -72,6 +73,34 @@ Built-in motion includes countdown, confetti, stars, pulse ring, shake, stamp, a
 
 New and sample quizzes ship with a small **post pack** (countdown + start, confetti + correct, shake + wrong, pulse + whoosh, stars + fanfare). Use **Apply post pack** in Settings to restore it on an existing quiz.
 
+## Reveal questions & animations
+
+**Reveal** is an image-answer question: up to 100 pictures, exactly one correct, laid out like an Image question. While the clock runs, every answer shows the same cover picture, or a “?” when no cover is set. Only the correct picture is uncovered, when the player locks in an answer or the reveal time arrives (timer, host reveal). The other answers stay covered. Scoring, streaks, host mode and auto-play are unchanged, and Choice, True/False, Multi and Image questions are untouched. An optional caption ("It's the Eiffel Tower!") pops in under the grid.
+
+Everything lives in the question's **Animations** section (and the builder's **Animate** tab for quiz-wide defaults):
+
+- **Reveal animation:** tile flip, pixelate → sharp, blur → sharp, zoom out from a crop, curtain, wipe (← → ↑ ↓), iris/spotlight, shatter, cross-fade, card flip. Duration (default 1.2 s), tiles across, zoom level and focus point where they apply, plus a live preview with Play / Cover.
+- **Cover:** one picture for every answer. Leave it empty and each tile shows “?”. The uncover animation still runs on the correct picture only: a solid colour, a heavy blur, or one of the picture animations (pixelate, blur, zoom). Any aspect ratio works — pictures are fitted, never cropped.
+- **Reveal sound:** a synthesized "Reveal sparkle" by default (no audio file), any built-in sound, or silent.
+
+**Question and answer animations** are separate settings: entrance and exit for the question (text and picture) and for the answer tiles. Entrances: fade, slide from each side, pop, zoom, bounce, flip, typewriter (question text only). Exits: fade, slide, pop, zoom, flip. Each has duration and easing; answers also have a stagger. Set them once for the quiz under **Animate**, then override any question — each row has a **Use global** switch, and **Reset to global** clears a question's overrides. The default for everything is *Default (today's look)*, so existing quizzes play exactly as before.
+
+Every animation is a pure function of elapsed time (`lib/stageMotion.ts`, `lib/reveal.ts`, timing constants in `lib/playTiming.ts`), so the video exporter draws the same frames the play screen shows. A question's timer never runs while the previous question's custom exit animations are still playing, live or in the video (with today's default look nothing changes).
+
+Files that use none of this are still saved as schema version 1, so older copies of the app can open them; quizzes that use Reveal or custom animations are stamped version 2.
+
+## Exporting a video
+
+**Export video** (dashboard card, the builder header, and the solo intro screen — in both web and mobile view) renders the quiz exactly as a solo run auto-plays — countdown, tile-in, timer ticks, select ring, reveal colours, cues, confetti, results — to a video file you can upload straight to Shorts / Reels / TikTok / YouTube or drop into an editor.
+
+- **Framing:** Vertical 9:16 (the mobile layout) or Horizontal 16:9 (the web layout), at 1080p, 1440p or 4K (4K is much slower and not every encoder supports it — unsupported options are greyed out). 30 or 60 fps.
+- **Answers:** *Show correct pick* (a player locks in the right answer with a second left, so you see the select ring and a correct reveal) or *Let the clock run out* (exactly what auto-play does when nobody touches it).
+- **Format:** MP4 (H.264 + AAC) where the browser can encode it, otherwise WebM (VP9/VP8 + Opus). Sound — the same synthesized blips and custom cue sounds the app plays — is rendered offline and muxed in.
+
+Everything happens in the browser: each frame is drawn to a canvas at *t = frame / fps* from the same timing constants the play screen uses (`lib/playTiming.ts`), encoded with WebCodecs, and muxed with `mp4-muxer` / `webm-muxer`. Nothing is uploaded, and it doesn't matter how fast your device is — a slow device just takes longer. The exporter is a separate chunk downloaded the first time you open it; after that it works offline like the rest of the app.
+
+Not in the video: the mute button, Submit/Next buttons and keyboard hints (their space is kept). Shuffle is ignored so the same quiz always exports the same video; animated GIFs show their first frame; web (URL) images only appear if their host allows cross-origin access.
+
 ## Scoring
 
 ```
@@ -107,7 +136,7 @@ Deleting a quiz garbage-collects any images nothing else references.
 
 ## Accessibility
 
-`prefers-reduced-motion` turns off the animated backgrounds and the confetti and collapses transitions — the app stays fully usable. Drag-and-drop has a keyboard path, and reordering also works through plain buttons.
+`prefers-reduced-motion` turns off the animated backgrounds and the confetti and collapses transitions — the app stays fully usable. Reveals and custom animations jump straight to their end state; the builder previews still animate when you press Play, and an exported video always shows the full animations. Drag-and-drop has a keyboard path, and reordering also works through plain buttons.
 
 ## Deploying
 
@@ -125,9 +154,18 @@ npm test
 
 Node's built-in runner, no dependencies. Coverage is thin — it covers the auto-advance rules in `lib/autoAdvance.ts`, where the "keep going after a timeout, but not after an answer" distinction is easy to break by accident.
 
+It also covers the Reveal/animation plumbing: reveal drawing and timing, canvas sizing (`lib/canvasSize.ts`, including a regression test for the builder cover preview that used to grow on its own), the per-question timer clock, and `lib/consistency.test.ts`, which checks that the builder, live play and the video export resolve the same animations and that every new field survives save/Export/Import.
+
+```bash
+npm run build && npx next start -p 3000 &
+BASE=http://localhost:3000 CHROME_PATH=/path/to/chrome npm run test:layout
+```
+
+`test:layout` is a headless-Chrome check (uses the `playwright-core` dev dependency and your installed Chrome): it seeds Reveal quizzes, opens the builder, play and host screens in web and mobile view, scrolls and resizes, and fails if any image or canvas changes size.
+
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti. Built-in cue sounds are synthesized with the Web Audio API (nothing to ship for those); authors can also drop in custom cue audio via **AudioDropZone**, which is stored with the quiz like images.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · dnd-kit · zustand · idb · canvas-confetti · mp4-muxer + webm-muxer (video export, lazy-loaded). Built-in cue sounds are synthesized with the Web Audio API (nothing to ship for those); authors can also drop in custom cue audio via **AudioDropZone**, which is stored with the quiz like images.
 
 ## Not built yet
 

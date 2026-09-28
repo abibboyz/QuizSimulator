@@ -1,6 +1,26 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
-export const SCHEMA_VERSION = 1;
+/**
+ * 2 added the `reveal` question kind and the optional `motion` settings. Both
+ * are additive: a version-1 quiz loads unchanged and resolves to exactly what
+ * it looked like before. The bump only stops an older build from importing a
+ * quiz it can't draw — see `schemaVersionFor`.
+ */
+export const SCHEMA_VERSION = 2;
+
+/**
+ * The oldest schema that can faithfully carry this quiz. Export files are
+ * stamped with it, so a quiz that uses nothing new still opens in builds from
+ * before version 2, and one with Reveal questions or animation settings is
+ * refused there cleanly ("made by a newer version") instead of playing with
+ * its hidden picture on show.
+ */
+export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings">): number {
+  const usesV2 =
+    !!quiz.settings?.motion ||
+    quiz.questions.some((q) => q.kind === "reveal" || q.reveal !== undefined || q.motion !== undefined);
+  return usesV2 ? 2 : 1;
+}
 
 /**
  * Images are kept out of the quiz record itself. `stored` refs point at a Blob
@@ -36,6 +56,8 @@ export type CueSound =
   | "buzz"
   | "fanfare"
   | "consolation"
+  /** A bright rising shimmer, made for uncovering a hidden picture. */
+  | "reveal"
   /** Whatever the author uploaded, mirroring the "image" animation. */
   | "custom";
 
@@ -76,7 +98,118 @@ export type ProgressPulse = "none" | "heartbeat" | "throb" | "flash";
  */
 export type QuizProgressStyle = "none" | "bar" | "segments" | "dots" | "mascot";
 
-export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice";
+export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice" | "reveal";
+
+/* ----------------------------------------------------------------- reveal */
+
+/**
+ * How a Reveal question uncovers its picture when the answer is shown.
+ *
+ * Cover-based: the cover image (or its fallback) sits on top and is taken off.
+ * Picture-based: `pixelate`, `blur` and `zoom` hide the answer picture itself
+ * (blocky, blurred, or cropped in) and sharpen / pull back to reveal it — the
+ * cover isn't drawn for those.
+ */
+export type RevealAnimation =
+  | "tiles"
+  | "pixelate"
+  | "blur"
+  | "zoom"
+  | "curtain"
+  | "wipe-left"
+  | "wipe-right"
+  | "wipe-up"
+  | "wipe-down"
+  | "iris"
+  | "shatter"
+  | "fade"
+  | "flip";
+
+/** What hides the picture when no cover image was uploaded. */
+export type RevealCoverFallback = "color" | "blur";
+
+/**
+ * Stored as a partial and resolved against defaults (`resolveReveal`), so a
+ * half-filled or hand-edited record still plays.
+ */
+export interface RevealSettings {
+  animation: RevealAnimation;
+  /** How long the uncovering takes. */
+  durationMs: number;
+  /** The picture that hides the answer. Unset uses `coverFallback`. */
+  cover?: MediaRef;
+  coverFallback: RevealCoverFallback;
+  /** Fill for the "color" fallback. Unset uses the theme accent, darkened. */
+  coverColor?: string;
+  /** Grid columns for tiles / shatter; blocks across at the start of pixelate. */
+  tiles: number;
+  /** How far `zoom` starts cropped in (2 = twice as close). */
+  zoom: number;
+  /** Where `zoom` (and `iris`) centre on, 0–1 across and down the picture. */
+  focusX: number;
+  focusY: number;
+  /** Shown under the picture once it's uncovered — usually the answer's name. */
+  caption?: string;
+  /** Played as the cover comes off. `null` is silent. */
+  sound: CueSound | null;
+}
+
+/* ----------------------------------------------------------------- motion */
+
+/**
+ * `default` is today's motion, reproduced exactly: for the question, the stage
+ * sliding in from the right (and out to the left) as questions change; for the
+ * answers, the staggered tile-in. Everything else is opt-in.
+ */
+export type EnterEffect =
+  | "default"
+  | "none"
+  | "fade"
+  | "slide-up"
+  | "slide-down"
+  | "slide-left"
+  | "slide-right"
+  | "pop"
+  | "zoom"
+  | "bounce"
+  | "flip"
+  /** Question text only: types itself out. */
+  | "typewriter";
+
+export type ExitEffect =
+  | "default"
+  | "none"
+  | "fade"
+  | "slide-up"
+  | "slide-down"
+  | "slide-left"
+  | "slide-right"
+  | "pop"
+  | "zoom"
+  | "flip";
+
+export type MotionEasing = "smooth" | "linear" | "ease-in-out" | "ease-out" | "snappy";
+
+/** One element's entrance and exit. */
+export interface ElementMotion {
+  enter: EnterEffect;
+  exit: ExitEffect;
+  /** Per effect, entering and leaving. Ignored by `default` and `none`. */
+  durationMs: number;
+  easing: MotionEasing;
+  /** Answers only: delay between one tile and the next. */
+  staggerMs: number;
+}
+
+/**
+ * Question text/picture and answer tiles animate separately. Every field is
+ * optional: at quiz level a missing field means "today's default"; on a
+ * question it means "use the quiz's setting".
+ */
+export interface MotionOverrides {
+  question?: Partial<ElementMotion>;
+  answers?: Partial<ElementMotion>;
+}
 
 export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
 
@@ -119,6 +252,14 @@ export interface Question {
   points?: number;
   /** Overrides the quiz-wide cues, slot by slot. */
   cues?: CueSet;
+  /**
+   * Reveal questions: one cover for every image answer, and how the correct
+   * picture is uncovered. Ignored by other kinds, but kept so switching kind
+   * back and forth doesn't lose it.
+   */
+  reveal?: Partial<RevealSettings>;
+  /** Overrides the quiz-wide question/answer animations. Absent = use the quiz's. */
+  motion?: MotionOverrides;
 }
 
 /** Audience the quiz is coloured for. Affects palette only, never gameplay. */
@@ -208,6 +349,8 @@ export interface QuizSettings {
   progressMascotMedia?: MediaRef;
   /** The quiz-wide progress meter. Shares the mascot with the timer. */
   quizProgressStyle: QuizProgressStyle;
+  /** Quiz-wide question/answer animations. Absent = today's motion. */
+  motion?: MotionOverrides;
 }
 
 export interface Quiz {
@@ -259,7 +402,9 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
 
   quiz.questions.forEach((q, i) => {
     const label = `Question ${i + 1}`;
-    const hasPicture = !!q.media || (q.kind === "image-choice" && q.options.some((option) => option.media));
+    const hasPicture =
+      !!q.media ||
+      ((q.kind === "image-choice" || q.kind === "reveal") && q.options.some((option) => option.media));
     if (!q.prompt.trim() && !hasPicture) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no prompt or image.` });
     }
@@ -267,6 +412,33 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
       issues.push({ questionId: q.id, severity: "error", message: `${label} needs at least 2 answers.` });
     }
     if (q.kind === "image-choice") {
+      if (q.options.length > 100) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message: `${label} has too many answers (max 100 for image answers).`,
+        });
+      }
+      const withMedia = q.options.filter((o) => o.media).length;
+      if (withMedia < 2) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message: `${label} needs at least 2 answers with images.`,
+        });
+      }
+      const correctCount = q.options.filter((o) => o.correct).length;
+      if (correctCount !== 1) {
+        issues.push({
+          questionId: q.id,
+          severity: "error",
+          message:
+            correctCount === 0
+              ? `${label} has no correct answer marked.`
+              : `${label} must have exactly one correct answer.`,
+        });
+      }
+    } else if (q.kind === "reveal") {
       if (q.options.length > 100) {
         issues.push({
           questionId: q.id,

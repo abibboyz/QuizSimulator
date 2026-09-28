@@ -8,7 +8,7 @@ import type { Cue, CueSlot } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
 import { useCountdown } from "@/hooks/useCountdown";
-import { initSound, playCorrect, playSelect, playWhoosh, playWrong, primeSamples } from "@/lib/sound";
+import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, primeSamples } from "@/lib/sound";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -21,10 +21,14 @@ import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
 import { MuteButton } from "@/components/ui/MuteButton";
+import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { CuePlayer } from "@/components/play/CuePlayer";
 import { activeCue } from "@/lib/cues";
 import { useMuted } from "@/hooks/useMuted";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
+import { clockHoldMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
+import { resolveReveal } from "@/lib/reveal";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -151,7 +155,23 @@ function PlayView() {
    * the overlay for the cue's second half — and it must not be on the clock, or
    * answerable through it, while the player still can't see it.
    */
-  const stageLive = phase === "asking" && !pending;
+  // The previous question's custom exits play before this one is on screen; its
+  // clock waits for them (0 for default motion, so today's timing is unchanged).
+  // Keyed by the session's per-question stamp, and derived during render so the
+  // clock never starts for a frame first.
+  const runKey = `${index}:${session.startedAt}`;
+  const leaving = index > 0 ? order[index - 1] : undefined;
+  const holdMs =
+    leaving && quiz && !reduced ? clockHoldMs(resolveMotion(quiz.settings, leaving), leaving.options.length) : 0;
+  const [releasedRun, setReleasedRun] = useState<string | null>(null);
+  const exitHeld = phase === "asking" && holdMs > 0 && releasedRun !== runKey;
+  useEffect(() => {
+    if (!exitHeld) return;
+    const id = window.setTimeout(() => setReleasedRun(runKey), holdMs);
+    return () => window.clearTimeout(id);
+  }, [exitHeld, holdMs, runKey]);
+
+  const stageLive = phase === "asking" && !pending && !exitHeld;
 
   const countdown = useCountdown(
     stageLive,
@@ -159,6 +179,8 @@ function PlayView() {
     soundOn,
     handleExpire,
     quiz?.settings.progressPulse === "heartbeat" ? "heartbeat" : "beep",
+    // Each question run gets its own clock: `startedAt` is stamped by the session on every advance/retry.
+    runKey,
   );
 
   // Mark the wall-clock start of each question so untimed play can still record
@@ -182,6 +204,12 @@ function PlayView() {
     revealFiredRef.current = answerCount;
 
     const correct = answers[answerCount - 1].correct;
+    // A Reveal question's picture uncovers now; its sound rides alongside the
+    // usual feedback. Same gate as the answer showing at all.
+    const current = order[index];
+    if (current?.kind === "reveal" && quiz.settings.revealAfterEach && soundOn) {
+      playCue(resolveReveal(current).sound);
+    }
     // With reveal-off the run only pauses here for 220ms before rolling on, so
     // a cue would flash a fraction of itself and get yanked. That setting means
     // "no feedback until the results screen" — a celebration is exactly the
@@ -263,7 +291,7 @@ function PlayView() {
   // With instant reveal switched off, roll straight into the next question.
   useEffect(() => {
     if (phase !== "revealed" || !quiz || quiz.settings.revealAfterEach) return;
-    const id = window.setTimeout(() => goNextRef.current(false), 220);
+    const id = window.setTimeout(() => goNextRef.current(false), REVEAL_OFF_HOLD_MS);
     return () => window.clearTimeout(id);
   }, [phase, quiz]);
 
@@ -333,6 +361,10 @@ function PlayView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handlePick, submitAnswer, advance]);
 
+  // Quiz-wide animation settings with this question's overrides on top.
+  const stageMotion = resolveMotion(quiz?.settings, question);
+  const swapOutDelay = question ? swapOutDelayMs(stageMotion, question.options.length) : 0;
+
   if (!loaded) {
     return <Splash message="Loading quiz…" />;
   }
@@ -398,6 +430,12 @@ function PlayView() {
           >
             Start quiz
           </Button>
+          <ExportVideoButton
+            quiz={quiz}
+            defaultFraming={mobile ? "vertical" : "horizontal"}
+            variant="outline"
+            size="sm"
+          />
           <Link href="/" className="text-sm text-ink-400 underline-offset-4 hover:underline">
             Back to all quizzes
           </Link>
@@ -420,13 +458,26 @@ function PlayView() {
 
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}
+          {/* The stage-wide swap is the question's `default` animation. A custom
+              question entrance or exit replaces it (QuestionStage runs those);
+              custom exits play out before any swap-out starts. */}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={question.id}
-              initial={reduced ? false : { opacity: 0, x: 36 }}
+              initial={reduced || !usesSwapIn(stageMotion) ? false : { opacity: 0, x: QUESTION_SWAP.offsetPx }}
               animate={reduced ? {} : { opacity: 1, x: 0 }}
-              exit={reduced ? {} : { opacity: 0, x: -36 }}
-              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.3, 1] }}
+              exit={
+                reduced || !usesSwapOut(stageMotion)
+                  ? {}
+                  : swapOutDelay > 0
+                    ? {
+                        opacity: 0,
+                        x: -QUESTION_SWAP.offsetPx,
+                        transition: { duration: QUESTION_SWAP.durationS, ease: QUESTION_SWAP.ease, delay: swapOutDelay / 1000 },
+                      }
+                    : { opacity: 0, x: -QUESTION_SWAP.offsetPx }
+              }
+              transition={{ duration: QUESTION_SWAP.durationS, ease: QUESTION_SWAP.ease }}
             >
               <QuestionStage
                 question={question}
@@ -439,6 +490,7 @@ function PlayView() {
                 mode="solo"
                 narrow={mobile}
                 theme={quiz.theme}
+                motion={stageMotion}
                 header={
                   <div className="flex items-center gap-4">
                     <ScoreBadge score={score} streak={streak} compact />
@@ -486,12 +538,12 @@ function PlayView() {
             <p className="mt-4 text-center text-xs text-ink-500">
               {mobile
                 ? phase === "asking"
-                  ? question.kind === "image-choice"
+                  ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Tap an image"
                     : "Tap an answer"
                   : "Tap to keep going"
                 : phase === "asking"
-                  ? question.kind === "image-choice"
+                  ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Click an image"
                     : `Press 1–${question.options.length} to answer`
                   : "Press Enter for the next question"}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { QuizSummary } from "@/types/quiz";
 import { duplicateQuiz, estimateUsage, listQuizzes, removeQuiz, saveQuiz } from "@/lib/storage";
+import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { exportQuizFile, importBundle, readFileText, TransferError } from "@/lib/transfer";
 import { getQuiz } from "@/lib/storage";
 import { createQuiz } from "@/lib/factory";
@@ -215,7 +216,7 @@ export default function Dashboard() {
                       </Link>
                     </div>
 
-                    <div className="flex gap-1 border-t border-ink-800 pt-3 text-xs">
+                    <div className="flex flex-wrap gap-1 border-t border-ink-800 pt-3 text-xs">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -229,6 +230,10 @@ export default function Dashboard() {
                       <Button variant="ghost" size="sm" onClick={() => handleExport(quiz.id)}>
                         Export
                       </Button>
+                      <ExportVideoButton
+                        quizId={quiz.id}
+                        defaultFraming={view === "mobile" ? "vertical" : "horizontal"}
+                      />
                       <Button variant="ghost" size="sm" className="ml-auto text-bad" onClick={() => handleDelete(quiz)}>
                         Delete
                       </Button>

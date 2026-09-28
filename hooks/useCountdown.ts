@@ -2,14 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { playHeartbeat, playTick, playUrgentTick } from "@/lib/sound";
+import { timerTickKind } from "@/lib/playTiming";
+import { countdownView, elapsedFor, type CountdownClock } from "@/lib/countdown";
 
-interface Result {
-  elapsedMs: number;
-  remainingMs: number;
-  /** 1 at the start, 0 when time is up. `1` for untimed questions. */
-  fraction: number;
-  urgent: boolean;
-}
+type Result = ReturnType<typeof countdownView>;
 
 /**
  * Drives the question timer off requestAnimationFrame rather than setInterval,
@@ -26,8 +22,15 @@ export function useCountdown(
   onExpire: () => void,
   /** Matches the tick to the meter's pulse, so a heartbeat meter sounds like one. */
   tick: "beep" | "heartbeat" = "beep",
+  /**
+   * Identifies the question being timed. The frozen value from an earlier key
+   * reads as a full timer, so a new question never shows the last one's time
+   * while it waits (behind a between cue) for its clock to start.
+   */
+  runKey: string | number | null = null,
 ): Result {
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [clock, setClock] = useState<CountdownClock>({ key: runKey, elapsedMs: 0 });
+  const elapsedMs = elapsedFor(clock, runKey);
   const expireRef = useRef(onExpire);
   const firedRef = useRef(false);
   const lastTickRef = useRef(-1);
@@ -66,17 +69,18 @@ export function useCountdown(
 
     const step = (now: number) => {
       const elapsed = now - startedAt;
-      setElapsedMs(elapsed);
+      setClock({ key: runKey, elapsedMs: elapsed });
 
       // One tick per whole second remaining, urgent in the last quarter.
       const secondsLeft = Math.ceil((limit - elapsed) / 1000);
       if (soundRef.current && secondsLeft !== lastTickRef.current && secondsLeft >= 0) {
         lastTickRef.current = secondsLeft;
         const heart = tickRef.current === "heartbeat";
-        if (elapsed / limit > 0.75) {
+        const kind = timerTickKind(elapsed, limit, secondsLeft);
+        if (kind === "urgent") {
           if (heart) playHeartbeat();
           else playUrgentTick();
-        } else if (secondsLeft <= 10) {
+        } else if (kind === "tick") {
           if (heart) playHeartbeat();
           else playTick();
         }
@@ -94,15 +98,7 @@ export function useCountdown(
 
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [active, seconds]);
+  }, [active, seconds, runKey]);
 
-  if (seconds === null) {
-    return { elapsedMs, remainingMs: 0, fraction: 1, urgent: false };
-  }
-
-  const limit = seconds * 1000;
-  const remainingMs = Math.max(0, limit - elapsedMs);
-  const fraction = Math.max(0, Math.min(1, remainingMs / limit));
-
-  return { elapsedMs, remainingMs, fraction, urgent: fraction <= 0.25 };
+  return countdownView(seconds, elapsedMs);
 }

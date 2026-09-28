@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { SCORE_TWEEN_MS } from "@/lib/playTiming";
 
 /** Tweens to a new value so scores climb instead of jumping. */
-export function useAnimatedNumber(value: number, durationMs = 650): number {
+export function useAnimatedNumber(value: number, durationMs = SCORE_TWEEN_MS): number {
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
   const reduced = useReducedMotion();

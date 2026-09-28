@@ -6,7 +6,9 @@ import { useSearchParams } from "next/navigation";
 import type { Question, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
-import { initSound, playCorrect, playUrgentTick, playWhoosh } from "@/lib/sound";
+import { initSound, playCorrect, playCue, playUrgentTick, playWhoosh } from "@/lib/sound";
+import { resolveMotion, type ResolvedMotion } from "@/lib/stageMotion";
+import { resolveReveal } from "@/lib/reveal";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -153,6 +155,7 @@ function HostView() {
             onNext={goNext}
             onBack={goBack}
             theme={quiz.theme}
+            motion={resolveMotion(quiz.settings, question)}
           />
 
           {showTeams && (
@@ -184,6 +187,8 @@ interface HostQuestionProps {
   onNext: () => void;
   onBack: () => void;
   theme: Theme;
+  /** Entrances and the Reveal uncover run here; there are no exits (each question simply remounts). */
+  motion: ResolvedMotion;
 }
 
 function HostQuestion({
@@ -200,6 +205,7 @@ function HostQuestion({
   onNext,
   onBack,
   theme,
+  motion,
 }: HostQuestionProps) {
   const [revealed, setRevealed] = useState(false);
   const [remainingMs, setRemainingMs] = useState(limitSeconds === null ? null : limitSeconds * 1000);
@@ -224,7 +230,8 @@ function HostQuestion({
     setRevealed(true);
     setRunning(false);
     if (soundOn) playCorrect();
-  }, [soundOn]);
+    if (soundOn && question.kind === "reveal") playCue(resolveReveal(question).sound);
+  }, [soundOn, question]);
 
   const advance = useCallback(() => {
     if (soundOn) playWhoosh();
@@ -291,6 +298,7 @@ function HostQuestion({
           onPick={() => {}}
           mode="host"
           theme={theme}
+          motion={motion}
           header={
             remainingMs !== null && limitSeconds ? (
               <ProgressMeter
