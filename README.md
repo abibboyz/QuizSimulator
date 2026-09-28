@@ -75,11 +75,11 @@ New and sample quizzes ship with a small **post pack** (countdown + start, confe
 
 ## Reveal questions & animations
 
-**Reveal** is an image-answer question: up to 100 pictures, exactly one correct, laid out like an Image question. While the clock runs, every answer shows the same cover picture, or a “?” when no cover is set. Only the correct picture is uncovered, when the player locks in an answer or the reveal time arrives (timer, host reveal). The other answers stay covered. Scoring, streaks, host mode and auto-play are unchanged, and Choice, True/False, Multi and Image questions are untouched. An optional caption ("It's the Eiffel Tower!") pops in under the grid.
+**Reveal** is an image-answer question: up to 100 pictures, exactly one correct, laid out like an Image question. While the clock runs, every answer shows the same cover picture, or a “?” when no cover is set. Only the correct picture is uncovered, when the player locks in an answer or the reveal time arrives (timer, host reveal). The other answers stay covered. Scoring, streaks, host mode and auto-play are unchanged, and Choice, True/False, Multi and Image questions are untouched. An optional caption ("It's the Eiffel Tower!") pops in under the grid after the picture finishes uncovering. Automatic advancement allows enough time for image loading, the reveal, and the caption to finish.
 
 Everything lives in the question's **Animations** section (and the builder's **Animate** tab for quiz-wide defaults):
 
-- **Reveal animation:** tile flip, pixelate → sharp, blur → sharp, zoom out from a crop, curtain, wipe (← → ↑ ↓), iris/spotlight, shatter, cross-fade, card flip. Duration (default 1.2 s), tiles across, zoom level and focus point where they apply, plus a live preview with Play / Cover.
+- **Reveal animation:** tile flip, pixelate → sharp, blur → sharp, zoom out from a crop, curtain, wipe (← → ↑ ↓), iris/spotlight, shatter, cross-fade, card flip, wipe from center, horizontal blinds, and mosaic dissolve. Duration (default 1.2 s), tiles across, zoom level and focus point where they apply, plus a live preview with Play / Cover.
 - **Cover:** one picture for every answer. Leave it empty and each tile shows “?”. The uncover animation still runs on the correct picture only: a solid colour, a heavy blur, or one of the picture animations (pixelate, blur, zoom). Any aspect ratio works — pictures are fitted, never cropped.
 - **Reveal sound:** a synthesized "Reveal sparkle" by default (no audio file), any built-in sound, or silent.
 

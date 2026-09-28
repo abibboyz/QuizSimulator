@@ -8,6 +8,7 @@ import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playCue, playUrgentTick, playWhoosh } from "@/lib/sound";
 import { resolveMotion, type ResolvedMotion } from "@/lib/stageMotion";
+import { completeRevealHold } from "@/lib/autoAdvance";
 import { resolveReveal } from "@/lib/reveal";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
@@ -246,12 +247,14 @@ function HostQuestion({
     return () => window.clearTimeout(id);
   }, [autoReveal, expired, revealed, reveal]);
 
+  const revealHold = autoAdvanceSeconds === null ? null : completeRevealHold(autoAdvanceSeconds, question);
+
   // Hands-free run: roll on to the next question by itself.
   useEffect(() => {
-    if (!revealed || autoAdvanceSeconds === null || isLast) return;
-    const id = window.setTimeout(advance, autoAdvanceSeconds * 1000);
+    if (!revealed || revealHold === null || isLast) return;
+    const id = window.setTimeout(advance, revealHold * 1000);
     return () => window.clearTimeout(id);
-  }, [revealed, autoAdvanceSeconds, isLast, advance]);
+  }, [revealed, revealHold, isLast, advance]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -352,7 +355,7 @@ function HostQuestion({
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
         {revealed && autoAdvanceSeconds !== null && !isLast ? (
-          <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
+          <span style={{ color: "var(--accent)" }}>Moving on in {revealHold}s · press ← → to take over</span>
         ) : (
           <>
             Space {revealed ? "advances" : "reveals"} · ← → to move · F for fullscreen

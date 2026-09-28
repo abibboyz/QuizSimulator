@@ -200,3 +200,15 @@ test("round trip: older files still load — v1 quizzes unchanged, #4-era Reveal
   assert.deepEqual(normalized.options[1].media, pic("answer"));
   assert.deepEqual(normalizeRevealQuestion(normalized), normalized, "normalizing twice changes nothing");
 });
+
+test("video export completes long reveals and preserves ordinary question hold times", () => {
+  const quiz = quizWith([
+    revealQuestion("long", { reveal: { animation: "dissolve", durationMs: 6000, caption: "Answer" } }),
+    mcQuestion("ordinary"),
+  ]);
+  quiz.settings.timeoutRevealSeconds = 1;
+  const timeline = buildTimeline(quiz, { answerMode: "pick-correct", sound: false });
+  const [reveal, ordinary] = timeline.questions;
+  assert.equal(reveal.advanceAt - reveal.revealAt, 8000);
+  assert.equal(ordinary.advanceAt - ordinary.revealAt, 1000);
+});

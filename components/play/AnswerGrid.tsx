@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ElementMotion, Question, Theme } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
@@ -90,6 +91,7 @@ export function AnswerGrid({
   sinceExit = null,
 }: Props) {
   const reduced = useReducedMotion();
+  const [revealElapsed, setRevealElapsed] = useState<number | null>(null);
   const ageBand = themeAgeBand(theme);
   const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
   const wrongColor = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
@@ -158,7 +160,8 @@ export function AnswerGrid({
                     <RevealPicture
                       question={{ media: answerMedia, reveal: question.reveal }}
                       theme={theme}
-                      revealKey="reveal"
+                      revealKey={`${question.id}:reveal`}
+                      onElapsed={setRevealElapsed}
                       maxHeight="100%"
                       instant={mode === "preview" || reduced}
                       captionClass={null}
@@ -192,6 +195,7 @@ export function AnswerGrid({
         </div>
         <RevealCaption
           settings={settings}
+          elapsed={revealed ? revealElapsed : null}
           revealKey={revealed ? `${question.id}:reveal` : null}
           instant={mode === "preview" || reduced}
           className={`mt-2 text-center font-bold ${captionText}`}

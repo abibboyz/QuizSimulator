@@ -19,7 +19,7 @@
 
 import type { Cue, CueSlot, MediaRef, Question, Quiz } from "@/types/quiz";
 import { activeCue, cueHoldMs } from "@/lib/cues";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
+import { completeRevealHold, revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
 import { accuracyLabel, scoreQuestion } from "@/lib/scoring";
 import { basePointsFor, isCorrect, timerFor } from "@/lib/store/playSession";
 import {
@@ -302,7 +302,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
     }
 
-    const holdSeconds = revealHoldSeconds(settings);
+    const holdSeconds = completeRevealHold(revealHoldSeconds(settings), question);
     const timeoutBar = shouldAutoAdvanceAfterTimeout(settings, "revealed", {
       questionId: question.id,
       selectedIds,

@@ -9,6 +9,7 @@ import { SCHEMA_VERSION, schemaVersionFor } from "@/types/quiz";
 import { newId } from "@/lib/factory";
 import { collectRefs, getMedia, putMediaRecord, remapMedia, saveQuiz } from "@/lib/storage";
 import { normalizeRevealQuestion } from "@/lib/reveal";
+import { validateBundleData } from "@/lib/bundleValidation";
 
 const APP_TAG = "quiz-simulator";
 
@@ -76,6 +77,12 @@ export async function importBundle(text: string): Promise<Quiz> {
   const source = bundle.quiz;
   if (!source || !Array.isArray(source.questions) || typeof source.title !== "string") {
     throw new TransferError("That export is missing its quiz data.");
+  }
+
+  try {
+    validateBundleData(source, bundle.media);
+  } catch (error) {
+    throw new TransferError(error instanceof Error ? error.message : "Invalid export.");
   }
 
   // Restore blobs first so the remap table is ready before the quiz is rewritten.

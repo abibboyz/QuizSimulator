@@ -10,6 +10,7 @@
 import type { RevealSettings } from "@/types/quiz";
 import {
   blurRadius,
+  dissolveOpacity,
   cardFlipAngle,
   coverTravel,
   flipFace,
@@ -373,6 +374,44 @@ function drawCoverBased(
           }
         }
       }
+      return;
+    }
+    case "wipe-center": {
+      const f = coverTravel(p);
+      o.drawImage(cov, 0, 0);
+      o.save();
+      o.beginPath();
+      o.rect(W * (1 - f) / 2, 0, W * f, H);
+      o.clip();
+      o.drawImage(img, 0, 0);
+      o.restore();
+      return;
+    }
+    case "blinds": {
+      o.drawImage(img, 0, 0);
+      const height = H / settings.tiles;
+      const remaining = 1 - coverTravel(p);
+      for (let row = 0; row < settings.tiles; row++) {
+        const y = row * height;
+        o.drawImage(cov, 0, y, W, height, 0, y, W, height * remaining);
+      }
+      return;
+    }
+    case "dissolve": {
+      o.drawImage(img, 0, 0);
+      const { cols, rows } = tileGrid(settings.tiles, W / H);
+      const width = W / cols;
+      const height = H / rows;
+      o.save();
+      for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < cols; column++) {
+          o.globalAlpha = dissolveOpacity(p, column, row);
+          const x = column * width;
+          const y = row * height;
+          o.drawImage(cov, x, y, width, height, x, y, width, height);
+        }
+      }
+      o.restore();
       return;
     }
     case "curtain": {

@@ -16,7 +16,7 @@ import { QuizProgress } from "@/components/play/QuizProgress";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
+import { completeRevealHold, revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
@@ -301,7 +301,7 @@ function PlayView() {
   const advancingAfterTimeout = quiz
     ? shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
     : false;
-  const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
+  const holdSeconds = quiz ? completeRevealHold(revealHoldSeconds(quiz.settings), order[index]) : 5;
 
   useEffect(() => {
     if (!advancingAfterTimeout) return;

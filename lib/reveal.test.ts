@@ -99,7 +99,7 @@ test("resolveReveal: keeps valid settings, silence, and rejects custom sounds (n
 });
 
 test("every reveal animation has catalogue info and resolves as itself", () => {
-  assert.equal(REVEAL_ANIMATION_IDS.length, 13);
+  assert.equal(REVEAL_ANIMATION_IDS.length, 16);
   for (const id of REVEAL_ANIMATION_IDS) {
     assert.ok(REVEAL_ANIMATIONS[id].label);
     assert.equal(resolveReveal({ reveal: { animation: id } }).animation, id);
@@ -234,4 +234,21 @@ test("revealAspect: decoded size, else the stored size, else 4:3", () => {
 test("revealFallbackColor darkens the accent deterministically", () => {
   assert.equal(revealFallbackColor("#ff0000"), revealFallbackColor("#ff0000"));
   assert.notEqual(revealFallbackColor("#ff0000"), "#ff0000");
+});
+
+test("mosaic dissolve is repeatable, monotonic and complete at its endpoints", async () => {
+  const { dissolveOpacity } = await import("./reveal.ts");
+  for (let row = 0; row < 8; row++) {
+    for (let column = 0; column < 8; column++) {
+      assert.equal(dissolveOpacity(0, column, row), 1);
+      assert.equal(dissolveOpacity(1, column, row), 0);
+      let previous = 1;
+      for (let step = 0; step <= 20; step++) {
+        const value = dissolveOpacity(step / 20, column, row);
+        assert.equal(value, dissolveOpacity(step / 20, column, row));
+        assert.ok(value <= previous && value >= 0);
+        previous = value;
+      }
+    }
+  }
 });

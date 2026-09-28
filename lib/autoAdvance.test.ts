@@ -53,3 +53,14 @@ test("hold time defaults to 5 seconds and stays in range", () => {
   assert.equal(revealHoldSeconds({ timeoutRevealSeconds: 999 }), 60, "capped so it can't stall");
   assert.equal(revealHoldSeconds({ timeoutRevealSeconds: NaN }), 5, "falls back to the default");
 });
+
+test("automatic navigation lets long reveals and captions finish without changing other question types", async () => {
+  const { completeRevealHold } = await import("./autoAdvance.ts");
+  const { createQuestion } = await import("./factory.ts");
+  const question = createQuestion("reveal");
+  question.reveal = { durationMs: 6000, caption: "Answer" };
+  assert.equal(completeRevealHold(1, question), 8);
+  assert.equal(completeRevealHold(10, question), 10);
+  assert.equal(completeRevealHold(1, createQuestion("multiple-choice")), 1);
+  assert.equal(completeRevealHold(5), 5);
+});
