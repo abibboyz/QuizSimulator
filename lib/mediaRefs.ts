@@ -15,6 +15,7 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
   if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
   for (const q of quiz.questions) {
+    if (q.background?.image) refs.push(q.background.image);
     if (q.media) refs.push(q.media);
     for (const o of q.options) if (o.media) refs.push(o.media);
     // Kept whatever the kind, so flipping a question away from Reveal and
@@ -45,6 +46,7 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
     questions: quiz.questions.map((q) => ({
       ...q,
       media: swap(q.media),
+      ...(q.background ? { background: { ...q.background, image: swap(q.background.image) } } : {}),
       options: q.options.map((o) => ({ ...o, media: swap(o.media) })),
       cues: mapCueSet(q.cues, swap),
       // Only questions that have reveal settings get the key — older quizzes come back byte-identical.

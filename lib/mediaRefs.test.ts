@@ -98,3 +98,13 @@ test("schemaVersionFor: files that use nothing new stay version 1 so older build
   withGlobal.settings = { ...withGlobal.settings, motion: { question: { enter: "fade" } } };
   assert.equal(schemaVersionFor(withGlobal), 2);
 });
+
+ test("local backgrounds survive disabled state, copying, and export collection", () => {
+  const quiz = oldQuiz();
+  quiz.questions = [{ ...oldQuestion, background: { enabled: false, image: ref("local"), fit: "contain", dim: 0.3 }, promptPlacement: { mode: "overlay", x: 20, y: 80 } }];
+  assert.ok(collectRefs(quiz).some((r) => r.kind === "stored" && r.id === "local"));
+  const copy = remapMedia(quiz, new Map([["local", "copied"]]));
+  assert.deepEqual(copy.questions[0].background?.image, ref("copied"));
+  assert.deepEqual(copy.questions[0].promptPlacement, quiz.questions[0].promptPlacement);
+  assert.equal(schemaVersionFor(quiz), 3);
+});

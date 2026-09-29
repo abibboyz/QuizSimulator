@@ -289,7 +289,7 @@ function EditView() {
           <div className="glass rounded-2xl p-4">
             {tab === "preview" &&
               (active ? (
-                <PreviewPane quiz={quiz} question={active} index={activeIndex} />
+                <PreviewPane quiz={quiz} question={active} index={activeIndex} onChange={updateQuestion} />
               ) : (
                 <p className="text-sm text-ink-400">Nothing to preview yet.</p>
               ))}

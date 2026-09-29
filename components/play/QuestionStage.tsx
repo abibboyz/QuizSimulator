@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { usePresence } from "motion/react";
 import type { Question, Theme } from "@/types/quiz";
+import { promptPosition } from "@/lib/questionPresentation";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
@@ -37,11 +38,12 @@ interface Props {
    * Exits only run inside AnimatePresence (solo play).
    */
   motion?: ResolvedMotion;
+  onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
 }
 
 const PROMPT_TEXT: Record<StageMode, string> = {
   host: "text-4xl md:text-6xl leading-tight",
-  solo: "text-xl md:text-3xl leading-snug",
+  solo: "text-lg md:text-2xl leading-snug",
   preview: "text-[11px] leading-snug",
 };
 
@@ -69,7 +71,13 @@ export function QuestionStage({
   header,
   theme,
   motion,
+  onPositionChange,
 }: Props) {
+  const placement = question.promptPlacement;
+  const overlay = placement?.mode === "overlay" && !!question.media && question.kind !== "reveal";
+  const bottom = placement?.mode === "bottom";
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const isReveal = question.kind === "reveal";
   // A Reveal question's pictures are the answers. Its prompt image stays hidden
   // so the covered grid is the only thing that can give the answer away.
@@ -109,6 +117,26 @@ export function QuestionStage({
   // pushing the answer tiles under the control bar.
   const gap = mode === "preview" ? "gap-1.5" : mode === "host" ? "gap-3 md:gap-5" : "gap-6 md:gap-8";
 
+  const promptNode = (
+  <h2
+    className={`stage-prompt text-center font-bold ${overlay && mode === "host" ? "text-lg md:text-2xl leading-snug" : PROMPT_TEXT[mode]}`}
+    style={{ color: "var(--prompt-color)" }}
+    aria-label={typing ? prompt : undefined}
+  >
+    {typing ? (
+      <>
+        {promptChars.slice(0, typed).join("")}
+        {/* The untyped rest is laid out but invisible, so lines don't reflow as it types. */}
+        <span aria-hidden style={{ visibility: "hidden" }}>
+          {promptChars.slice(typed).join("")}
+        </span>
+      </>
+    ) : (
+      question.prompt || <span className="text-ink-500">Untitled question</span>
+    )}
+  </h2>
+  );
+
   return (
     <div className={`flex w-full flex-col ${gap}`}>
       <div className="flex items-start justify-between gap-4">
@@ -121,7 +149,7 @@ export function QuestionStage({
         {header}
       </div>
 
-      {imageLeads && (
+      {imageLeads && !overlay && (
         <div className="flex justify-center" style={questionStyle}>
           <MediaImage
             media={question.media}
@@ -138,26 +166,10 @@ export function QuestionStage({
         </div>
       )}
 
-      <div className={imageLeads ? "" : "flex flex-col items-center gap-4"} style={questionStyle}>
-        <h2
-          className={`stage-prompt text-center font-bold ${PROMPT_TEXT[mode]}`}
-          style={{ color: "var(--prompt-color)" }}
-          aria-label={typing ? prompt : undefined}
-        >
-          {typing ? (
-            <>
-              {promptChars.slice(0, typed).join("")}
-              {/* The untyped rest is laid out but invisible, so lines don't reflow as it types. */}
-              <span aria-hidden style={{ visibility: "hidden" }}>
-                {promptChars.slice(typed).join("")}
-              </span>
-            </>
-          ) : (
-            question.prompt || <span className="text-ink-500">Untitled question</span>
-          )}
-        </h2>
+      {((!overlay && !bottom) || (!overlay && !imageLeads && !isReveal && question.media)) && <div className={imageLeads ? "" : "flex flex-col items-center gap-4"} style={questionStyle}>
+        {!overlay && !bottom && promptNode}
 
-        {!imageLeads && !isReveal && question.media && (
+        {!overlay && !imageLeads && !isReveal && question.media && (
           // The picture gives up height once the answer is out, so the
           // explanation lands on screen instead of below the fold.
           <MediaImage
@@ -173,7 +185,39 @@ export function QuestionStage({
             }`}
           />
         )}
-      </div>
+      </div>}
+
+      {overlay && (
+        <div ref={canvasRef} className="relative mx-auto w-full overflow-hidden rounded-xl" style={{ maxWidth: mode === "host" ? "40vh" : undefined, aspectRatio: "16 / 9" }}>
+          <MediaImage media={question.media} className="absolute inset-0 h-full w-full object-contain" />
+          <div
+            role={onPositionChange ? "button" : undefined}
+            tabIndex={onPositionChange ? 0 : undefined}
+            aria-label={onPositionChange ? "Drag prompt or use arrow keys to position" : undefined}
+            className={onPositionChange ? "focus-ring absolute cursor-grab touch-none select-none" : "absolute"}
+            style={{ width: "80%", maxHeight: "100%", overflow: "auto", left: `${promptPosition(placement?.x)}%`, top: `${promptPosition(placement?.y)}%`, transform: `translate(-${promptPosition(placement?.x)}%, -${promptPosition(placement?.y)}%)` }}
+            onPointerDown={(event) => {
+              if (!onPositionChange) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              drag.current = { x: event.clientX, y: event.clientY, left: promptPosition(placement?.x), top: promptPosition(placement?.y) };
+            }}
+            onPointerMove={(event) => {
+              if (!drag.current || !onPositionChange || !canvasRef.current) return;
+              const bounds = canvasRef.current.getBoundingClientRect();
+              const target = event.currentTarget.getBoundingClientRect();
+              onPositionChange({ mode: "overlay", x: promptPosition(drag.current.left + (event.clientX - drag.current.x) / Math.max(1, bounds.width - target.width) * 100), y: promptPosition(drag.current.top + (event.clientY - drag.current.y) / Math.max(1, bounds.height - target.height) * 100) });
+            }}
+            onPointerUp={() => { drag.current = null; }}
+            onPointerCancel={() => { drag.current = null; }}
+            onLostPointerCapture={() => { drag.current = null; }}
+            onKeyDown={(event) => {
+              if (!onPositionChange || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+              event.preventDefault();
+              onPositionChange({ mode: "overlay", x: promptPosition(promptPosition(placement?.x) + (event.key === "ArrowLeft" ? -2 : event.key === "ArrowRight" ? 2 : 0)), y: promptPosition(promptPosition(placement?.y) + (event.key === "ArrowUp" ? -2 : event.key === "ArrowDown" ? 2 : 0)) });
+            }}
+          ><div style={questionStyle}>{promptNode}</div></div>
+        </div>
+      )}
 
       <AnswerGrid
         question={question}
@@ -188,6 +232,8 @@ export function QuestionStage({
         sinceMount={sinceMount}
         sinceExit={sinceExit}
       />
+
+      {bottom && <div style={questionStyle}>{promptNode}</div>}
 
       {revealed &&
         question.explanation &&

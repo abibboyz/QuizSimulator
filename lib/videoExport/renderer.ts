@@ -16,6 +16,7 @@
  * everything else sits where it sits in the app.
  */
 
+import { questionTheme, promptPosition } from "@/lib/questionPresentation";
 import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, themeInk, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
@@ -215,7 +216,8 @@ export class FrameRenderer {
   /** ThemeShell + AnimatedBackground. */
   private drawBackground(t: number) {
     const { ctx, W, H } = this;
-    const theme = this.quiz.theme;
+    const scene = sceneAt(this.timeline, t);
+    const theme = questionTheme(this.quiz.theme, scene.kind === "stage" ? this.timeline.questions[scene.index]?.question : undefined);
 
     ctx.fillStyle = this.surface;
     ctx.fillRect(0, 0, W, H);
@@ -694,23 +696,41 @@ export class FrameRenderer {
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
 
+    const overlay = q.promptPlacement?.mode === "overlay" && !!q.media && q.kind !== "reveal";
     const imageLeads = q.layout === "image-top" && !!q.media && q.kind !== "reveal";
-    if (imageLeads) {
+    if (imageLeads && !overlay) {
       const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
       if (media) parts.push(posed(this.centered(media, CW)));
     }
 
+    const placement = q.promptPlacement;
+    const normalPrompt = placement?.mode !== "bottom" && !overlay;
     const promptBox = this.promptBox(run, sinceMount, CW);
-    if (!imageLeads && q.media && q.kind !== "reveal") {
+    if (!overlay && !imageLeads && q.media && q.kind !== "reveal") {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
-      parts.push(posed(this.stack([promptBox, ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
-    } else {
+      parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
+    } else if (normalPrompt) {
       parts.push(posed(promptBox));
+    }
+
+    if (overlay && placement) {
+      const bg = q.media ? this.image(q.media) : null;
+      const text = posed(this.promptBox(run, sinceMount, CW * 0.8));
+      const height = CW * 9 / 16;
+      parts.push({ w: CW, h: height, draw: (x, y) => {
+        this.ctx.save();
+        this.ctx.beginPath(); this.ctx.rect(x, y, CW, height); this.ctx.clip();
+        if (bg) this.drawContain(bg, x, y, CW, height);
+        text.draw(x + (CW - text.w) * promptPosition(placement.x) / 100, y + Math.max(0, height - text.h) * promptPosition(placement.y) / 100);
+        this.ctx.restore();
+      } });
     }
 
     parts.push(
       q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW),
     );
+
+    if (placement?.mode === "bottom") parts.push(posed(promptBox));
 
     if (revealed && q.explanation) {
       // The explanation takes the question's exit but not its entrance (it arrives with the answer).

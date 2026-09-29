@@ -6,7 +6,7 @@ import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { optionPalette, themeInk } from "@/lib/themes";
 import { themeAgeBand } from "@/lib/ageBands";
-import { Field, Input, Select, Textarea } from "@/components/ui/Field";
+import { Field, Input, Select, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { OptionList } from "@/components/builder/OptionList";
@@ -95,12 +95,19 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       <Field
         label="Prompt"
         action={
+          <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-ink-300">
+            <input type="checkbox" checked={!!question.promptPlacement}
+              onChange={(event) => onChange({ ...question, promptPlacement: event.target.checked ? { mode: "top", x: 50, y: 50 } : undefined })} />
+            Position prompt
+          </label>
           <ColorSwatch
             label="Question text colour"
             value={theme.promptColor}
             fallback={themeInk(quiz.theme)[100]}
             onChange={(promptColor) => setTheme({ promptColor })}
           />
+          </div>
         }
       >
         <Textarea
@@ -112,15 +119,44 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         />
       </Field>
 
+      {question.promptPlacement && (
+        <Field label="Prompt position" hint="Choose Over question image, then drag in Live preview. Requires a question image; otherwise the prompt stays at the top. Arrow keys also move it.">
+          <Select value={question.promptPlacement.mode} onChange={(event) => onChange({ ...question, promptPlacement: { ...question.promptPlacement!, mode: event.target.value as "top" | "overlay" | "bottom" } })}>
+            <option value="top">Top (current position)</option>
+            <option value="overlay">Over question image · draggable</option>
+            <option value="bottom">Bottom · below answers</option>
+          </Select>
+        </Field>
+      )}
+
+      <div className="space-y-3 rounded-2xl border border-ink-700 p-3">
+        <Toggle label="Use a screen background for this question" checked={question.background?.enabled ?? false}
+          hint="Replaces the whole-screen background for this question only. Other questions keep their own settings. Turn off to use the quiz background."
+          onChange={(enabled) => onChange({ ...question, background: { image: quiz.theme.bgImage, fit: quiz.theme.bgImageFit, dim: quiz.theme.bgImageDim, ...question.background, enabled } })} />
+        {question.background?.enabled && <>
+          <MediaDropZone label="Screen background image (this question only)" media={question.background.image}
+            onChange={(image) => onChange({ ...question, background: { ...question.background!, image } })} />
+          <Field label="Background image fit">
+            <Select value={question.background.fit} onChange={(event) => onChange({ ...question, background: { ...question.background!, fit: event.target.value as "cover" | "contain" | "tile" } })}>
+              <option value="cover">Cover</option><option value="contain">Contain</option><option value="tile">Tile</option>
+            </Select>
+          </Field>
+          <Field label={`Dim image · ${Math.round(question.background.dim * 100)}%`}>
+            <input type="range" min={0} max={90} value={question.background.dim * 100} className="w-full"
+              onChange={(event) => onChange({ ...question, background: { ...question.background!, dim: Number(event.target.value) / 100 } })} />
+          </Field>
+        </>}
+      </div>
+
       {/* A Reveal question's picture is the thing being revealed, so it lives
           with the rest of the reveal settings below. */}
       {question.kind !== "reveal" && (
       <Field
-        label={question.kind === "image-choice" ? "Prompt image" : "Image"}
+        label="Question image"
         hint={
           question.kind === "image-choice"
-            ? "Optional picture above the question. The grid below is the set of images players see."
-            : "Drag one in, click to browse, or just paste from your clipboard."
+            ? "Separate from the screen background. The grid below contains the answer images."
+            : "Separate from the screen background. Choose Over question image to place the prompt on this picture."
         }
       >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />

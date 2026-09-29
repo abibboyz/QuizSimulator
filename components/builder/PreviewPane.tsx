@@ -1,5 +1,6 @@
 "use client";
 
+import { questionTheme } from "@/lib/questionPresentation";
 import { useState } from "react";
 import type { Question, Quiz } from "@/types/quiz";
 import { getPreset, themeVars } from "@/lib/themes";
@@ -10,15 +11,17 @@ interface Props {
   quiz: Quiz;
   question: Question;
   index: number;
+  onChange: (question: Question) => void;
 }
 
 /**
  * Renders the real QuestionStage at preview scale, so what you see here is
  * exactly what plays — including the theme and background you picked.
  */
-export function PreviewPane({ quiz, question, index }: Props) {
+export function PreviewPane({ quiz, question, index, onChange }: Props) {
   const [revealed, setRevealed] = useState(false);
-  const preset = getPreset(quiz.theme.preset);
+  const theme = questionTheme(quiz.theme, question);
+  const preset = getPreset(theme.preset);
 
   return (
     <div className="space-y-2">
@@ -35,17 +38,17 @@ export function PreviewPane({ quiz, question, index }: Props) {
 
       <div
         className="relative overflow-hidden rounded-2xl border border-ink-700"
-        style={{ ...themeVars(quiz.theme), background: quiz.theme.surface }}
+        style={{ ...themeVars(theme), background: theme.surface }}
       >
         <AnimatedBackground
-          kind={quiz.theme.bgAnimation}
-          accent={quiz.theme.accent}
+          kind={theme.bgAnimation}
+          accent={theme.accent}
           glow={preset.glow}
-          surface={quiz.theme.surface}
+          surface={theme.surface}
           contained
-          image={quiz.theme.bgImage}
-          imageFit={quiz.theme.bgImageFit}
-          imageDim={quiz.theme.bgImageDim}
+          image={theme.bgImage}
+          imageFit={theme.bgImageFit}
+          imageDim={theme.bgImageDim}
         />
         <div className="relative p-4">
           <QuestionStage
@@ -57,7 +60,8 @@ export function PreviewPane({ quiz, question, index }: Props) {
             interactive={false}
             onPick={() => {}}
             mode="preview"
-            theme={quiz.theme}
+            theme={theme}
+            onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
           />
         </div>
       </div>

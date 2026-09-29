@@ -9,6 +9,7 @@ import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playCue, playUrgentTick, playWhoosh } from "@/lib/sound";
 import { resolveMotion, type ResolvedMotion } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
+import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -111,7 +112,7 @@ function HostView() {
   const limit = question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
 
   return (
-    <ThemeShell theme={quiz.theme}>
+    <ThemeShell theme={questionTheme(quiz.theme, question)}>
       {/*
         Fixed to the viewport rather than min-height: on a 720p projector the
         controls must never be pushed below the fold where the host can't reach

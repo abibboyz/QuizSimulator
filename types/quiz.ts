@@ -1,12 +1,13 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 3 adds local backgrounds and prompt placement.
  * 2 added the `reveal` question kind and the optional `motion` settings. Both
  * are additive: a version-1 quiz loads unchanged and resolves to exactly what
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -16,6 +17,7 @@ export const SCHEMA_VERSION = 2;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings">): number {
+  if (quiz.questions.some((q) => q.background || q.promptPlacement)) return 3;
   const usesV2 =
     !!quiz.settings?.motion ||
     quiz.questions.some((q) => q.kind === "reveal" || q.reveal !== undefined || q.motion !== undefined);
@@ -238,6 +240,9 @@ export interface Question {
   kind: QuestionKind;
   layout: QuestionLayout;
   prompt: string;
+  /** Local background wins only while enabled; disabling preserves the upload. */
+  background?: { enabled: boolean; image?: MediaRef; fit: BgImageFit; dim: number };
+  promptPlacement?: { mode: "top" | "overlay" | "bottom"; x: number; y: number };
   media?: MediaRef;
   explanation?: string;
   options: Option[];

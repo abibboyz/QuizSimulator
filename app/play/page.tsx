@@ -9,6 +9,7 @@ import { getQuiz } from "@/lib/storage";
 import { basePointsFor, timerFor, usePlaySession } from "@/lib/store/playSession";
 import { useCountdown } from "@/hooks/useCountdown";
 import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, primeSamples } from "@/lib/sound";
+import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -390,7 +391,7 @@ function PlayView() {
   }
 
   return (
-    <ThemeShell theme={quiz.theme}>
+    <ThemeShell narrow={mobile} theme={questionTheme(quiz.theme, phase === "asking" || phase === "revealed" ? question : undefined)}>
       {/* The intro stays put behind a start cue, so the screen is never blank
           while one plays. */}
       {(phase === "intro" || phase === "countdown") && (
