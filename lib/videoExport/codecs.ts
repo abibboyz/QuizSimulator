@@ -9,10 +9,11 @@ import type { Framing } from "@/lib/videoExport/renderer";
 
 export type Container = "mp4" | "webm";
 export type FormatChoice = "auto" | Container;
-export type Quality = "1080p" | "1440p" | "4k";
+export type Quality = "720p" | "1080p" | "1440p" | "4k";
 export type Fps = 30 | 60;
 
 export const QUALITIES: { id: Quality; short: number; label: string; note?: string }[] = [
+  { id: "720p", short: 720, label: "720p", note: "Faster export on slower devices" },
   { id: "1080p", short: 1080, label: "1080p" },
   { id: "1440p", short: 1440, label: "1440p" },
   { id: "4k", short: 2160, label: "4K", note: "Much slower; not every encoder supports it" },
@@ -30,7 +31,7 @@ export function outputSize(framing: Framing, quality: Quality): { width: number;
  * variable-bitrate mode, so the mostly-still quiz frames come out far smaller.
  */
 export function videoBitrate(quality: Quality, fps: Fps): number {
-  const base = quality === "4k" ? 60e6 : quality === "1440p" ? 32e6 : 16e6;
+  const base = quality === "4k" ? 60e6 : quality === "1440p" ? 32e6 : quality === "720p" ? 8e6 : 16e6;
   return Math.round(base * (fps === 60 ? 1.5 : 1));
 }
 

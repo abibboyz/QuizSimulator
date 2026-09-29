@@ -29,6 +29,7 @@ interface Props {
 
 type Status =
   | { kind: "idle" }
+  | { kind: "cancelled" }
   | { kind: "running"; progress: ExportProgress }
   | { kind: "done"; result: ExportResult; url: string }
   | { kind: "error"; message: string };
@@ -174,7 +175,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
   }
 
   async function start() {
-    if (!decision) return;
+    if (!decision || abortRef.current) return;
     if (urlRef.current) {
       URL.revokeObjectURL(urlRef.current);
       urlRef.current = null;
@@ -189,24 +190,22 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
       const result = await runExport(
         { quiz, framing, quality, fps, answerMode, format: decision },
         (progress) => {
-          if (!controller.signal.aborted) setStatus({ kind: "running", progress });
+          if (abortRef.current === controller && !controller.signal.aborted) setStatus({ kind: "running", progress });
         },
         controller.signal,
       );
+      if (controller.signal.aborted || abortRef.current !== controller) return;
       const url = URL.createObjectURL(result.blob);
       urlRef.current = url;
       setStatus({ kind: "done", result, url });
       if (!isIOS() || !canShareFile(result)) download(url, result.filename);
     } catch (error) {
-      if (controller.signal.aborted) {
-        setStatus({ kind: "idle" });
-      } else {
-        console.error(error);
-        setStatus({
-          kind: "error",
-          message: error instanceof Error ? error.message : "The export failed for an unknown reason.",
-        });
-      }
+      if (controller.signal.aborted || abortRef.current !== controller) return;
+      console.error(error);
+      setStatus({
+        kind: "error",
+        message: error instanceof Error ? error.message : "The export failed for an unknown reason.",
+      });
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -215,7 +214,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
   function cancel() {
     abortRef.current?.abort();
     abortRef.current = null;
-    setStatus({ kind: "idle" });
+    setStatus({ kind: "cancelled" });
   }
 
   async function share(result: ExportResult) {
@@ -267,7 +266,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
             </h2>
             <p className="truncate text-xs text-ink-400">
               {quiz.title || "Untitled quiz"} · {quiz.questions.length}{" "}
-              {quiz.questions.length === 1 ? "question" : "questions"} · plays exactly like auto-play
+              {quiz.questions.length === 1 ? "question" : "questions"} · rendered from the quiz’s playback settings
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={close} aria-label="Close">
@@ -275,6 +274,9 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
           </Button>
         </header>
 
+        {status.kind === "running" && (
+          <div className="border-b border-ink-800 px-5 py-3"><ProgressBlock progress={status.progress} /></div>
+        )}
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-sm text-ink-200">
           {!supported && (
             <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200">
@@ -404,10 +406,14 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
             {formatDuration(durationMs)} · {frames.toLocaleString()} frames · up to ~{formatBytes(maxBytes)}
           </p>
 
-          {status.kind === "running" && <ProgressBlock progress={status.progress} />}
+          {status.kind === "cancelled" && <p role="status">Export cancelled. You can start again when ready.</p>}
+          <p className="text-xs text-ink-400">Exports use the selected framing and simulated answers. Player controls are omitted. Animated image uploads are exported as still pictures. Questions and answers use their saved order.</p>
 
           {status.kind === "error" && (
-            <p className="rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">Export failed: {status.message}</p>
+            <div role="alert" className="rounded-xl border border-bad/40 bg-bad/10 p-3">
+              <p className="text-bad">Export failed: {status.message}</p>
+              <p className="mt-2 text-xs text-ink-300">Try 720p at 30 fps or Auto format. If a picture is missing, replace it or upload it directly, then retry.</p>
+            </div>
           )}
 
           {status.kind === "done" && (
@@ -508,6 +514,12 @@ function Segmented({
 }
 
 function ProgressBlock({ progress }: { progress: ExportProgress }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const pct = Math.floor(progress.fraction * 100);
   const eta =
     progress.etaSeconds === null
@@ -524,6 +536,7 @@ function ProgressBlock({ progress }: { progress: ExportProgress }) {
       <div
         className="h-2 overflow-hidden rounded-full bg-ink-800"
         role="progressbar"
+        aria-label="Video export progress"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
@@ -532,8 +545,9 @@ function ProgressBlock({ progress }: { progress: ExportProgress }) {
       </div>
       <p className="text-xs tabular-nums text-ink-500">
         Frame {progress.frame.toLocaleString()} / {progress.totalFrames.toLocaleString()}
-        {eta && ` · ${eta}`} · keep this tab open
+        {eta && ` · ${eta}`} · {elapsed}s elapsed · keep this tab open
       </p>
+      {progress.warnings?.map((warning) => <p key={warning} className="text-xs text-ink-200">Warning: {warning}</p>)}
     </div>
   );
 }

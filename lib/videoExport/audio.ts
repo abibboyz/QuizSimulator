@@ -30,10 +30,10 @@ export function offlineAudioAvailable(): boolean {
   return offlineCtor() !== null;
 }
 
-async function sampleBytes(ref: MediaRef): Promise<ArrayBuffer | null> {
+async function sampleBytes(ref: MediaRef, signal?: AbortSignal): Promise<ArrayBuffer | null> {
   try {
     if (ref.kind === "url") {
-      const response = await fetch(ref.url);
+      const response = await fetch(ref.url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) });
       return response.ok ? await response.arrayBuffer() : null;
     }
     const record = await getMedia(ref.id);
@@ -70,7 +70,7 @@ export async function renderAudio(timeline: Timeline, signal?: AbortSignal): Pro
     const key = sampleKey(event.sample);
     if (buffers.has(key)) continue;
     signal?.throwIfAborted?.();
-    const bytes = await sampleBytes(event.sample);
+    const bytes = await sampleBytes(event.sample, signal);
     let decoded: AudioBuffer | null = null;
     if (bytes) {
       try {

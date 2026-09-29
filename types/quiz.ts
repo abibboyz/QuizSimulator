@@ -265,7 +265,7 @@ export interface Question {
 /** Audience the quiz is coloured for. Affects palette only, never gameplay. */
 export type AgeBand = "3-5" | "6-8" | "9-12" | "13-16";
 
-export type ThemePreset = "neon" | "sunset" | "forest" | "candy" | "mono" | AgeBand;
+export type ThemePreset = "sunshine" | "ocean" | "garden" | "bubblegum" | "neon" | "sunset" | "forest" | "candy" | "mono" | AgeBand;
 
 export type BgAnimation = "aurora" | "particles" | "shapes" | "starfield" | "none";
 

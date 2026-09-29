@@ -9,6 +9,7 @@ import {
   FONT_CHOICES,
   THEME_PRESETS,
   getPreset,
+  themeInk,
   optionPalette,
   readableTextOn,
 } from "@/lib/themes";
@@ -104,8 +105,8 @@ export function ThemePanel({ theme, onChange }: Props) {
           colour shown.
         </Note>
 
-        <SubHeading label="Classic palettes" />
-        <div className="grid grid-cols-5 gap-2">
+        <SubHeading label="Light & dark palettes" />
+        <div className="grid grid-cols-3 gap-2">
           {THEME_PRESETS.map((preset) => {
             const active = theme.preset === preset.id;
             return (
@@ -122,19 +123,24 @@ export function ThemePanel({ theme, onChange }: Props) {
                     preset: preset.id,
                     accent: preset.accent,
                     surface: preset.surface,
+                    promptColor: undefined,
+                    titleColor: undefined,
+                    explanationColor: undefined,
                     bgAnimation:
                       !isAgeBand(theme.preset) && theme.bgAnimation === getPreset(theme.preset).defaultBg
                         ? preset.defaultBg
                         : theme.bgAnimation,
                   })
                 }
-                className={`focus-ring aspect-square rounded-xl border-2 transition ${
+                className={`focus-ring rounded-xl border-2 px-2 py-4 text-xs font-bold transition ${
                   active ? "scale-105 border-white" : "border-transparent hover:scale-105"
                 }`}
-                style={{ background: `linear-gradient(135deg, ${preset.accent}, ${preset.glow})` }}
+                style={{ background: preset.surface, color: readableTextOn(preset.surface) }}
                 aria-label={preset.label}
                 aria-pressed={active}
-              />
+              >
+                {preset.label}
+              </button>
             );
           })}
         </div>
@@ -376,8 +382,8 @@ export function ThemePanel({ theme, onChange }: Props) {
         summary={fontName}
         preview={
           <>
-            <Dot color={theme.promptColor ?? "#e9ebf4"} />
-            <Dot color={theme.titleColor ?? "#e9ebf4"} />
+            <Dot color={theme.promptColor ?? themeInk(theme)[100]} />
+            <Dot color={theme.titleColor ?? themeInk(theme)[100]} />
           </>
         }
       >
@@ -405,19 +411,19 @@ export function ThemePanel({ theme, onChange }: Props) {
           <ColorRow
             label="Question text"
             value={theme.promptColor}
-            fallback="#e9ebf4"
+            fallback={themeInk(theme)[100]}
             onChange={(promptColor) => onChange({ ...theme, promptColor })}
           />
           <ColorRow
             label="Quiz title"
             value={theme.titleColor}
-            fallback="#e9ebf4"
+            fallback={themeInk(theme)[100]}
             onChange={(titleColor) => onChange({ ...theme, titleColor })}
           />
           <ColorRow
             label="Explanation"
             value={theme.explanationColor}
-            fallback="#c7cbdd"
+            fallback={themeInk(theme)[200]}
             onChange={(explanationColor) => onChange({ ...theme, explanationColor })}
           />
         </div>

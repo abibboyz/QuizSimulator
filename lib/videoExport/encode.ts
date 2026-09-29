@@ -7,6 +7,7 @@
  * and doesn't care whether the tab is in the foreground.
  */
 
+import { exportWait } from "@/lib/videoExport/wait";
 import type { Quiz } from "@/types/quiz";
 import { Muxer as Mp4Muxer, StreamTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, StreamTarget as WebmTarget } from "webm-muxer";
@@ -36,6 +37,7 @@ export interface ExportProgress {
   fraction: number;
   /** Seconds left, once there's enough history to guess. */
   etaSeconds: number | null;
+  warnings?: string[];
 }
 
 export interface ExportResult {
@@ -205,7 +207,7 @@ export async function runExport(
   const totalFrames = Math.max(1, Math.ceil((timeline.durationMs / 1000) * fps));
   const warnings: string[] = [];
   const report = (phase: ExportPhase, frame: number, fraction: number, etaSeconds: number | null = null) =>
-    onProgress({ phase, frame, totalFrames, fraction: Math.min(1, fraction), etaSeconds });
+    onProgress({ phase, frame, totalFrames, fraction: Math.min(1, fraction), etaSeconds, warnings: [...warnings] });
   const check = () => {
     if (signal.aborted) throw abortError();
   };
@@ -222,6 +224,7 @@ export async function runExport(
     );
   }
 
+  let removeAbortListener = () => {};
   let videoEncoder: VideoEncoder | null = null;
   let audioEncoder: AudioEncoder | null = null;
   try {
@@ -229,7 +232,7 @@ export async function runExport(
     let audioBuffer: AudioBuffer | null = null;
     if (withAudio) {
       report("audio", 0, WEIGHT.loading);
-      const rendered = await renderAudio(timeline, signal);
+      const rendered = await exportWait(renderAudio(timeline, signal), signal, "Soundtrack rendering", 120_000);
       if (rendered) {
         audioBuffer = rendered.buffer;
         if (rendered.missingSamples > 0) {
@@ -270,6 +273,13 @@ export async function runExport(
       },
       error: fail,
     });
+    const closeOnAbort = () => {
+      for (const encoder of [videoEncoder, audioEncoder]) {
+        if (encoder && encoder.state !== "closed") encoder.close();
+      }
+    };
+    signal.addEventListener("abort", closeOnAbort, { once: true });
+    removeAbortListener = () => signal.removeEventListener("abort", closeOnAbort);
     videoEncoder.configure({ ...format.video.config, width, height, framerate: fps });
 
     // Audio: feed 100ms slices of the pre-rendered track, staying just ahead of the video.
@@ -338,7 +348,9 @@ export async function runExport(
       }
       feedAudioUntil((i + 2) / fps);
 
-      while (videoEncoder.encodeQueueSize > MAX_ENCODE_QUEUE) {
+      const queueStarted = performance.now();
+      while (videoEncoder.encodeQueueSize > MAX_ENCODE_QUEUE || (audioEncoder?.encodeQueueSize ?? 0) > MAX_ENCODE_QUEUE) {
+        if (performance.now() - queueStarted > 60_000) throw new Error("The video encoder stopped responding. Try 720p at 30 fps.");
         await waitForDequeue(videoEncoder);
         guard();
       }
@@ -355,8 +367,8 @@ export async function runExport(
 
     report("finalizing", totalFrames, base + span);
     feedAudioUntil(Infinity);
-    await videoEncoder.flush();
-    if (audioEncoder) await audioEncoder.flush();
+    await exportWait(videoEncoder.flush(), signal, "Video finalization");
+    if (audioEncoder) await exportWait(audioEncoder.flush(), signal, "Audio finalization");
     guard();
     muxer.finalize();
     const blob = writer.toBlob(mimeType);
@@ -373,6 +385,7 @@ export async function runExport(
       warnings,
     };
   } finally {
+    removeAbortListener();
     for (const encoder of [videoEncoder, audioEncoder]) {
       if (encoder && encoder.state !== "closed") {
         try {

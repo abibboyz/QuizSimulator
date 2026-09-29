@@ -4,7 +4,10 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-outfit);
+}
 
+/* Keep colours as variables so per-quiz palettes also recolour utilities. */
+@theme {
   --color-ink-950: #05060c;
   --color-ink-900: #0a0c16;
   --color-ink-850: #0f1120;

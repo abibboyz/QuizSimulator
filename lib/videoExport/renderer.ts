@@ -17,7 +17,7 @@
  */
 
 import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
-import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
+import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, themeInk, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceColumns } from "@/lib/imageChoice";
 import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, showsPerQuestion } from "@/lib/progress";
@@ -92,21 +92,6 @@ export function mediaKey(ref: MediaRef): string {
 
 /* ------------------------------------------------------------------ tokens */
 
-/** globals.css @theme ink scale. */
-const INK = {
-  950: "#05060c",
-  900: "#0a0c16",
-  850: "#0f1120",
-  800: "#14172a",
-  700: "#1d2136",
-  600: "#2b3049",
-  500: "#454b69",
-  400: "#6c7391",
-  300: "#99a0bd",
-  200: "#c7cbdd",
-  100: "#e9ebf4",
-};
-
 const swapEase = cubicBezier(QUESTION_SWAP.ease);
 const popEase = cubicBezier(POP_IN.ease);
 const CONFETTI_COLORS = ["#26ccff", "#a25afd", "#ff5e7e", "#88ff5a", "#fcff42", "#ffa62d", "#ff36ff"].map(parseColor);
@@ -149,6 +134,7 @@ export class FrameRenderer {
   private readonly surface: string;
   private readonly good: string;
   private readonly bad: string;
+  private readonly ink: ReturnType<typeof themeInk>;
   private readonly promptColor: string;
   private readonly titleColor: string;
   private readonly explanationColor: string;
@@ -182,14 +168,15 @@ export class FrameRenderer {
     this.sm = f.cssWidth >= 640;
 
     const theme = quiz.theme;
+    this.ink = themeInk(theme);
     this.accent = theme.accent;
     this.glow = getPreset(theme.preset).glow;
     this.surface = theme.surface;
     this.good = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
     this.bad = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
-    this.promptColor = theme.promptColor ?? "#e9ebf4";
-    this.titleColor = theme.titleColor ?? "#e9ebf4";
-    this.explanationColor = theme.explanationColor ?? "#c7cbdd";
+    this.promptColor = theme.promptColor ?? this.ink[100];
+    this.titleColor = theme.titleColor ?? this.ink[100];
+    this.explanationColor = theme.explanationColor ?? this.ink[200];
     this.quizFont =
       theme.font === "sans" ? assets.fonts.sans : theme.font === "mono" ? assets.fonts.mono : assets.fonts.display;
 
@@ -433,7 +420,7 @@ export class FrameRenderer {
 
     const blocks: Box[] = [];
     blocks.push(
-      this.textBox("SOLO RUN", CW, { size: 12, lh: 16, weight: 600, color: INK[400], spacing: 3.6, align: "center" }),
+      this.textBox("SOLO RUN", CW, { size: 12, lh: 16, weight: 600, color: this.ink[400], spacing: 3.6, align: "center" }),
     );
     blocks.push(
       this.textBox(quiz.title, CW, {
@@ -448,7 +435,7 @@ export class FrameRenderer {
     );
     if (quiz.description) {
       blocks.push(
-        this.textBox(quiz.description, CW, { size: 18, lh: 28, weight: 400, color: INK[300], align: "center" }),
+        this.textBox(quiz.description, CW, { size: 18, lh: 28, weight: 400, color: this.ink[300], align: "center" }),
       );
     }
 
@@ -491,9 +478,9 @@ export class FrameRenderer {
           let cx = x + (maxW - row.w) / 2;
           const cy = y + r * 38;
           for (const chip of row.items) {
-            this.fillRR(cx, cy, chip.w, chip.h, chip.h / 2, withAlpha(INK[900], 0.6));
-            this.strokeRR(cx + 0.5, cy + 0.5, chip.w - 1, chip.h - 1, chip.h / 2, INK[600], 1);
-            this.drawLine(chip.text, cx + chip.w / 2, cy + 5, 20, font, INK[300], "center");
+            this.fillRR(cx, cy, chip.w, chip.h, chip.h / 2, withAlpha(this.ink[900], 0.6));
+            this.strokeRR(cx + 0.5, cy + 0.5, chip.w - 1, chip.h - 1, chip.h / 2, this.ink[600], 1);
+            this.drawLine(chip.text, cx + chip.w / 2, cy + 5, 20, font, this.ink[300], "center");
             cx += chip.w + 8;
           }
         });
@@ -571,9 +558,9 @@ export class FrameRenderer {
     const lw = this.measure(lead, font);
     const tw = this.measure(tail, font);
     const start = x + (w - lw - tw) / 2;
-    this.drawLine(lead, start, y, 16, font, INK[400], "left");
+    this.drawLine(lead, start, y, 16, font, this.ink[400], "left");
     this.drawLine(tail, start + lw, y, 16, font, this.accent, "left");
-    this.fillRR(x, y + 24, w, 2, 1, INK[800]);
+    this.fillRR(x, y + 24, w, 2, 1, this.ink[800]);
     ctx.fillStyle = this.accent;
     ctx.fillRect(x, y + 24, w * Math.max(0, 1 - since / (total * 1000)), 2);
   }
@@ -747,7 +734,7 @@ export class FrameRenderer {
       size: md ? 30 : 20,
       lh: md ? 41.25 : 27.5,
       weight: 700,
-      color: q.prompt ? this.promptColor : INK[500],
+      color: q.prompt ? this.promptColor : this.ink[500],
       family: this.quizFont,
       align: "center" as Align,
       balance: true,
@@ -825,9 +812,9 @@ export class FrameRenderer {
       w: CW,
       h: Math.max(metaH, groupH),
       draw: (x, y) => {
-        this.drawLine(main, x, y, 16, metaFont, INK[300], "left", 1.2);
-        if (extra && extraInline) this.drawLine(extra, x + mainW + 8, y, 16, metaFont, INK[400], "left", 1.2);
-        extraLines.forEach((line, i) => this.drawLine(line, x, y + 16 * (i + 1), 16, metaFont, INK[400], "left", 1.2));
+        this.drawLine(main, x, y, 16, metaFont, this.ink[300], "left", 1.2);
+        if (extra && extraInline) this.drawLine(extra, x + mainW + 8, y, 16, metaFont, this.ink[400], "left", 1.2);
+        extraLines.forEach((line, i) => this.drawLine(line, x, y + 16 * (i + 1), 16, metaFont, this.ink[400], "left", 1.2));
 
         let gx = x + CW - groupW;
         const cy = y + groupH / 2;
@@ -847,7 +834,7 @@ export class FrameRenderer {
           });
           gx += pillW + 12;
         }
-        this.drawLine(scoreText, gx + scoreW, cy - 14, 28, scoreFont, INK[100], "right");
+        this.drawLine(scoreText, gx + scoreW, cy - 14, 28, scoreFont, this.ink[100], "right");
         gx += scoreW;
         if (meter) meter.draw(gx + 16, cy - meter.h / 2);
       },
@@ -952,7 +939,7 @@ export class FrameRenderer {
             cy - size * 0.24,
             size * 0.48,
             this.font(700, size * 0.32),
-            st.urgent ? this.bad : INK[100],
+            st.urgent ? this.bad : this.ink[100],
             "center",
           );
         });
@@ -1218,7 +1205,7 @@ export class FrameRenderer {
         ctx.clip();
         if (img) this.drawCover(img, cx, cy - 28, 56, 56);
         else {
-          ctx.fillStyle = INK[800];
+          ctx.fillStyle = this.ink[800];
           ctx.fillRect(cx, cy - 28, 56, 56);
         }
         ctx.restore();
@@ -1334,7 +1321,7 @@ export class FrameRenderer {
                     ry + (boxH - qLh) / 2,
                     qLh,
                     this.font(700, 30),
-                    INK[500],
+                    this.ink[500],
                     "center",
                   );
                 }
@@ -1343,7 +1330,7 @@ export class FrameRenderer {
                 if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
                 if (img) this.drawContain(img, tx, ry, colW, boxH);
                 else if (!option.media)
-                  this.drawLine("?", tx + colW / 2, ry + boxH / 2 - 12, 24, numFont, INK[500], "center");
+                  this.drawLine("?", tx + colW / 2, ry + boxH / 2 - 12, 24, numFont, this.ink[500], "center");
                 ctx.filter = "none";
               }
               ctx.restore();
@@ -1399,8 +1386,8 @@ export class FrameRenderer {
       draw: (x, y) => {
         const pop: Pose = { opacity: p, x: 0, y: 8 * (1 - p), scale: lerp(0.97, 1, p), rotateX: 0 };
         this.withPose(pop, x + CW / 2, y + h / 2, 1, () => {
-          this.fillRR(x, y, CW, h, 16, withAlpha(INK[900], 0.8));
-          this.strokeRR(x + 0.5, y + 0.5, CW - 1, h - 1, 15.5, INK[600], 1);
+          this.fillRR(x, y, CW, h, 16, withAlpha(this.ink[900], 0.8));
+          this.strokeRR(x + 0.5, y + 0.5, CW - 1, h - 1, 15.5, this.ink[600], 1);
           lines.forEach((line, i) =>
             this.drawLine(line, x + CW / 2, y + 17 + i * 20, 20, font, this.explanationColor, "center"),
           );
@@ -1427,7 +1414,7 @@ export class FrameRenderer {
           size: 14,
           lh: 20,
           weight: 600,
-          color: INK[400],
+          color: this.ink[400],
           spacing: 2.8,
           align: "center",
         }),
@@ -1440,7 +1427,7 @@ export class FrameRenderer {
           align: "center",
           balance: true,
         }),
-        this.textBox(verdict.blurb, CW, { size: 16, lh: 24, weight: 400, color: INK[300], align: "center" }),
+        this.textBox(verdict.blurb, CW, { size: 16, lh: 24, weight: 400, color: this.ink[300], align: "center" }),
       ],
       8,
       CW,
@@ -1479,7 +1466,7 @@ export class FrameRenderer {
         cy + 17,
         valueLh,
         this.font(700, valueSize),
-        highlight ? this.accent : INK[100],
+        highlight ? this.accent : this.ink[100],
         "center",
       );
       this.drawLine(
@@ -1488,7 +1475,7 @@ export class FrameRenderer {
         cy + 17 + valueLh + 4,
         15,
         this.font(400, 10),
-        INK[400],
+        this.ink[400],
         "center",
         1,
       );
@@ -1532,13 +1519,13 @@ export class FrameRenderer {
         ctx.save();
         this.rr(x, y, CW, h, 16);
         ctx.clip();
-        this.drawLine("QUESTION BREAKDOWN", x + 20, y + 12, 20, strongFont, INK[300], "left", 1.4);
-        ctx.fillStyle = INK[700];
+        this.drawLine("QUESTION BREAKDOWN", x + 20, y + 12, 20, strongFont, this.ink[300], "left", 1.4);
+        ctx.fillStyle = this.ink[700];
         ctx.fillRect(x, y + headH - 1, CW, 1);
         let iy = y + headH;
         items.forEach((item, idx) => {
           if (idx > 0) {
-            ctx.fillStyle = INK[800];
+            ctx.fillStyle = this.ink[800];
             ctx.fillRect(x, iy, CW, 1);
             iy += 1;
           }
@@ -1554,24 +1541,24 @@ export class FrameRenderer {
           item.lines.forEach((line, li) => {
             if (li === 0 && line.startsWith(item.lead)) {
               const lw = this.measure(item.lead, promptFont);
-              this.drawLine(item.lead, tx, iy + 16, 24, promptFont, INK[400], "left");
-              this.drawLine(line.slice(item.lead.length), tx + lw, iy + 16, 24, promptFont, INK[100], "left");
+              this.drawLine(item.lead, tx, iy + 16, 24, promptFont, this.ink[400], "left");
+              this.drawLine(line.slice(item.lead.length), tx + lw, iy + 16, 24, promptFont, this.ink[100], "left");
             } else {
-              this.drawLine(line, tx, iy + 16 + li * 24, 24, promptFont, INK[100], "left");
+              this.drawLine(line, tx, iy + 16 + li * 24, 24, promptFont, this.ink[100], "left");
             }
           });
           let ey = iy + 16 + item.lines.length * 24 + 4;
           for (const line of item.extra) {
             if (line.startsWith(label)) {
               const lw = this.measure(label, smallFont);
-              this.drawLine(label, tx, ey, 20, smallFont, INK[300], "left");
+              this.drawLine(label, tx, ey, 20, smallFont, this.ink[300], "left");
               this.drawLine(line.slice(label.length), tx + lw, ey, 20, strongFont, this.good, "left");
             } else {
-              this.drawLine(line, tx, ey, 20, smallFont, INK[300], "left");
+              this.drawLine(line, tx, ey, 20, smallFont, this.ink[300], "left");
             }
             ey += 20;
           }
-          this.drawLine(item.points, x + CW - 20, iy + 18, 20, strongFont, INK[300], "right");
+          this.drawLine(item.points, x + CW - 20, iy + 18, 20, strongFont, this.ink[300], "right");
           iy += item.h;
         });
         ctx.restore();
@@ -1605,7 +1592,7 @@ export class FrameRenderer {
   private drawCountdown(instance: CueInstance, local: number) {
     const { ctx, W, H } = this;
     this.backdropBlur(4);
-    ctx.fillStyle = withAlpha(INK[950], 0.7);
+    ctx.fillStyle = withAlpha(this.ink[950], 0.7);
     ctx.fillRect(0, 0, W, H);
 
     const beats = COUNTDOWN_BEATS;
@@ -1832,8 +1819,8 @@ export class FrameRenderer {
 
   /** `.glass`: ink-850 at 82% with an ink-600/70 hairline. (Its backdrop blur is left out.) */
   private glass(x: number, y: number, w: number, h: number, r: number) {
-    this.fillRR(x, y, w, h, r, withAlpha(INK[850], 0.82));
-    this.strokeRR(x + 0.5, y + 0.5, w - 1, h - 1, r - 0.5, withAlpha(INK[600], 0.7), 1);
+    this.fillRR(x, y, w, h, r, withAlpha(this.ink[850], 0.82));
+    this.strokeRR(x + 0.5, y + 0.5, w - 1, h - 1, r - 0.5, withAlpha(this.ink[600], 0.7), 1);
   }
 
   private withTransform(cx: number, cy: number, scale: number, rotateDeg: number, opacity: number, draw: () => void) {
@@ -1972,7 +1959,7 @@ export class FrameRenderer {
         ctx.clip();
         if (img) ctx.drawImage(img.source, x, y, w, h);
         else {
-          ctx.fillStyle = INK[800];
+          ctx.fillStyle = this.ink[800];
           ctx.fillRect(x, y, w, h);
         }
         ctx.restore();

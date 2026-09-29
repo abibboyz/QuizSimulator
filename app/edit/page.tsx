@@ -179,6 +179,19 @@ function EditView() {
           </span>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTab("theme");
+                requestAnimationFrame(() => {
+                  document.getElementById("quiz-theme-tab")?.focus({ preventScroll: true });
+                  document.getElementById("quiz-appearance-panel")?.scrollIntoView({ block: "start" });
+                });
+              }}
+            >
+              Theme
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => exportQuizFile(quiz)}>
               Export
             </Button>
@@ -255,11 +268,13 @@ function EditView() {
           )}
         </section>
 
-        <aside className="space-y-3">
+        <aside id="quiz-appearance-panel" className="scroll-mt-40 space-y-3">
           <div className="flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
             {(["preview", "theme", "settings", "animate"] as Tab[]).map((id) => (
               <button
                 key={id}
+                id={id === "theme" ? "quiz-theme-tab" : undefined}
+                aria-pressed={tab === id}
                 type="button"
                 onClick={() => setTab(id)}
                 className={`focus-ring flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold capitalize transition ${

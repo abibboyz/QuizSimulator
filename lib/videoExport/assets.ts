@@ -4,6 +4,7 @@
  * deterministic — no frame is ever drawn with a half-loaded image.
  */
 
+import { exportWait } from "@/lib/videoExport/wait";
 import type { CueSet, MediaRef, Quiz } from "@/types/quiz";
 import { getMedia } from "@/lib/storage";
 import { mediaKey, type FontSet, type LoadedImage, type RenderAssets } from "@/lib/videoExport/renderer";
@@ -57,13 +58,14 @@ function decodeImageUrl(url: string, cors: boolean): Promise<LoadedImage> {
     const img = new Image();
     if (cors) img.crossOrigin = "anonymous";
     img.decoding = "async";
-    img.onload = () => resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => reject(new Error(`Couldn't load ${url}`));
+    const timer = setTimeout(() => { img.src = ""; reject(new Error("Picture loading timed out")); }, 20_000);
+    img.onload = () => { clearTimeout(timer); resolve({ source: img, width: img.naturalWidth, height: img.naturalHeight }); };
+    img.onerror = () => { clearTimeout(timer); reject(new Error("Could not load picture")); };
     img.src = url;
   });
 }
 
-async function loadImage(ref: MediaRef): Promise<LoadedImage | null> {
+async function loadImage(ref: MediaRef, signal?: AbortSignal): Promise<LoadedImage | null> {
   try {
     if (ref.kind === "stored") {
       const record = await getMedia(ref.id);
@@ -72,11 +74,12 @@ async function loadImage(ref: MediaRef): Promise<LoadedImage | null> {
     // Web images must allow CORS: drawing one that doesn't would taint the
     // canvas and make every frame unreadable to the encoder.
     try {
-      const response = await fetch(ref.url, { mode: "cors" });
+      const response = await fetch(ref.url, { mode: "cors", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) });
       if (response.ok) return await decodeBlob(await response.blob());
     } catch {
       // try the <img crossorigin> route below
     }
+    signal?.throwIfAborted();
     return await decodeImageUrl(ref.url, true);
   } catch {
     return null;
@@ -133,16 +136,26 @@ export async function loadAssets(
   const worker = async () => {
     for (let ref = queue.shift(); ref; ref = queue.shift()) {
       signal?.throwIfAborted?.();
-      const img = await loadImage(ref);
+      const img = await loadImage(ref, signal);
+      if (signal?.aborted) {
+        if (img && typeof ImageBitmap !== "undefined" && img.source instanceof ImageBitmap) img.source.close();
+        signal.throwIfAborted();
+      }
       if (img) images.set(mediaKey(ref), img);
       else missingImages++;
       onProgress?.(++done, refs.length);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(6, refs.length) }, worker));
-
-  const fonts = await loadFonts();
-  return { assets: { images, fonts }, missingImages };
+  try {
+    const results = await Promise.allSettled(Array.from({ length: Math.min(6, refs.length) }, worker));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+    const fonts = await exportWait(loadFonts(), signal, "Font loading");
+    return { assets: { images, fonts }, missingImages };
+  } catch (error) {
+    releaseAssets({ images, fonts: { sans: "", mono: "", display: "" } });
+    throw error;
+  }
 }
 
 /** Frees decoded bitmaps once an export is finished. */

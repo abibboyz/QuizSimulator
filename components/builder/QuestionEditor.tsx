@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import type { Cue, CueSlot, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
-import { optionPalette } from "@/lib/themes";
+import { optionPalette, themeInk } from "@/lib/themes";
 import { themeAgeBand } from "@/lib/ageBands";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
@@ -98,7 +98,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           <ColorSwatch
             label="Question text colour"
             value={theme.promptColor}
-            fallback="#e9ebf4"
+            fallback={themeInk(quiz.theme)[100]}
             onChange={(promptColor) => setTheme({ promptColor })}
           />
         }
@@ -166,7 +166,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           <ColorSwatch
             label="Explanation text colour"
             value={theme.explanationColor}
-            fallback="#c7cbdd"
+            fallback={themeInk(quiz.theme)[200]}
             onChange={(explanationColor) => setTheme({ explanationColor })}
           />
         }

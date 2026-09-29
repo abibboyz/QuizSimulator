@@ -63,6 +63,7 @@ interface Props {
 
 export function ExportVideoButton({ quiz, quizId, defaultFraming, variant = "ghost", size = "sm", className }: Props) {
   const [target, setTarget] = useState<Quiz | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const open = async () => {
@@ -71,9 +72,14 @@ export function ExportVideoButton({ quiz, quizId, defaultFraming, variant = "gho
       return;
     }
     if (!quizId) return;
+    setError(null);
     setBusy(true);
     try {
-      setTarget(await getQuiz(quizId));
+      const saved = await getQuiz(quizId);
+      if (!saved) throw new Error("Quiz could not be found. Refresh and try again.");
+      setTarget(saved);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not load the quiz.");
     } finally {
       setBusy(false);
     }
@@ -95,6 +101,7 @@ export function ExportVideoButton({ quiz, quizId, defaultFraming, variant = "gho
         </svg>
         Export video
       </Button>
+      {error && <p role="alert" className="text-xs text-bad">{error}</p>}
       {target && <ExportVideoDialog quiz={target} defaultFraming={defaultFraming} onClose={() => setTarget(null)} />}
     </>
   );
