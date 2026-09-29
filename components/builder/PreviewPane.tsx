@@ -52,6 +52,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
         />
         <div className="relative p-4">
           <QuestionStage
+                loopSettings={quiz.settings}
             question={question}
             index={index}
             total={quiz.questions.length}

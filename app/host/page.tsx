@@ -157,6 +157,7 @@ function HostView() {
             onBack={goBack}
             theme={quiz.theme}
             motion={resolveMotion(quiz.settings, question)}
+            loopSettings={quiz.settings}
           />
 
           {showTeams && (
@@ -190,6 +191,7 @@ interface HostQuestionProps {
   theme: Theme;
   /** Entrances and the Reveal uncover run here; there are no exits (each question simply remounts). */
   motion: ResolvedMotion;
+  loopSettings: Pick<QuizSettings, "loopMotion">;
 }
 
 function HostQuestion({
@@ -207,6 +209,7 @@ function HostQuestion({
   onBack,
   theme,
   motion,
+  loopSettings,
 }: HostQuestionProps) {
   const [revealed, setRevealed] = useState(false);
   const [remainingMs, setRemainingMs] = useState(limitSeconds === null ? null : limitSeconds * 1000);
@@ -290,6 +293,7 @@ function HostQuestion({
           mascotMedia={meter.progressMascotMedia}
         />
         <QuestionStage
+          loopSettings={loopSettings}
           question={question}
           index={index}
           total={total}

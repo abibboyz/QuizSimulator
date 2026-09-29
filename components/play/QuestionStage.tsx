@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { usePresence } from "motion/react";
-import type { Question, Theme } from "@/types/quiz";
+import type { Question, QuizSettings, Theme } from "@/types/quiz";
+import { LoopMotion } from "@/components/play/LoopMotion";
+import { resolveLoops } from "@/lib/loopMotion";
+import { fontFamily } from "@/lib/themes";
 import { promptPosition } from "@/lib/questionPresentation";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
@@ -19,6 +22,7 @@ import {
 
 interface Props {
   question: Question;
+  loopSettings?: Pick<QuizSettings, "loopMotion">;
   index: number;
   total: number;
   selected: string[];
@@ -60,6 +64,7 @@ const META_TEXT: Record<StageMode, string> = {
  */
 export function QuestionStage({
   question,
+  loopSettings = {},
   index,
   total,
   selected,
@@ -73,6 +78,7 @@ export function QuestionStage({
   motion,
   onPositionChange,
 }: Props) {
+  const loops = resolveLoops(loopSettings, question);
   const placement = question.promptPlacement;
   const overlay = placement?.mode === "overlay" && !!question.media && question.kind !== "reveal";
   const bottom = placement?.mode === "bottom";
@@ -118,9 +124,10 @@ export function QuestionStage({
   const gap = mode === "preview" ? "gap-1.5" : mode === "host" ? "gap-3 md:gap-5" : "gap-6 md:gap-8";
 
   const promptNode = (
+    <LoopMotion value={loops.question} preview={mode === "preview"}>
   <h2
     className={`stage-prompt text-center font-bold ${overlay && mode === "host" ? "text-lg md:text-2xl leading-snug" : PROMPT_TEXT[mode]}`}
-    style={{ color: "var(--prompt-color)" }}
+    style={{ color: "var(--prompt-color)", fontWeight: question.promptStyle?.bold === false ? 400 : 700, fontStyle: question.promptStyle?.italic ? "italic" : "normal", textDecoration: question.promptStyle?.underline ? "underline" : "none", fontFamily: question.promptStyle?.font ? fontFamily(question.promptStyle.font, question.promptStyle.customFont) : undefined }}
     aria-label={typing ? prompt : undefined}
   >
     {typing ? (
@@ -135,6 +142,7 @@ export function QuestionStage({
       question.prompt || <span className="text-ink-500">Untitled question</span>
     )}
   </h2>
+    </LoopMotion>
   );
 
   return (
@@ -151,6 +159,7 @@ export function QuestionStage({
 
       {imageLeads && !overlay && (
         <div className="flex justify-center" style={questionStyle}>
+          <LoopMotion value={loops.question} preview={mode === "preview"}>
           <MediaImage
             media={question.media}
             className={`rounded-2xl object-contain transition-[max-height] duration-300 ${
@@ -163,6 +172,7 @@ export function QuestionStage({
                   : "max-h-12"
             }`}
           />
+          </LoopMotion>
         </div>
       )}
 
@@ -172,6 +182,7 @@ export function QuestionStage({
         {!overlay && !imageLeads && !isReveal && question.media && (
           // The picture gives up height once the answer is out, so the
           // explanation lands on screen instead of below the fold.
+          <LoopMotion value={loops.question} preview={mode === "preview"}>
           <MediaImage
             media={question.media}
             className={`rounded-2xl object-contain transition-[max-height] duration-300 ${
@@ -184,12 +195,13 @@ export function QuestionStage({
                   : "max-h-10"
             }`}
           />
+          </LoopMotion>
         )}
       </div>}
 
       {overlay && (
         <div ref={canvasRef} className="relative mx-auto w-full overflow-hidden rounded-xl" style={{ maxWidth: mode === "host" ? "40vh" : undefined, aspectRatio: "16 / 9" }}>
-          <MediaImage media={question.media} className="absolute inset-0 h-full w-full object-contain" />
+          <div className="absolute inset-0"><LoopMotion value={loops.question} preview={mode === "preview"}><MediaImage media={question.media} className="h-full w-full object-contain" /></LoopMotion></div>
           <div
             role={onPositionChange ? "button" : undefined}
             tabIndex={onPositionChange ? 0 : undefined}
@@ -219,7 +231,10 @@ export function QuestionStage({
         </div>
       )}
 
+      {bottom && <div style={questionStyle}>{promptNode}</div>}
+
       <AnswerGrid
+        loops={loops}
         question={question}
         selected={selected}
         revealed={revealed}
@@ -232,8 +247,6 @@ export function QuestionStage({
         sinceMount={sinceMount}
         sinceExit={sinceExit}
       />
-
-      {bottom && <div style={questionStyle}>{promptNode}</div>}
 
       {revealed &&
         question.explanation &&

@@ -481,6 +481,7 @@ function PlayView() {
               transition={{ duration: QUESTION_SWAP.durationS, ease: QUESTION_SWAP.ease }}
             >
               <QuestionStage
+                loopSettings={quiz.settings}
                 question={question}
                 index={index}
                 total={order.length}

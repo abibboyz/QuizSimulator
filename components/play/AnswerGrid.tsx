@@ -1,10 +1,12 @@
 "use client";
 
-import type { ElementMotion, Question, Theme } from "@/types/quiz";
+import type { ElementMotion, LoopMotionSet, Question, Theme } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceGridStyle } from "@/lib/imageChoice";
 import { revealAnswerMedia, resolveReveal } from "@/lib/reveal";
+import { LoopMotion } from "@/components/play/LoopMotion";
+import { answerLoop, DEFAULT_LOOP } from "@/lib/loopMotion";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { RevealCaption, RevealPicture } from "@/components/play/RevealPicture";
 import { REVEAL_TILE } from "@/lib/revealDraw";
@@ -16,6 +18,7 @@ export type StageMode = "solo" | "host" | "preview";
 
 interface Props {
   question: Question;
+  loops?: Required<LoopMotionSet>;
   selected: string[];
   revealed: boolean;
   interactive: boolean;
@@ -78,6 +81,7 @@ const PAD: Record<StageMode, string> = {
 
 export function AnswerGrid({
   question,
+  loops,
   selected,
   revealed,
   interactive,
@@ -122,13 +126,14 @@ export function AnswerGrid({
             const answerMedia = revealAnswerMedia(question, option);
 
             return (
+              <LoopMotion key={option.id} value={answerLoop(loops?.answers ?? DEFAULT_LOOP, option)} index={index} preview={mode === "preview"}>
               <button
                 key={option.id}
                 type="button"
                 disabled={!interactive}
                 onClick={() => onPick(option.id)}
                 aria-pressed={isPicked}
-                className={`focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
+                className={`w-full h-full focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
                   tileIn ? "animate-tile-in" : ""
                 } ${interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"} ${
                   faded ? "opacity-35 saturate-50" : "opacity-100"
@@ -187,6 +192,7 @@ export function AnswerGrid({
                   </span>
                 )}
               </button>
+            </LoopMotion>
             );
           })}
         </div>
@@ -222,13 +228,14 @@ export function AnswerGrid({
           const tileIn = mode !== "preview" && anim.cssTileIn;
 
           return (
+            <LoopMotion key={option.id} value={answerLoop(loops?.answers ?? DEFAULT_LOOP, option)} index={index} preview={mode === "preview"}>
             <button
               key={option.id}
               type="button"
               disabled={!interactive}
               onClick={() => onPick(option.id)}
               aria-pressed={isPicked}
-              className={`focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
+              className={`w-full h-full focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
                 tileIn ? "animate-tile-in" : ""
               } ${interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"} ${
                 faded ? "opacity-35 saturate-50" : "opacity-100"
@@ -272,6 +279,7 @@ export function AnswerGrid({
                 </span>
               )}
             </button>
+            </LoopMotion>
           );
         })}
       </div>
@@ -298,13 +306,14 @@ export function AnswerGrid({
         const tileIn = mode !== "preview" && anim.cssTileIn;
 
         return (
+          <LoopMotion key={option.id} value={answerLoop(loops?.answers ?? DEFAULT_LOOP, option)} index={index} preview={mode === "preview"}>
           <button
             key={option.id}
             type="button"
             disabled={!interactive}
             onClick={() => onPick(option.id)}
             aria-pressed={isPicked}
-            className={`focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
+            className={`w-full h-full focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
               tileIn ? "animate-tile-in" : ""
             } ${PAD[mode]} ${TEXT[mode]} ${
               interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
@@ -356,6 +365,7 @@ export function AnswerGrid({
               </span>
             )}
           </button>
+            </LoopMotion>
         );
       })}
     </div>

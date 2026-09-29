@@ -1,20 +1,22 @@
 "use client";
 
+import { themeInk } from "@/lib/themeInk";
+
 import type { ReactNode } from "react";
-import type { BgImageFit, Theme } from "@/types/quiz";
+import type { BgImageFit, FontChoice, Theme } from "@/types/quiz";
 import {
   BG_ANIMATIONS,
   DEFAULT_CORRECT_COLOR,
   DEFAULT_WRONG_COLOR,
   FONT_CHOICES,
+  FONT_GROUPS,
   THEME_PRESETS,
   getPreset,
-  themeInk,
   optionPalette,
   readableTextOn,
 } from "@/lib/themes";
 import { AGE_BANDS, OPTION_MARKERS, applyAgeBand, isAgeBand, optionColor, themeAgeBand } from "@/lib/ageBands";
-import { Field, Input } from "@/components/ui/Field";
+import { Field, Input, Select } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
@@ -388,23 +390,14 @@ export function ThemePanel({ theme, onChange }: Props) {
         }
       >
         <SubHeading label="Question font" flush />
-        <div className="grid grid-cols-3 gap-2">
-          {FONT_CHOICES.map((font) => (
-            <button
-              key={font.id}
-              type="button"
-              onClick={() => onChange({ ...theme, font: font.id })}
-              style={{ fontFamily: font.varName }}
-              className={`focus-ring rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                theme.font === font.id
-                  ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ink-100"
-                  : "border-ink-700 text-ink-300 hover:border-ink-600"
-              }`}
-            >
-              {font.label}
-            </button>
-          ))}
-        </div>
+        <Select aria-label="Global question font" value={theme.font} onChange={(event) => onChange({ ...theme, font: event.target.value as FontChoice })}>
+          {FONT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.choices.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}</optgroup>)}
+        </Select>
+        <p className="text-xs text-ink-500">Display, Sans and Mono are included. Other fonts use the device’s installed fonts, with a fallback when unavailable.</p>
+
+        {theme.font === "custom" && <Field label="Custom font name" hint="Use a font installed on the device used to play or export. Otherwise a fallback font is used.">
+          <Input value={theme.customFont ?? ""} placeholder="Font family name" onChange={(event) => onChange({ ...theme, customFont: event.target.value })} />
+        </Field>}
 
         <SubHeading label="Colours" />
         <div className="space-y-1.5">
