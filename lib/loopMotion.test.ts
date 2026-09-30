@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { answerLoop, DEFAULT_LOOP, LOOP_STYLES, loopPose, normalizeLoop, resolveLoops } from "./loopMotion.ts";
+import { answerLoop, DEFAULT_LOOP, LOOP_SPEEDS, LOOP_STYLES, loopPose, normalizeLoop, resolveLoops } from "./loopMotion.ts";
 import { schemaVersionFor, type Question, type QuizSettings } from "../types/quiz.ts";
 const question = { id: "q", options: [] } as unknown as Question;
 const global = { loopMotion: { answers: { ...DEFAULT_LOOP, style: "bounce" as const } } };
@@ -32,8 +32,10 @@ test("every loop is bounded, starts at rest, and returns to rest without a jump"
   }
 });
 
-test("imported loop settings cannot exceed gentle motion limits", () => {
-  assert.deepEqual(normalizeLoop({ durationMs: -1, amount: 100 }), { style: "none", durationMs: 2000, amount: 10 });
+test("animation speeds run from playful to turbo and imported values stay in range", () => {
+  assert.deepEqual(LOOP_SPEEDS.map((speed) => speed.label), ["Playful", "Energetic", "Supercharged", "Turbo"]);
+  assert.deepEqual(normalizeLoop({ durationMs: -1, amount: 100 }), { style: "none", durationMs: 600, amount: 10 });
+  assert.equal(normalizeLoop({ durationMs: 8000 }).durationMs, 2000);
   assert.deepEqual(normalizeLoop({ durationMs: NaN, amount: Infinity }), DEFAULT_LOOP);
 });
 

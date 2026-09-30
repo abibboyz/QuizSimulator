@@ -89,6 +89,15 @@ export function quizProgressFraction(answered: number, total: number): number {
   return Math.min(1, Math.max(0, answered / total));
 }
 
+/**
+ * Number of questions the player has reached. `index` is zero-based, while a
+ * progress meter counts the question currently on screen as reached.
+ */
+export function quizProgressReached(index: number, answered: number, total: number): number {
+  if (!Number.isFinite(index) || !Number.isFinite(answered) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.min(total, Math.max(0, Math.max(Math.floor(answered), Math.floor(index) + 1)));
+}
+
 /** Whether a per-question meter is still legible, or should degrade to a bar. */
 export function showsPerQuestion(style: QuizProgressStyle, total: number): boolean {
   return (style === "segments" || style === "dots") && total > 0 && total <= MAX_PROGRESS_SEGMENTS;

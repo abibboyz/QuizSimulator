@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { LoopMotion } from "@/types/quiz";
-import { DEFAULT_LOOP, LOOP_STYLES, normalizeLoop } from "@/lib/loopMotion";
+import { DEFAULT_LOOP, LOOP_SPEEDS, LOOP_STYLES, normalizeLoop } from "@/lib/loopMotion";
 import { Field, Select } from "@/components/ui/Field";
 import { LoopMotion as Preview } from "@/components/play/LoopMotion";
 
@@ -47,7 +47,7 @@ export function LoopMotionFields({ label, value, inherited, onChange }: {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Speed"><Select aria-label={`${label} speed`} value={resolved.durationMs} onChange={(event) => onChange({ ...resolved, durationMs: Number(event.target.value) })}>
-            <option value={8000}>Very slow</option><option value={6000}>Slow</option><option value={4000}>Gentle</option><option value={2000}>Playful</option>
+            {LOOP_SPEEDS.map((speed) => <option key={speed.durationMs} value={speed.durationMs}>{speed.label}</option>)}
           </Select></Field>
           <Field label={`Movement · ${resolved.amount}`}><input aria-label={`${label} movement`} className="w-full" type="range" min={1} max={10} value={resolved.amount}
             onChange={(event) => onChange({ ...resolved, amount: Number(event.target.value) })} /></Field>

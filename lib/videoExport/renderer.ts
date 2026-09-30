@@ -25,7 +25,7 @@ import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceColumns } from "@/lib/imageChoice";
-import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, showsPerQuestion } from "@/lib/progress";
+import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
 import { basePointsFor } from "@/lib/store/playSession";
 import {
@@ -579,13 +579,15 @@ export class FrameRenderer {
     let value = 0;
     this.reachedSteps.push({ at: -Infinity, value: 0 });
     for (const run of this.timeline.questions) {
-      if (Math.max(answered, run.index) !== value) {
-        value = Math.max(answered, run.index);
+      const entered = quizProgressReached(run.index, answered, this.timeline.questions.length);
+      if (entered !== value) {
+        value = entered;
         this.reachedSteps.push({ at: run.enterAt, value });
       }
       if (reveal) answered = run.index + 1;
-      if (Math.max(answered, run.index) !== value) {
-        value = Math.max(answered, run.index);
+      const revealed = quizProgressReached(run.index, answered, this.timeline.questions.length);
+      if (revealed !== value) {
+        value = revealed;
         this.reachedSteps.push({ at: run.revealAt, value });
       }
     }
@@ -700,8 +702,8 @@ export class FrameRenderer {
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
 
-    const overlay = q.promptPlacement?.mode === "overlay" && !!q.media && q.kind !== "reveal";
-    const imageLeads = q.layout === "image-top" && !!q.media && q.kind !== "reveal";
+    const overlay = q.promptPlacement?.mode === "overlay" && !!q.media;
+    const imageLeads = q.layout === "image-top" && !!q.media;
     if (imageLeads && !overlay) {
       const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
       if (media) parts.push(posed(this.centered(media, CW)));
@@ -710,7 +712,7 @@ export class FrameRenderer {
     const placement = q.promptPlacement;
     const normalPrompt = placement?.mode !== "bottom" && !overlay;
     const promptBox = this.promptBox(run, sinceMount, CW);
-    if (!overlay && !imageLeads && q.media && q.kind !== "reveal") {
+    if (!overlay && !imageLeads && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
       parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
     } else if (normalPrompt) {
@@ -723,8 +725,17 @@ export class FrameRenderer {
       const height = CW * 9 / 16;
       parts.push({ w: CW, h: height, draw: (x, y) => {
         this.ctx.save();
-        this.ctx.beginPath(); this.ctx.rect(x, y, CW, height); this.ctx.clip();
-        if (bg) this.drawContain(bg, x, y, CW, height);
+        this.ctx.beginPath();
+        if (this.ctx.roundRect) {
+          this.ctx.roundRect(x, y, CW, height, 12);
+        } else {
+          this.ctx.rect(x, y, CW, height);
+        }
+        this.ctx.clip();
+        if (bg) {
+          const bgLoop = resolveLoops(this.quiz.settings, q).question;
+          this.withLoop(bgLoop, sinceMount, x, y, CW, height, () => this.drawContain(bg, x, y, CW, height));
+        }
         text.draw(x + (CW - text.w) * promptPosition(placement.x) / 100, y + Math.max(0, height - text.h) * promptPosition(placement.y) / 100);
         this.ctx.restore();
       } });

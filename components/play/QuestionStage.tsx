@@ -80,14 +80,14 @@ export function QuestionStage({
 }: Props) {
   const loops = resolveLoops(loopSettings, question);
   const placement = question.promptPlacement;
-  const overlay = placement?.mode === "overlay" && !!question.media && question.kind !== "reveal";
+  const overlay = placement?.mode === "overlay" && !!question.media;
   const bottom = placement?.mode === "bottom";
   const canvasRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const isReveal = question.kind === "reveal";
   // A Reveal question's pictures are the answers. Its prompt image stays hidden
   // so the covered grid is the only thing that can give the answer away.
-  const imageLeads = question.layout === "image-top" && !!question.media && !isReveal;
+  const imageLeads = question.layout === "image-top" && !!question.media;
   const reduced = useReducedMotion();
 
   // Stage animation clocks. With default motion both spans are 0, so neither
@@ -176,10 +176,10 @@ export function QuestionStage({
         </div>
       )}
 
-      {((!overlay && !bottom) || (!overlay && !imageLeads && !isReveal && question.media)) && <div className={imageLeads ? "" : "flex flex-col items-center gap-4"} style={questionStyle}>
+      {((!overlay && !bottom) || (!overlay && !imageLeads && question.media)) && <div className={imageLeads ? "" : "flex flex-col items-center gap-4"} style={questionStyle}>
         {!overlay && !bottom && promptNode}
 
-        {!overlay && !imageLeads && !isReveal && question.media && (
+        {!overlay && !imageLeads && question.media && (
           // The picture gives up height once the answer is out, so the
           // explanation lands on screen instead of below the fold.
           <LoopMotion value={loops.question} preview={mode === "preview"}>

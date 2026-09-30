@@ -27,15 +27,30 @@ export interface PresetDefinition {
 }
 
 export const THEME_PRESETS: PresetDefinition[] = [
-  { id: "sunshine", label: "Sunshine", accent: "#b45309", surface: "#fff7d6", glow: "#f59e0b", defaultBg: "shapes" },
-  { id: "ocean", label: "Ocean", accent: "#0369a1", surface: "#e0f7ff", glow: "#38bdf8", defaultBg: "particles" },
-  { id: "garden", label: "Garden", accent: "#15803d", surface: "#ecfccb", glow: "#4ade80", defaultBg: "shapes" },
   { id: "bubblegum", label: "Bubblegum", accent: "#a21caf", surface: "#fce7f3", glow: "#c084fc", defaultBg: "aurora" },
-  { id: "neon", label: "Neon", accent: "#22d3ee", surface: "#070b1a", glow: "#6366f1", defaultBg: "particles" },
-  { id: "sunset", label: "Sunset", accent: "#fb7185", surface: "#1a0a14", glow: "#f59e0b", defaultBg: "aurora" },
-  { id: "forest", label: "Forest", accent: "#4ade80", surface: "#04120c", glow: "#14b8a6", defaultBg: "shapes" },
   { id: "candy", label: "Candy", accent: "#c084fc", surface: "#150c26", glow: "#f472b6", defaultBg: "aurora" },
+  { id: "carnival", label: "Carnival", accent: "#facc15", surface: "#1e103d", glow: "#f43f5e", defaultBg: "shapes" },
+  { id: "cherry-pop", label: "Cherry Pop", accent: "#e11d48", surface: "#fff1f2", glow: "#fb7185", defaultBg: "aurora" },
+  { id: "cosmic", label: "Cosmic", accent: "#a78bfa", surface: "#0f0824", glow: "#ec4899", defaultBg: "starfield" },
+  { id: "electric-lime", label: "Electric Lime", accent: "#a3e635", surface: "#101807", glow: "#22d3ee", defaultBg: "particles" },
+  { id: "flamingo", label: "Flamingo", accent: "#db2777", surface: "#fff0f6", glow: "#fb7185", defaultBg: "shapes" },
+  { id: "forest", label: "Forest", accent: "#4ade80", surface: "#04120c", glow: "#14b8a6", defaultBg: "shapes" },
+  { id: "galaxy", label: "Galaxy", accent: "#818cf8", surface: "#07071a", glow: "#c026d3", defaultBg: "starfield" },
+  { id: "garden", label: "Garden", accent: "#15803d", surface: "#ecfccb", glow: "#4ade80", defaultBg: "shapes" },
+  { id: "lagoon", label: "Lagoon", accent: "#0891b2", surface: "#e6fffb", glow: "#2dd4bf", defaultBg: "particles" },
+  { id: "lavender", label: "Lavender", accent: "#7c3aed", surface: "#f3e8ff", glow: "#c084fc", defaultBg: "aurora" },
+  { id: "lemonade", label: "Lemonade", accent: "#a16207", surface: "#fef9c3", glow: "#facc15", defaultBg: "shapes" },
+  { id: "mango", label: "Mango", accent: "#c2410c", surface: "#fff7ed", glow: "#fb923c", defaultBg: "shapes" },
+  { id: "mint", label: "Mint", accent: "#047857", surface: "#ecfdf5", glow: "#34d399", defaultBg: "particles" },
   { id: "mono", label: "Mono", accent: "#e4e4e7", surface: "#0a0a0a", glow: "#71717a", defaultBg: "starfield" },
+  { id: "neon", label: "Neon", accent: "#22d3ee", surface: "#070b1a", glow: "#6366f1", defaultBg: "particles" },
+  { id: "ocean", label: "Ocean", accent: "#0369a1", surface: "#e0f7ff", glow: "#38bdf8", defaultBg: "particles" },
+  { id: "peach", label: "Peach", accent: "#c2410c", surface: "#ffedd5", glow: "#fb7185", defaultBg: "aurora" },
+  { id: "raspberry", label: "Raspberry", accent: "#f472b6", surface: "#210817", glow: "#a855f7", defaultBg: "aurora" },
+  { id: "sky", label: "Sky", accent: "#0284c7", surface: "#e0f2fe", glow: "#7dd3fc", defaultBg: "particles" },
+  { id: "sunset", label: "Sunset", accent: "#fb7185", surface: "#1a0a14", glow: "#f59e0b", defaultBg: "aurora" },
+  { id: "sunshine", label: "Sunshine", accent: "#b45309", surface: "#fff7d6", glow: "#f59e0b", defaultBg: "shapes" },
+  { id: "tropical", label: "Tropical", accent: "#2dd4bf", surface: "#071a22", glow: "#f97316", defaultBg: "particles" },
 ];
 
 
@@ -124,6 +139,16 @@ export function getPreset(id: ThemePreset): PresetDefinition {
   return [...THEME_PRESETS, ...BAND_PRESETS].find((p) => p.id === id) ?? THEME_PRESETS.find((p) => p.id === "neon")!;
 }
 
+/**
+ * Applies only the palette owned by a preset. Author choices such as fonts,
+ * text and answer colours, background media/animation, and gameplay settings
+ * remain untouched.
+ */
+export function applyThemePreset(theme: Theme, id: ThemePreset): Theme {
+  const preset = getPreset(id);
+  return { ...theme, preset: id, accent: preset.accent, surface: preset.surface };
+}
+
 export const DEFAULT_THEME: Theme = {
   preset: "neon",
   bgAnimation: "particles",
@@ -159,4 +184,3 @@ export function themeVars(theme: Theme): React.CSSProperties {
     "--color-bad": theme.wrongColor ?? DEFAULT_WRONG_COLOR,
   } as React.CSSProperties;
 }
-

@@ -17,13 +17,22 @@ export const LOOP_STYLES: { id: LoopStyle; label: string }[] = [
   { id: "tiptoe", label: "Tiptoe" }, { id: "wave", label: "Wave" },
   { id: "zigzag", label: "Zigzag" },
 ].sort((a, b) => a.label.localeCompare(b.label)) as { id: LoopStyle; label: string }[];
-export const DEFAULT_LOOP: LoopMotion = { style: "none", durationMs: 4000, amount: 6 };
+export const LOOP_SPEEDS = [
+  { durationMs: 2000, label: "Playful" },
+  { durationMs: 1400, label: "Energetic" },
+  { durationMs: 900, label: "Supercharged" },
+  { durationMs: 600, label: "Turbo" },
+] as const;
+
+export const DEFAULT_LOOP: LoopMotion = { style: "none", durationMs: 2000, amount: 6 };
 const bound = (v: number | undefined, fallback: number, min: number, max: number) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 export function normalizeLoop(value?: Partial<LoopMotion>): LoopMotion {
   return {
     style: LOOP_STYLES.some((s) => s.id === value?.style) ? value!.style! : "none",
-    durationMs: bound(value?.durationMs, 4000, 2000, 8000),
+    // Keep imported and older saved values inside the currently offered
+    // playful-to-turbo range as well, so every renderer behaves identically.
+    durationMs: bound(value?.durationMs, 2000, 600, 2000),
     amount: bound(value?.amount, 6, 0, 10),
     ...(value?.playback === "loop" || value?.playback === "hold" ? { playback: value.playback } : {}),
     ...(value?.secondary && LOOP_STYLES.some((s) => s.id === value.secondary) ? { secondary: value.secondary } : {}),

@@ -167,9 +167,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         </>}
       </div>
 
-      {/* A Reveal question's picture is the thing being revealed, so it lives
-          with the rest of the reveal settings below. */}
-      {question.kind !== "reveal" && (
+      {/* A Reveal question's picture is the thing being revealed, but we allow an explicit
+          question image so users can place prompts over it if they wish. */}
       <Field
         label="Question image"
         hint={
@@ -180,7 +179,6 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
-      )}
 
       <OptionList
         question={question}
