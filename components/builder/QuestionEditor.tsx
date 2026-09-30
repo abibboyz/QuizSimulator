@@ -1,10 +1,12 @@
 "use client";
 
+import { themeInk } from "@/lib/themeInk";
+
 import { useEffect } from "react";
-import type { Cue, CueSlot, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
+import type { Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
-import { optionPalette, themeInk } from "@/lib/themes";
+import { FONT_GROUPS, fontFamily, optionPalette } from "@/lib/themes";
 import { themeAgeBand } from "@/lib/ageBands";
 import { Field, Input, Select, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
@@ -110,7 +112,24 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           </div>
         }
       >
+        <div className="mb-2 flex flex-wrap items-center gap-2" role="group" aria-label="Prompt formatting">
+          {([['bold', 'B'], ['italic', 'I'], ['underline', 'U']] as const).map(([key, label]) => {
+            const active = question.promptStyle?.[key] ?? (key === 'bold');
+            return <button key={key} type="button" aria-label={key} aria-pressed={active}
+              className={`focus-ring rounded-lg border px-3 py-1.5 text-sm ${active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
+              style={{ fontWeight: key === 'bold' ? 700 : undefined, fontStyle: key === 'italic' ? 'italic' : undefined, textDecoration: key === 'underline' ? 'underline' : undefined }}
+              onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, [key]: !active } })}>{label}</button>;
+          })}
+          <Select aria-label="Question font" className="w-auto" value={question.promptStyle?.font ?? ""}
+            onChange={(event) => onChange({ ...question, promptStyle: { ...question.promptStyle, font: (event.target.value || undefined) as FontChoice | undefined } })}>
+            <option value="">Use global font</option>
+            {FONT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.choices.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}</optgroup>)}
+          </Select>
+        </div>
+        {question.promptStyle?.font === "custom" && <Input className="mb-2" aria-label="Custom question font name" placeholder="Installed font name (fallback if unavailable)"
+          value={question.promptStyle.customFont ?? ""} onChange={(event) => onChange({ ...question, promptStyle: { ...question.promptStyle, customFont: event.target.value } })} />}
         <Textarea
+          style={{ fontWeight: question.promptStyle?.bold === false ? 400 : 700, fontStyle: question.promptStyle?.italic ? "italic" : "normal", textDecoration: question.promptStyle?.underline ? "underline" : "none", fontFamily: question.promptStyle?.font ? fontFamily(question.promptStyle.font, question.promptStyle.customFont) : fontFamily(theme.font, theme.customFont) }}
           value={question.prompt}
           onChange={(event) => onChange({ ...question, prompt: event.target.value })}
           placeholder="What do you want to ask?"
@@ -124,7 +143,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           <Select value={question.promptPlacement.mode} onChange={(event) => onChange({ ...question, promptPlacement: { ...question.promptPlacement!, mode: event.target.value as "top" | "overlay" | "bottom" } })}>
             <option value="top">Top (current position)</option>
             <option value="overlay">Over question image · draggable</option>
-            <option value="bottom">Bottom · below answers</option>
+            <option value="bottom">Bottom · below question image</option>
           </Select>
         </Field>
       )}
@@ -148,9 +167,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         </>}
       </div>
 
-      {/* A Reveal question's picture is the thing being revealed, so it lives
-          with the rest of the reveal settings below. */}
-      {question.kind !== "reveal" && (
+      {/* A Reveal question's picture is the thing being revealed, but we allow an explicit
+          question image so users can place prompts over it if they wish. */}
       <Field
         label="Question image"
         hint={
@@ -161,7 +179,6 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       >
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
-      )}
 
       <OptionList
         question={question}

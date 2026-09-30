@@ -16,12 +16,16 @@
  * everything else sits where it sits in the app.
  */
 
+import { themeInk } from "@/lib/themeInk";
+
+import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
+import type { LoopMotion } from "@/types/quiz";
 import { questionTheme, promptPosition } from "@/lib/questionPresentation";
 import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
-import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, themeInk, readableTextOn, withAlpha } from "@/lib/themes";
+import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceColumns } from "@/lib/imageChoice";
-import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, showsPerQuestion } from "@/lib/progress";
+import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
 import { basePointsFor } from "@/lib/store/playSession";
 import {
@@ -179,7 +183,7 @@ export class FrameRenderer {
     this.titleColor = theme.titleColor ?? this.ink[100];
     this.explanationColor = theme.explanationColor ?? this.ink[200];
     this.quizFont =
-      theme.font === "sans" ? assets.fonts.sans : theme.font === "mono" ? assets.fonts.mono : assets.fonts.display;
+      fontFamily(theme.font, theme.customFont, assets.fonts);
 
     // Canvas `filter` is Chrome/Firefox only; Safari gets the same frame minus two blurs.
     this.ctx.filter = "blur(1px)";
@@ -575,13 +579,15 @@ export class FrameRenderer {
     let value = 0;
     this.reachedSteps.push({ at: -Infinity, value: 0 });
     for (const run of this.timeline.questions) {
-      if (Math.max(answered, run.index) !== value) {
-        value = Math.max(answered, run.index);
+      const entered = quizProgressReached(run.index, answered, this.timeline.questions.length);
+      if (entered !== value) {
+        value = entered;
         this.reachedSteps.push({ at: run.enterAt, value });
       }
       if (reveal) answered = run.index + 1;
-      if (Math.max(answered, run.index) !== value) {
-        value = Math.max(answered, run.index);
+      const revealed = quizProgressReached(run.index, answered, this.timeline.questions.length);
+      if (revealed !== value) {
+        value = revealed;
         this.reachedSteps.push({ at: run.revealAt, value });
       }
     }
@@ -691,13 +697,13 @@ export class FrameRenderer {
     const posed = (box: Box): Box => ({
       w: box.w,
       h: box.h,
-      draw: (x, y) => this.withPose(qPose, x + box.w / 2, y + box.h / 2, 1, () => box.draw(x, y)),
+      draw: (x, y) => this.withLoop(resolveLoops(this.quiz.settings, q).question, sinceMount, x, y, box.w, box.h, () => this.withPose(qPose, x + box.w / 2, y + box.h / 2, 1, () => box.draw(x, y))),
     });
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
 
-    const overlay = q.promptPlacement?.mode === "overlay" && !!q.media && q.kind !== "reveal";
-    const imageLeads = q.layout === "image-top" && !!q.media && q.kind !== "reveal";
+    const overlay = q.promptPlacement?.mode === "overlay" && !!q.media;
+    const imageLeads = q.layout === "image-top" && !!q.media;
     if (imageLeads && !overlay) {
       const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
       if (media) parts.push(posed(this.centered(media, CW)));
@@ -706,7 +712,7 @@ export class FrameRenderer {
     const placement = q.promptPlacement;
     const normalPrompt = placement?.mode !== "bottom" && !overlay;
     const promptBox = this.promptBox(run, sinceMount, CW);
-    if (!overlay && !imageLeads && q.media && q.kind !== "reveal") {
+    if (!overlay && !imageLeads && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
       parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
     } else if (normalPrompt) {
@@ -719,18 +725,27 @@ export class FrameRenderer {
       const height = CW * 9 / 16;
       parts.push({ w: CW, h: height, draw: (x, y) => {
         this.ctx.save();
-        this.ctx.beginPath(); this.ctx.rect(x, y, CW, height); this.ctx.clip();
-        if (bg) this.drawContain(bg, x, y, CW, height);
+        this.ctx.beginPath();
+        if (this.ctx.roundRect) {
+          this.ctx.roundRect(x, y, CW, height, 12);
+        } else {
+          this.ctx.rect(x, y, CW, height);
+        }
+        this.ctx.clip();
+        if (bg) {
+          const bgLoop = resolveLoops(this.quiz.settings, q).question;
+          this.withLoop(bgLoop, sinceMount, x, y, CW, height, () => this.drawContain(bg, x, y, CW, height));
+        }
         text.draw(x + (CW - text.w) * promptPosition(placement.x) / 100, y + Math.max(0, height - text.h) * promptPosition(placement.y) / 100);
         this.ctx.restore();
       } });
     }
 
+    if (placement?.mode === "bottom") parts.push(posed(promptBox));
+
     parts.push(
       q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW),
     );
-
-    if (placement?.mode === "bottom") parts.push(posed(promptBox));
 
     if (revealed && q.explanation) {
       // The explanation takes the question's exit but not its entrance (it arrives with the answer).
@@ -753,9 +768,11 @@ export class FrameRenderer {
     const opts = {
       size: md ? 30 : 20,
       lh: md ? 41.25 : 27.5,
-      weight: 700,
+      weight: q.promptStyle?.bold === false ? 400 : 700,
+      italic: q.promptStyle?.italic,
+      underline: q.promptStyle?.underline,
       color: q.prompt ? this.promptColor : this.ink[500],
-      family: this.quizFont,
+      family: q.promptStyle?.font ? fontFamily(q.promptStyle.font, q.promptStyle.customFont, this.assets.fonts) : this.quizFont,
       align: "center" as Align,
       balance: true,
     };
@@ -767,7 +784,7 @@ export class FrameRenderer {
 
     // Same lines as the full prompt; the untyped rest keeps its space, like the
     // stage's invisible remainder, so nothing reflows while it types.
-    const font = this.font(opts.weight, opts.size, opts.family);
+    const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
     const lines = this.balance(q.prompt, font, CW);
     return {
       w: CW,
@@ -779,7 +796,7 @@ export class FrameRenderer {
           const chars = [...line];
           const shown = chars.slice(0, left).join("");
           const lineW = this.measure(line, font);
-          this.drawLine(shown, x + (CW - lineW) / 2, y + i * opts.lh, opts.lh, font, opts.color, "left");
+          this.drawLine(shown, x + (CW - lineW) / 2, y + i * opts.lh, opts.lh, font, opts.color, "left", 0, opts.underline);
           left -= chars.length + 1; // the space the line broke on
         });
       },
@@ -1204,7 +1221,7 @@ export class FrameRenderer {
     const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
 
-    this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
+    this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, x, y, w, h, () => this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
       if (glow > 0) this.glowShadow(x, y, w, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
       if (ring > 0) this.fillRing(x, y, w, h, r, 4, `rgba(255,255,255,${ring})`);
       this.fillRR(x, y, w, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
@@ -1236,7 +1253,7 @@ export class FrameRenderer {
       if (tile.showMark) {
         this.drawLine(option.correct ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, textColor, "right");
       }
-    });
+    }), i);
   }
 
   /** AnswerGrid for image-choice: the numbered picture grid. */
@@ -1293,7 +1310,7 @@ export class FrameRenderer {
             const tin = this.tilePose(run, i, t);
             const opacity = faded ? lerp(1, 0.35, rp) : 1;
 
-            this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
+            this.withLoop(answerLoop(resolveLoops(this.quiz.settings, q).answers, option), t - run.mountAt, tx, ry, colW, rowH[r], () => this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
               const rad = 6; // rounded-md
               if (showCorrect) {
                 this.glowShadow(tx, ry, colW, boxH, rad, 6, 28, withAlpha(this.good, 0.9 * rp));
@@ -1375,7 +1392,7 @@ export class FrameRenderer {
                   "center",
                 ),
               );
-            });
+            }), i);
           });
           ry += rowH[r] + gap;
         });
@@ -1863,6 +1880,18 @@ export class FrameRenderer {
    * scale, and rotateX as vertical foreshortening (cos θ) — the canvas stand-in
    * for the stage's `perspective(800px) rotateX()`.
    */
+  private withLoop(settings: LoopMotion, t: number, x: number, y: number, w: number, h: number, draw: () => void, index = 0) {
+    const p = loopPose(settings, t, index);
+    const cx = x + w / 2, cy = y + h * (loopOrigin(settings) === "50% 100%" ? 1 : loopOrigin(settings) === "50% 0%" ? 0 : 0.5);
+    this.ctx.save();
+    this.ctx.translate(cx + p.x, cy + p.y);
+    this.ctx.rotate(p.rotate * Math.PI / 180);
+    this.ctx.scale(p.sx, p.sy);
+    this.ctx.translate(-cx, -cy);
+    draw();
+    this.ctx.restore();
+  }
+
   private withPose(pose: Pose, cx: number, cy: number, opacity: number, draw: () => void) {
     const alphaOut = pose.opacity * opacity;
     if (alphaOut <= 0.001) return;
@@ -2096,9 +2125,11 @@ export class FrameRenderer {
       align?: Align;
       spacing?: number;
       balance?: boolean;
+      italic?: boolean;
+      underline?: boolean;
     },
   ): Box {
-    const font = this.font(o.weight, o.size, o.family);
+    const font = `${o.italic ? "italic " : ""}${this.font(o.weight, o.size, o.family)}`;
     const spacing = o.spacing ?? 0;
     const lines = o.balance ? this.balance(text, font, maxWidth) : this.wrap(text, font, maxWidth, spacing);
     const align = o.align ?? "left";
@@ -2107,7 +2138,7 @@ export class FrameRenderer {
       h: lines.length * o.lh,
       draw: (x, y) => {
         const ax = align === "center" ? x + maxWidth / 2 : align === "right" ? x + maxWidth : x;
-        lines.forEach((line, i) => this.drawLine(line, ax, y + i * o.lh, o.lh, font, o.color, align, spacing));
+        lines.forEach((line, i) => this.drawLine(line, ax, y + i * o.lh, o.lh, font, o.color, align, spacing, o.underline));
       },
     };
   }
@@ -2122,6 +2153,7 @@ export class FrameRenderer {
     color: string,
     align: Align,
     spacing = 0,
+    underline = false,
   ) {
     if (!text) return;
     const { ctx } = this;
@@ -2130,6 +2162,11 @@ export class FrameRenderer {
     ctx.font = font;
     ctx.fillStyle = color;
     ctx.textBaseline = "alphabetic";
+    if (underline) {
+      const width = this.measure(text, font, spacing);
+      const left = align === "center" ? x - width / 2 : align === "right" ? x - width : x;
+      ctx.fillRect(left, baseline + Math.max(1, lineHeight * 0.06), width, Math.max(1, lineHeight * 0.045));
+    }
     if (!spacing) {
       ctx.textAlign = align;
       ctx.fillText(text, x, baseline);

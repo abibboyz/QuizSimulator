@@ -16,8 +16,9 @@ export const SCHEMA_VERSION = 3;
  * refused there cleanly ("made by a newer version") instead of playing with
  * its hidden picture on show.
  */
-export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings">): number {
-  if (quiz.questions.some((q) => q.background || q.promptPlacement)) return 3;
+export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.theme?.font && !["sans", "display", "mono"].includes(quiz.theme.font)) return 3;
+  if (quiz.settings.loopMotion || quiz.questions.some((q) => q.background || q.promptPlacement || q.promptStyle || q.loopMotion || q.options.some((o) => o.loopMotion))) return 3;
   const usesV2 =
     !!quiz.settings?.motion ||
     quiz.questions.some((q) => q.kind === "reveal" || q.reveal !== undefined || q.motion !== undefined);
@@ -215,7 +216,21 @@ export interface MotionOverrides {
 
 export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
 
+export type LoopStyle = "none" | "hop" | "bounce" | "float" | "sideways" | "rock" | "wiggle" | "pulse" | "jelly" | "seesaw" | "orbit" | "dance" | "butterfly" | "flutter" | "shuffle" | "boomerang" | "figure-eight" | "heartbeat" | "leaf" | "pendulum" | "rubberband" | "shake" | "skipping" | "spiral" | "swing" | "tiptoe" | "wave" | "zigzag";
+export interface LoopMotion {
+  style: LoopStyle;
+  secondary?: LoopStyle;
+  playback?: "loop" | "hold";
+  direction?: "same" | "reverse" | "alternate";
+  pauseOnInteract?: boolean;
+  durationMs: number;
+  amount: number;
+}
+export interface LoopMotionSet { question?: LoopMotion; answers?: LoopMotion }
+
 export interface Option {
+  /** Overrides this question’s continuous answer motion. */
+  loopMotion?: LoopMotion;
   id: string;
   text: string;
   media?: MediaRef;
@@ -236,10 +251,12 @@ export interface Option {
 export type OptionMarker = "shapes" | "letters" | "numbers" | "bullets" | "none";
 
 export interface Question {
+  loopMotion?: LoopMotionSet;
   id: string;
   kind: QuestionKind;
   layout: QuestionLayout;
   prompt: string;
+  promptStyle?: { bold?: boolean; italic?: boolean; underline?: boolean; font?: FontChoice; customFont?: string };
   /** Local background wins only while enabled; disabling preserves the upload. */
   background?: { enabled: boolean; image?: MediaRef; fit: BgImageFit; dim: number };
   promptPlacement?: { mode: "top" | "overlay" | "bottom"; x: number; y: number };
@@ -270,11 +287,36 @@ export interface Question {
 /** Audience the quiz is coloured for. Affects palette only, never gameplay. */
 export type AgeBand = "3-5" | "6-8" | "9-12" | "13-16";
 
-export type ThemePreset = "sunshine" | "ocean" | "garden" | "bubblegum" | "neon" | "sunset" | "forest" | "candy" | "mono" | AgeBand;
+export type ThemePreset =
+  | "bubblegum"
+  | "candy"
+  | "carnival"
+  | "cherry-pop"
+  | "cosmic"
+  | "electric-lime"
+  | "flamingo"
+  | "forest"
+  | "galaxy"
+  | "garden"
+  | "lagoon"
+  | "lavender"
+  | "lemonade"
+  | "mango"
+  | "mint"
+  | "mono"
+  | "neon"
+  | "ocean"
+  | "peach"
+  | "raspberry"
+  | "sky"
+  | "sunset"
+  | "sunshine"
+  | "tropical"
+  | AgeBand;
 
 export type BgAnimation = "aurora" | "particles" | "shapes" | "starfield" | "none";
 
-export type FontChoice = "sans" | "display" | "mono";
+export type FontChoice = "sans" | "display" | "mono" | "georgia" | "arial" | "verdana" | "trebuchet" | "times" | "courier" | "comic" | "helvetica" | "helvetica-neue" | "avenir" | "avenir-next" | "futura" | "gill-sans" | "tahoma" | "segoe" | "calibri" | "candara" | "century-gothic" | "optima" | "palatino" | "baskerville" | "garamond" | "cambria" | "didot" | "bodoni" | "book-antiqua" | "american-typewriter" | "menlo" | "monaco" | "consolas" | "andale" | "impact" | "copperplate" | "papyrus" | "brush-script" | "snell" | "chalkboard" | "noteworthy" | "custom";
 
 export type BgImageFit = "cover" | "contain" | "tile";
 
@@ -284,6 +326,7 @@ export interface Theme {
   accent: string;
   surface: string;
   font: FontChoice;
+  customFont?: string;
   /** Custom background picture. Animated GIFs keep animating. */
   bgImage?: MediaRef;
   bgImageFit: BgImageFit;
@@ -313,6 +356,7 @@ export interface Theme {
 }
 
 export interface QuizSettings {
+  loopMotion?: LoopMotionSet;
   /** `null` means untimed. */
   timerSeconds: number | null;
   shuffleQuestions: boolean;

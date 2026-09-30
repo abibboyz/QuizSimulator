@@ -98,7 +98,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
   const [chosenQuality, setQuality] = useState<Quality>("1080p");
   const [fps, setFps] = useState<Fps>(30);
   const [format, setFormat] = useState<FormatChoice>("auto");
-  const [answerMode, setAnswerMode] = useState<AnswerMode>("pick-correct");
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("timeout");
   const [sound, setSound] = useState<boolean>(quiz.settings.sound);
   // Keyed by framing|fps|quality, so switching back and forth never re-probes.
   const [probed, setProbed] = useState<Record<string, Capabilities>>({});

@@ -1,7 +1,7 @@
 "use client";
 
 import type { MediaRef, QuizProgressStyle } from "@/types/quiz";
-import { quizProgressFraction, showsPerQuestion } from "@/lib/progress";
+import { quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
 import { MascotFigure } from "@/components/play/MascotFigure";
 
 interface Props {
@@ -31,10 +31,10 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
   if (style === "none" || total <= 0) return null;
 
   const answered = outcomes.length;
-  // Host mode never scores, so it has no outcomes to count — position is the
-  // only progress it has. Solo play uses whichever is further along, which is
-  // answered once a question has been submitted and index the rest of the time.
-  const reached = Math.max(answered, index);
+  // Host mode never scores, so it has no outcomes to count. The current
+  // question still counts as reached: question 1 starts at 1/total and the
+  // final question reaches 100%, with or without reveal-after-each enabled.
+  const reached = quizProgressReached(index, answered, total);
   const fraction = quizProgressFraction(reached, total);
   const label = `Question ${Math.min(index + 1, total)} of ${total}`;
 

@@ -1,20 +1,22 @@
 "use client";
 
+import { themeInk } from "@/lib/themeInk";
+
 import type { ReactNode } from "react";
-import type { BgImageFit, Theme } from "@/types/quiz";
+import type { BgImageFit, FontChoice, Theme } from "@/types/quiz";
 import {
   BG_ANIMATIONS,
   DEFAULT_CORRECT_COLOR,
   DEFAULT_WRONG_COLOR,
   FONT_CHOICES,
+  FONT_GROUPS,
   THEME_PRESETS,
-  getPreset,
-  themeInk,
+  applyThemePreset,
   optionPalette,
   readableTextOn,
 } from "@/lib/themes";
-import { AGE_BANDS, OPTION_MARKERS, applyAgeBand, isAgeBand, optionColor, themeAgeBand } from "@/lib/ageBands";
-import { Field, Input } from "@/components/ui/Field";
+import { AGE_BANDS, OPTION_MARKERS, optionColor, themeAgeBand } from "@/lib/ageBands";
+import { Field, Input, Select } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
@@ -65,84 +67,27 @@ export function ThemePanel({ theme, onChange }: Props) {
   return (
     <div className="space-y-2">
       <Section
-        title="Preset"
+        title="Theme"
         summary={presetName}
         defaultOpen
         preview={<Dot color={theme.accent} />}
-        hint="Start here. A preset sets everything below in one go — then fine-tune whatever you want."
       >
-        <SubHeading label="By audience" />
-        <div className="space-y-1.5">
-          {AGE_BANDS.map((band) => {
-            const active = ageBand === band.id;
-            return (
-              <button
-                key={band.id}
-                type="button"
-                onClick={() => onChange(applyAgeBand(theme, band.id))}
-                aria-pressed={active}
-                className={`focus-ring flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
-                  active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700 hover:border-ink-600"
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs"
-                  style={{ background: band.tileColor, color: readableTextOn(band.tileColor) }}
-                >
-                  {band.optionPalette[0].shape}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-ink-100">{band.label}</span>
-                  <span className="block text-[11px] text-ink-500">{band.blurb}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <Note>
-          Colours only — timers, scoring, and layouts stay exactly as you set them. Every answer tile gets the one
-          colour shown.
-        </Note>
-
-        <SubHeading label="Light & dark palettes" />
-        <div className="grid grid-cols-3 gap-2">
-          {THEME_PRESETS.map((preset) => {
-            const active = theme.preset === preset.id;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                title={preset.label}
-                onClick={() =>
-                  // Switching palette also moves the background, unless the user
-                  // has already chosen one deliberately for this quiz. Age bands
-                  // never own a background, so coming from one always keeps it.
-                  onChange({
-                    ...theme,
-                    preset: preset.id,
-                    accent: preset.accent,
-                    surface: preset.surface,
-                    promptColor: undefined,
-                    titleColor: undefined,
-                    explanationColor: undefined,
-                    bgAnimation:
-                      !isAgeBand(theme.preset) && theme.bgAnimation === getPreset(theme.preset).defaultBg
-                        ? preset.defaultBg
-                        : theme.bgAnimation,
-                  })
-                }
-                className={`focus-ring rounded-xl border-2 px-2 py-4 text-xs font-bold transition ${
-                  active ? "scale-105 border-white" : "border-transparent hover:scale-105"
-                }`}
-                style={{ background: preset.surface, color: readableTextOn(preset.surface) }}
-                aria-label={preset.label}
-                aria-pressed={active}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
+        <Field label="Quiz theme" hint="Changes the overall stage palette. Your other custom settings stay as they are.">
+          <Select
+            aria-label="Quiz theme"
+            value={theme.preset}
+            onChange={(event) => onChange(applyThemePreset(theme, event.target.value as Theme["preset"]))}
+          >
+            {ageBand && <option value={ageBand}>{presetName}</option>}
+            {THEME_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>{preset.label}</option>
+            ))}
+          </Select>
+        </Field>
+        <div className="flex items-center gap-2 rounded-xl border border-ink-700 px-3 py-2">
+          <Dot color={theme.surface} />
+          <Dot color={theme.accent} />
+          <span className="text-xs text-ink-500">Stage and accent preview</span>
         </div>
       </Section>
 
@@ -178,7 +123,7 @@ export function ThemePanel({ theme, onChange }: Props) {
             <input
               type="color"
               value={theme.accent}
-              onChange={(event) => onChange({ ...theme, preset: "mono", accent: event.target.value })}
+              onChange={(event) => onChange({ ...theme, accent: event.target.value })}
               className="focus-ring h-10 w-14 cursor-pointer rounded-xl border border-ink-600 bg-ink-900"
               aria-label="Pick an accent colour"
             />
@@ -388,23 +333,14 @@ export function ThemePanel({ theme, onChange }: Props) {
         }
       >
         <SubHeading label="Question font" flush />
-        <div className="grid grid-cols-3 gap-2">
-          {FONT_CHOICES.map((font) => (
-            <button
-              key={font.id}
-              type="button"
-              onClick={() => onChange({ ...theme, font: font.id })}
-              style={{ fontFamily: font.varName }}
-              className={`focus-ring rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                theme.font === font.id
-                  ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ink-100"
-                  : "border-ink-700 text-ink-300 hover:border-ink-600"
-              }`}
-            >
-              {font.label}
-            </button>
-          ))}
-        </div>
+        <Select aria-label="Global question font" value={theme.font} onChange={(event) => onChange({ ...theme, font: event.target.value as FontChoice })}>
+          {FONT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.choices.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}</optgroup>)}
+        </Select>
+        <p className="text-xs text-ink-500">Display, Sans and Mono are included. Other fonts use the device’s installed fonts, with a fallback when unavailable.</p>
+
+        {theme.font === "custom" && <Field label="Custom font name" hint="Use a font installed on the device used to play or export. Otherwise a fallback font is used.">
+          <Input value={theme.customFont ?? ""} placeholder="Font family name" onChange={(event) => onChange({ ...theme, customFont: event.target.value })} />
+        </Field>}
 
         <SubHeading label="Colours" />
         <div className="space-y-1.5">

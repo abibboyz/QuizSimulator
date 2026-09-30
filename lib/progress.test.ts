@@ -13,6 +13,7 @@ import {
   PULSE_CLASS,
   QUIZ_PROGRESS_STYLES,
   quizProgressFraction,
+  quizProgressReached,
   showsPerQuestion,
 } from "./progress.ts";
 
@@ -76,6 +77,24 @@ test("quiz progress is a plain fraction of the run, clamped", () => {
   assert.equal(quizProgressFraction(10, 10), 1);
   assert.equal(quizProgressFraction(11, 10), 1, "clamped above");
   assert.equal(quizProgressFraction(-1, 10), 0, "clamped below");
+});
+
+test("quiz progress advances with every current question and reaches full on the last", () => {
+  assert.equal(quizProgressReached(0, 0, 5), 1, "question 1 is one question into the run");
+  assert.equal(quizProgressReached(1, 0, 5), 2, "host mode advances without answer outcomes");
+  assert.equal(quizProgressReached(2, 2, 5), 3, "the current question wins when answers trail the index");
+  assert.equal(quizProgressReached(2, 4, 5), 4, "recorded outcomes win when they are further ahead");
+  assert.equal(quizProgressReached(4, 0, 5), 5, "the final question fills the meter");
+  assert.equal(quizProgressReached(10, 20, 5), 5, "malformed imported state cannot overflow the meter");
+});
+
+test("every quiz-progress style and question kind uses the shared reached-question count", () => {
+  const kinds = ["multiple-choice", "true-false", "multi-select", "image-choice", "reveal"];
+  for (const { id: style } of QUIZ_PROGRESS_STYLES) {
+    for (const kind of kinds) {
+      assert.equal(quizProgressReached(2, 0, 4), 3, `${style} must advance on ${kind}`);
+    }
+  }
 });
 
 test("an empty or bad quiz reads as no progress rather than dividing by zero", () => {
