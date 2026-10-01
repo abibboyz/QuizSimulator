@@ -256,7 +256,22 @@ export interface Question {
   kind: QuestionKind;
   layout: QuestionLayout;
   prompt: string;
-  promptStyle?: { bold?: boolean; italic?: boolean; underline?: boolean; font?: FontChoice; customFont?: string };
+  promptStyle?: {
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    font?: FontChoice;
+    customFont?: string;
+    /** Web play size in pixels. Unset keeps the size each surface already uses. */
+    fontSize?: number;
+    /** Unset stays centered, which is how existing prompts are drawn. */
+    align?: "left" | "center" | "right";
+    /**
+     * Word art treatment. `true` is the original accent outline. A style name
+     * picks one of the varieties. Unset is ordinary prompt text.
+     */
+    wordArt?: boolean | "classic" | "outline" | "retro" | "glow" | "bubble" | "comic" | "echo" | "spark";
+  };
   /** Local background wins only while enabled; disabling preserves the upload. */
   background?: { enabled: boolean; image?: MediaRef; fit: BgImageFit; dim: number };
   promptPlacement?: { mode: "top" | "overlay" | "bottom"; x: number; y: number };

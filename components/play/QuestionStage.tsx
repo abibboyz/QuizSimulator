@@ -7,6 +7,16 @@ import { LoopMotion } from "@/components/play/LoopMotion";
 import { resolveLoops } from "@/lib/loopMotion";
 import { fontFamily } from "@/lib/themes";
 import { promptPosition } from "@/lib/questionPresentation";
+import {
+  promptAlign,
+  promptFontSize,
+  promptFontStack,
+  promptGraphemes,
+  promptPreservesBreaks,
+  wordArtCss,
+  wordArtInk,
+  wordArtStyleOf,
+} from "@/lib/promptText";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
@@ -84,9 +94,6 @@ export function QuestionStage({
   const bottom = placement?.mode === "bottom";
   const canvasRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const isReveal = question.kind === "reveal";
-  // A Reveal question's pictures are the answers. Its prompt image stays hidden
-  // so the covered grid is the only thing that can give the answer away.
   const imageLeads = question.layout === "image-top" && !!question.media;
   const reduced = useReducedMotion();
 
@@ -118,7 +125,17 @@ export function QuestionStage({
   const prompt = question.prompt;
   const typing = animated && motion.question.enter === "typewriter" && !!prompt;
   const typed = typing ? typewriterChars(prompt, motion.question, sinceMount) : 0;
-  const promptChars = typing ? [...prompt] : [];
+  const promptChars = typing ? promptGraphemes(prompt) : [];
+  const align = promptAlign(question.promptStyle);
+  const aligned = align !== "center";
+  const sized = typeof question.promptStyle?.fontSize === "number" && Number.isFinite(question.promptStyle.fontSize);
+  const sizeBase = overlay && mode === "host" ? 24 : mode === "host" ? 60 : mode === "preview" ? 11 : 30;
+  const promptPx = promptFontSize(question.promptStyle, sizeBase);
+  const artStyle = wordArtStyleOf(question.promptStyle?.wordArt);
+  const art = artStyle ? wordArtInk(theme.accent, theme.surface, artStyle) : null;
+  const chosenFont = question.promptStyle?.font
+    ? fontFamily(question.promptStyle.font, question.promptStyle.customFont)
+    : undefined;
   // Host mode packs tighter: everything has to clear a 720p projector without
   // pushing the answer tiles under the control bar.
   const gap = mode === "preview" ? "gap-1.5" : mode === "host" ? "gap-3 md:gap-5" : "gap-6 md:gap-8";
@@ -126,8 +143,19 @@ export function QuestionStage({
   const promptNode = (
     <LoopMotion value={loops.question} preview={mode === "preview"}>
   <h2
-    className={`stage-prompt text-center font-bold ${overlay && mode === "host" ? "text-lg md:text-2xl leading-snug" : PROMPT_TEXT[mode]}`}
-    style={{ color: "var(--prompt-color)", fontWeight: question.promptStyle?.bold === false ? 400 : 700, fontStyle: question.promptStyle?.italic ? "italic" : "normal", textDecoration: question.promptStyle?.underline ? "underline" : "none", fontFamily: question.promptStyle?.font ? fontFamily(question.promptStyle.font, question.promptStyle.customFont) : undefined }}
+    className={`stage-prompt font-bold ${aligned ? "w-full" : "text-center"} ${overlay && mode === "host" ? "text-lg md:text-2xl leading-snug" : PROMPT_TEXT[mode]}`}
+    style={{
+      color: art ? art.fill : "var(--prompt-color)",
+      fontWeight: question.promptStyle?.bold === false ? 400 : 700,
+      fontStyle: question.promptStyle?.italic ? "italic" : "normal",
+      textDecoration: question.promptStyle?.underline ? "underline" : "none",
+      fontFamily: promptFontStack(chosenFont ?? "var(--quiz-font)"),
+      textAlign: aligned ? align : undefined,
+      whiteSpace: promptPreservesBreaks(prompt) ? "pre-wrap" : undefined,
+      fontSize: sized ? promptPx : undefined,
+      lineHeight: sized ? 1.375 : undefined,
+      textShadow: art ? wordArtCss(art, sized ? promptPx : sizeBase) : undefined,
+    }}
     aria-label={typing ? prompt : undefined}
   >
     {typing ? (
@@ -158,7 +186,7 @@ export function QuestionStage({
       </div>
 
       {imageLeads && !overlay && (
-        <div className="flex justify-center" style={questionStyle}>
+        <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"} style={questionStyle}>
           <LoopMotion value={loops.question} preview={mode === "preview"}>
           <MediaImage
             media={question.media}
@@ -176,13 +204,14 @@ export function QuestionStage({
         </div>
       )}
 
-      {((!overlay && !bottom) || (!overlay && !imageLeads && question.media)) && <div className={imageLeads ? "" : "flex flex-col items-center gap-4"} style={questionStyle}>
+      {((!overlay && !bottom) || (!overlay && !imageLeads && question.media)) && <div className={imageLeads ? "" : aligned ? "flex w-full flex-col items-stretch gap-4" : "flex flex-col items-center gap-4"} style={questionStyle}>
         {!overlay && !bottom && promptNode}
 
         {!overlay && !imageLeads && question.media && (
           // The picture gives up height once the answer is out, so the
           // explanation lands on screen instead of below the fold.
           <LoopMotion value={loops.question} preview={mode === "preview"}>
+          <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"}>
           <MediaImage
             media={question.media}
             className={`rounded-2xl object-contain transition-[max-height] duration-300 ${
@@ -195,6 +224,7 @@ export function QuestionStage({
                   : "max-h-10"
             }`}
           />
+          </div>
           </LoopMotion>
         )}
       </div>}

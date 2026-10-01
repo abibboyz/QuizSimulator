@@ -65,3 +65,19 @@ export function readableTextOn(hex: string): string {
   if (luminance === null) return "#ffffff";
   return luminance > BLACK_WHITE_CROSSOVER ? "#0a0a0a" : "#ffffff";
 }
+
+/** Mix two #rrggbb colours. `amount` 0 stays on `from`; 1 is `to`. */
+export function mixHex(from: string, to: string, amount: number): string {
+  const a = HEX.exec(from.trim());
+  const b = HEX.exec(to.trim());
+  if (!a || !b) return from;
+  const t = Math.min(1, Math.max(0, amount));
+  const ai = parseInt(a[1], 16);
+  const bi = parseInt(b[1], 16);
+  const channel = (shift: number) => {
+    const av = (ai >> shift) & 255;
+    const bv = (bi >> shift) & 255;
+    return Math.round(av + (bv - av) * t);
+  };
+  return `#${[channel(16), channel(8), channel(0)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}

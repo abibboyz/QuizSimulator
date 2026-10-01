@@ -159,7 +159,7 @@ function EditView() {
   }
 
   return (
-    <div className="min-h-dvh bg-ink-950" style={themeVars(quiz.theme)}>
+    <div className="min-h-dvh bg-ink-950 text-ink-100" style={themeVars(quiz.theme)}>
       <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
           <Link href="/" className="focus-ring rounded-lg px-2 py-1 text-sm text-ink-400 hover:text-ink-200">

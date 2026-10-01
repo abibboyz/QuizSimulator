@@ -46,7 +46,7 @@ export function ThemeShell({ theme, children, className = "", subtle = false, na
     //   the root and paints behind the surface colour above, hiding the
     //   animation and any background image entirely.
     <div
-      className={`isolate relative min-h-dvh ${narrow ? "mx-auto w-full max-w-[26rem]" : ""} ${className}`}
+      className={`isolate relative min-h-dvh text-ink-100 ${narrow ? "mx-auto w-full max-w-[26rem]" : ""} ${className}`}
       style={{ ...themeVars(theme), background: theme.surface }}
     >
       {narrow ? (

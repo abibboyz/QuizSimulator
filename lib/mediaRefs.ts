@@ -3,8 +3,44 @@
  * Pure — no IndexedDB — so storage, import/export and `node --test` share it.
  */
 
-import type { MediaRef, Quiz } from "@/types/quiz";
+import type { CueSet, MediaRef, Quiz } from "@/types/quiz";
 import { mapCueSet, quizCueRefs } from "./cues.ts";
+
+/** Same key the video renderer uses to look a picture up once it is loaded. */
+export function mediaKey(ref: MediaRef): string {
+  return ref.kind === "stored" ? `s:${ref.id}` : `u:${ref.url}`;
+}
+
+function cueImages(set: CueSet | undefined): MediaRef[] {
+  if (!set) return [];
+  return Object.values(set).flatMap((cue) => (cue?.media ? [cue.media] : []));
+}
+
+/**
+ * Every picture a solo run can show. Cue sounds stay out (audio.ts loads those).
+ * A question background counts only while it is enabled, because that is when
+ * play replaces the quiz background with it.
+ */
+export function imageRefs(quiz: Quiz): MediaRef[] {
+  const refs: MediaRef[] = [];
+  if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
+  if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
+  refs.push(...cueImages(quiz.settings?.cues));
+  for (const q of quiz.questions) {
+    if (q.media) refs.push(q.media);
+    if (q.background?.enabled && q.background.image) refs.push(q.background.image);
+    for (const o of q.options) if (o.media) refs.push(o.media);
+    if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
+    refs.push(...cueImages(q.cues));
+  }
+  const seen = new Set<string>();
+  return refs.filter((ref) => {
+    const key = mediaKey(ref);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /**
  * Every media reference used anywhere in a quiz — including the theme's
