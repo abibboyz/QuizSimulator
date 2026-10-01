@@ -183,6 +183,14 @@ test("typewriter types a character count that is a pure function of time", () =>
   assert.equal(enterSpanMs({ ...DEFAULT_MOTION, question: m }, 4, text), 900);
 });
 
+test("typewriter counts a space, a line break, and an emoji as one each", () => {
+  const m: ElementMotion = { ...DEFAULT_QUESTION_MOTION, enter: "typewriter", durationMs: 1 };
+  assert.equal(typewriterChars("a b", m, 10_000), 3);
+  assert.equal(typewriterChars("a\nb", m, 10_000), 3);
+  assert.equal(typewriterChars("a😀b", m, 10_000), 3);
+  assert.equal(typewriterChars("👍🏽", m, 10_000), 1);
+});
+
 /* ------------------------------------------------------------ determinism */
 
 test("every entrance and exit is deterministic, starts/ends at rest, and stays finite", () => {

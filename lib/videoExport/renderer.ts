@@ -16,7 +16,20 @@
  * everything else sits where it sits in the app.
  */
 
-import { themeInk } from "@/lib/themeInk";
+import { mediaKey } from "@/lib/mediaRefs";
+import { stageEdge, stageVignette, themeInk } from "@/lib/themeInk";
+import {
+  layoutPrompt,
+  promptAlign,
+  promptFontSize,
+  promptFontStack,
+  promptGraphemes,
+  promptHasEmoji,
+  promptPreservesBreaks,
+  splitEmojiRuns,
+  wordArtInk,
+  wordArtStyleOf,
+} from "@/lib/promptText";
 
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
@@ -89,10 +102,6 @@ export interface FontSet {
 export interface RenderAssets {
   images: Map<string, LoadedImage>;
   fonts: FontSet;
-}
-
-export function mediaKey(ref: MediaRef): string {
-  return ref.kind === "stored" ? `s:${ref.id}` : `u:${ref.url}`;
 }
 
 /* ------------------------------------------------------------------ tokens */
@@ -226,11 +235,12 @@ export class FrameRenderer {
     ctx.fillStyle = this.surface;
     ctx.fillRect(0, 0, W, H);
 
-    // radial-gradient(120% 120% at 50% 0%, glow/0.22 0%, surface 55%, #04050a 100%)
+    // radial-gradient(120% 120% at 50% 0%, glow/0.22 0%, surface 55%, edge 100%)
+    // Dark themes keep #04050a. Light themes deepen their own surface.
     this.ellipseGradient(W / 2, 0, 1.2 * W, 1.2 * H, [
       [0, withAlpha(this.glow, 0.22)],
       [0.55, this.surface],
-      [1, "#04050a"],
+      [1, stageEdge(theme.surface)],
     ]);
 
     const bg = theme.bgImage ? this.image(theme.bgImage) : null;
@@ -256,11 +266,12 @@ export class FrameRenderer {
     else if (theme.bgAnimation === "particles" || theme.bgAnimation === "starfield")
       this.drawDots(t, theme.bgAnimation);
 
-    // Vignette: radial-gradient(120% 90% at 50% 50%, transparent 35%, rgba(0,0,0,0.55) 100%)
+    // Vignette. Dark themes keep rgba(0,0,0,0.55). Light themes stay pale so dark text shows.
+    const vignette = stageVignette(theme.surface);
     this.ellipseGradient(W / 2, H / 2, 1.2 * W, 0.9 * H, [
       [0, "rgba(0,0,0,0)"],
       [0.35, "rgba(0,0,0,0)"],
-      [1, "rgba(0,0,0,0.55)"],
+      [1, vignette],
     ]);
   }
 
@@ -704,9 +715,15 @@ export class FrameRenderer {
 
     const overlay = q.promptPlacement?.mode === "overlay" && !!q.media;
     const imageLeads = q.layout === "image-top" && !!q.media;
+    const promptSide = promptAlign(q.promptStyle);
+    const placed = (box: Box): Box =>
+      promptSide === "center"
+        ? this.centered(box, CW)
+        : { w: CW, h: box.h, draw: (x, y) => box.draw(promptSide === "right" ? x + CW - box.w : x, y) };
+
     if (imageLeads && !overlay) {
       const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
-      if (media) parts.push(posed(this.centered(media, CW)));
+      if (media) parts.push(posed(placed(media)));
     }
 
     const placement = q.promptPlacement;
@@ -714,7 +731,7 @@ export class FrameRenderer {
     const promptBox = this.promptBox(run, sinceMount, CW);
     if (!overlay && !imageLeads && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
-      parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [this.centered(media, CW)] : [])], 16, CW)));
+      parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW)));
     } else if (normalPrompt) {
       parts.push(posed(promptBox));
     }
@@ -765,39 +782,75 @@ export class FrameRenderer {
   private promptBox(run: QuestionRun, sinceMount: number, CW: number): Box {
     const { md } = this;
     const q = run.question;
+    const baseSize = md ? 30 : 20;
+    const baseLh = md ? 41.25 : 27.5;
+    const sized = typeof q.promptStyle?.fontSize === "number";
+    const size = promptFontSize(q.promptStyle, baseSize);
+    const lh = sized ? size * (baseLh / baseSize) : baseLh;
+    const align = promptAlign(q.promptStyle);
+    const artStyle = wordArtStyleOf(q.promptStyle?.wordArt);
+    const art = artStyle ? wordArtInk(this.accent, this.surface, artStyle) : undefined;
+    const raw = q.prompt || "";
+    const family = q.promptStyle?.font ? fontFamily(q.promptStyle.font, q.promptStyle.customFont, this.assets.fonts) : this.quizFont;
+    const face = promptHasEmoji(raw) ? promptFontStack(family) : family;
     const opts = {
-      size: md ? 30 : 20,
-      lh: md ? 41.25 : 27.5,
+      size,
+      lh,
       weight: q.promptStyle?.bold === false ? 400 : 700,
       italic: q.promptStyle?.italic,
       underline: q.promptStyle?.underline,
       color: q.prompt ? this.promptColor : this.ink[500],
-      family: q.promptStyle?.font ? fontFamily(q.promptStyle.font, q.promptStyle.customFont, this.assets.fonts) : this.quizFont,
-      align: "center" as Align,
-      balance: true,
+      family: face,
+      align,
+      balance: true as const,
+      wordArt: art,
     };
-    const full = this.textBox(q.prompt || "Untitled question", CW, opts);
-    const m = run.motion.question;
-    if (m.enter !== "typewriter" || !q.prompt) return full;
-    const typed = typewriterChars(q.prompt, m, sinceMount);
-    if (typed >= [...q.prompt].length) return full;
+    const preserve = promptPreservesBreaks(raw);
+    if (!preserve) {
+      const full = this.textBox(q.prompt || "Untitled question", CW, opts);
+      const m = run.motion.question;
+      if (m.enter !== "typewriter" || !q.prompt) return full;
+      const typed = typewriterChars(q.prompt, m, sinceMount);
+      if (typed >= promptGraphemes(q.prompt).length) return full;
 
-    // Same lines as the full prompt; the untyped rest keeps its space, like the
-    // stage's invisible remainder, so nothing reflows while it types.
+      // Same lines as the full prompt; the untyped rest keeps its space, like the
+      // stage's invisible remainder, so nothing reflows while it types.
+      const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
+      const lines = this.balance(q.prompt, font, CW);
+      return {
+        w: CW,
+        h: lines.length * opts.lh,
+        draw: (x, y) => {
+          let left = typed;
+          lines.forEach((line, i) => {
+            if (left <= 0) return;
+            const chars = promptGraphemes(line);
+            const shown = chars.slice(0, left).join("");
+            const lineW = this.measure(line, font);
+            const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
+            this.drawLine(shown, origin, y + i * opts.lh, opts.lh, font, opts.color, "left", 0, opts.underline, art);
+            left -= chars.length + 1; // the space the line broke on
+          });
+        },
+      };
+    }
+
     const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
-    const lines = this.balance(q.prompt, font, CW);
+    const lines = layoutPrompt(raw, (sample) => this.measure(sample, font), CW);
+    const motion = run.motion.question;
+    const typing = motion.enter === "typewriter";
+    const typed = typing ? typewriterChars(raw, motion, sinceMount) : Number.POSITIVE_INFINITY;
     return {
       w: CW,
-      h: lines.length * opts.lh,
+      h: Math.max(lh, lines.length * lh),
       draw: (x, y) => {
-        let left = typed;
         lines.forEach((line, i) => {
-          if (left <= 0) return;
-          const chars = [...line];
-          const shown = chars.slice(0, left).join("");
-          const lineW = this.measure(line, font);
-          this.drawLine(shown, x + (CW - lineW) / 2, y + i * opts.lh, opts.lh, font, opts.color, "left", 0, opts.underline);
-          left -= chars.length + 1; // the space the line broke on
+          const glyphs = promptGraphemes(line.text);
+          const visible = typed >= line.end ? line.text : typed <= line.start ? "" : glyphs.slice(0, Math.max(0, typed - line.start)).join("");
+          if (!visible) return;
+          const lineW = this.measure(line.text, font);
+          const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
+          this.drawLine(visible, origin, y + i * lh, lh, font, opts.color, "left", 0, opts.underline, art);
         });
       },
     };
@@ -2127,6 +2180,7 @@ export class FrameRenderer {
       balance?: boolean;
       italic?: boolean;
       underline?: boolean;
+      wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number };
     },
   ): Box {
     const font = `${o.italic ? "italic " : ""}${this.font(o.weight, o.size, o.family)}`;
@@ -2138,7 +2192,7 @@ export class FrameRenderer {
       h: lines.length * o.lh,
       draw: (x, y) => {
         const ax = align === "center" ? x + maxWidth / 2 : align === "right" ? x + maxWidth : x;
-        lines.forEach((line, i) => this.drawLine(line, ax, y + i * o.lh, o.lh, font, o.color, align, spacing, o.underline));
+        lines.forEach((line, i) => this.drawLine(line, ax, y + i * o.lh, o.lh, font, o.color, align, spacing, o.underline, o.wordArt));
       },
     };
   }
@@ -2154,20 +2208,79 @@ export class FrameRenderer {
     align: Align,
     spacing = 0,
     underline = false,
+    wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number },
   ) {
     if (!text) return;
     const { ctx } = this;
     const m = this.metrics(font);
     const baseline = top + (lineHeight - (m.ascent + m.descent)) / 2 + m.ascent;
     ctx.font = font;
-    ctx.fillStyle = color;
+    ctx.fillStyle = wordArt?.fill ?? color;
     ctx.textBaseline = "alphabetic";
     if (underline) {
       const width = this.measure(text, font, spacing);
       const left = align === "center" ? x - width / 2 : align === "right" ? x - width : x;
+      ctx.save();
+      ctx.shadowColor = "transparent";
       ctx.fillRect(left, baseline + Math.max(1, lineHeight * 0.06), width, Math.max(1, lineHeight * 0.045));
+      ctx.restore();
+    }
+    if (wordArt) {
+      const width = this.measure(text, font, spacing);
+      let cx = align === "center" ? x - width / 2 : align === "right" ? x - width : x;
+      ctx.textAlign = "left";
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+      const classic =
+        (wordArt.strokeWidth ?? 1) === 1 &&
+        (wordArt.blur ?? 0) === 0 &&
+        (wordArt.drop ?? 1) === 1 &&
+        (wordArt.layers ?? 1) === 1;
+      const pieces = spacing
+        ? promptGraphemes(text).map((glyph) => ({ text: glyph, emoji: promptHasEmoji(glyph) }))
+        : splitEmojiRuns(text);
+      const strokeWidth = wordArt.strokeWidth ?? 1;
+      const layers = wordArt.layers ?? 1;
+      const drop = wordArt.drop ?? 1;
+      const blur = lineHeight * (wordArt.blur ?? 0);
+      for (const piece of pieces) {
+        if (!classic) {
+          const step = lineHeight * 0.04 * drop;
+          for (let i = layers; i >= 1; i--) {
+            ctx.save();
+            ctx.shadowColor = blur ? wordArt.shadow : "transparent";
+            ctx.shadowBlur = blur;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.fillStyle = wordArt.shadow;
+            ctx.fillText(piece.text, cx + step * i, baseline + step * i);
+            ctx.restore();
+          }
+        }
+        ctx.save();
+        if (classic) {
+          ctx.shadowColor = wordArt.shadow;
+          ctx.shadowOffsetX = lineHeight * 0.03;
+          ctx.shadowOffsetY = lineHeight * 0.03;
+          ctx.shadowBlur = 0;
+        } else {
+          ctx.shadowColor = "transparent";
+        }
+        ctx.lineWidth = Math.max(1, lineHeight * 0.045 * (classic ? 1 : Math.max(strokeWidth, 0.35)));
+        if (!piece.emoji && strokeWidth > 0) {
+          ctx.strokeStyle = wordArt.stroke;
+          ctx.strokeText(piece.text, cx, baseline);
+          ctx.shadowColor = "transparent";
+        }
+        ctx.fillStyle = wordArt.fill;
+        ctx.fillText(piece.text, cx, baseline);
+        ctx.restore();
+        cx += this.measure(piece.text, font) + (spacing ? spacing * promptGraphemes(piece.text).length : 0);
+      }
+      return;
     }
     if (!spacing) {
+      ctx.fillStyle = color;
       ctx.textAlign = align;
       ctx.fillText(text, x, baseline);
       ctx.textAlign = "left";
@@ -2177,6 +2290,7 @@ export class FrameRenderer {
     const width = this.measure(text, font, spacing);
     let cx = align === "center" ? x - width / 2 : align === "right" ? x - width : x;
     ctx.textAlign = "left";
+    ctx.fillStyle = color;
     for (const ch of Array.from(text)) {
       ctx.fillText(ch, cx, baseline);
       cx += ctx.measureText(ch).width + spacing;

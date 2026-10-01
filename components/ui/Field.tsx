@@ -1,6 +1,6 @@
 "use client";
 
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 const BASE =
   "focus-ring w-full rounded-xl border border-ink-600 bg-ink-900/70 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 transition focus:border-ink-500";
@@ -49,8 +49,12 @@ export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInput
   return <input {...rest} className={`${BASE} ${className}`} />;
 }
 
-export function Textarea({ className = "", ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...rest} className={`${BASE} resize-y ${className}`} />;
+export function Textarea({
+  className = "",
+  ref,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
+  return <textarea ref={ref} {...rest} className={`${BASE} resize-y ${className}`} />;
 }
 
 export function Select({ className = "", children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {

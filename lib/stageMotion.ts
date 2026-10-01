@@ -25,6 +25,7 @@ import type {
   QuizSettings,
 } from "@/types/quiz";
 import { QUESTION_SWAP, STAGE_MOTION, TILE_IN, tileDelayMs } from "./playTiming.ts";
+import { promptGraphemes } from "./promptText.ts";
 import { clamp01, cubicBezier, lerp } from "./videoExport/motion.ts";
 
 export interface ResolvedMotion {
@@ -301,13 +302,16 @@ function combine(enter: Pose, exit: Pose | null): Pose {
 
 /** How long the question text takes to type out. */
 export function typewriterMs(text: string, motion: ElementMotion): number {
-  const byLength = [...text].length * STAGE_MOTION.typewriterMsPerChar;
+  const byLength = promptGraphemes(text).length * STAGE_MOTION.typewriterMsPerChar;
   return Math.min(STAGE_MOTION.typewriterMaxMs, Math.max(motion.durationMs, byLength));
 }
 
-/** Characters of `text` visible `sinceMount` ms after the question appears. */
+/**
+ * Characters of `text` visible `sinceMount` ms after the question appears.
+ * A space, a line break, and a whole emoji each count as one.
+ */
 export function typewriterChars(text: string, motion: ElementMotion, sinceMount: number): number {
-  const chars = [...text].length;
+  const chars = promptGraphemes(text).length;
   if (motion.enter !== "typewriter") return chars;
   return Math.min(chars, Math.floor(clamp01(sinceMount / typewriterMs(text, motion)) * chars + 1e-9));
 }

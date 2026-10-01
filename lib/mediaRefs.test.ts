@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectRefs, remapMedia } from "./mediaRefs.ts";
+import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
 import { schemaVersionFor, validateQuiz, type MediaRef, type Question, type Quiz } from "../types/quiz.ts";
 
 const ref = (id: string): MediaRef => ({ kind: "stored", id, w: 400, h: 300 });
@@ -103,6 +103,14 @@ test("schemaVersionFor: files that use nothing new stay version 1 so older build
   const quiz = oldQuiz();
   quiz.questions = [{ ...oldQuestion, background: { enabled: false, image: ref("local"), fit: "contain", dim: 0.3 }, promptPlacement: { mode: "overlay", x: 20, y: 80 } }];
   assert.ok(collectRefs(quiz).some((r) => r.kind === "stored" && r.id === "local"));
+  // Disabled, so play and the video both keep the quiz background. The picture
+  // stays in the save either way.
+  assert.equal(
+    imageRefs(quiz).some((r) => r.kind === "stored" && r.id === "local"),
+    false,
+  );
+  quiz.questions[0].background!.enabled = true;
+  assert.ok(imageRefs(quiz).some((r) => r.kind === "stored" && r.id === "local"));
   const copy = remapMedia(quiz, new Map([["local", "copied"]]));
   assert.deepEqual(copy.questions[0].background?.image, ref("copied"));
   assert.deepEqual(copy.questions[0].promptPlacement, quiz.questions[0].promptPlacement);

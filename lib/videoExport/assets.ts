@@ -5,35 +5,10 @@
  */
 
 import { exportWait } from "@/lib/videoExport/wait";
-import type { CueSet, MediaRef, Quiz } from "@/types/quiz";
+import type { MediaRef, Quiz } from "@/types/quiz";
 import { getMedia } from "@/lib/storage";
-import { mediaKey, type FontSet, type LoadedImage, type RenderAssets } from "@/lib/videoExport/renderer";
-
-function cueImages(set: CueSet | undefined): MediaRef[] {
-  if (!set) return [];
-  return Object.values(set).flatMap((cue) => (cue?.media ? [cue.media] : []));
-}
-
-/** Every picture the run can show (cue *sounds* are handled by audio.ts). */
-export function imageRefs(quiz: Quiz): MediaRef[] {
-  const refs: MediaRef[] = [];
-  if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
-  if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
-  refs.push(...cueImages(quiz.settings?.cues));
-  for (const q of quiz.questions) {
-    if (q.media) refs.push(q.media);
-    for (const o of q.options) if (o.media) refs.push(o.media);
-    if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
-    refs.push(...cueImages(q.cues));
-  }
-  const seen = new Set<string>();
-  return refs.filter((ref) => {
-    const key = mediaKey(ref);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
+import { imageRefs, mediaKey } from "@/lib/mediaRefs";
+import type { FontSet, LoadedImage, RenderAssets } from "@/lib/videoExport/renderer";
 
 async function decodeBlob(blob: Blob): Promise<LoadedImage> {
   if (typeof createImageBitmap === "function") {

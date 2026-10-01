@@ -5,6 +5,7 @@ import type { BgAnimation, BgImageFit, MediaRef } from "@/types/quiz";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useMediaUrl } from "@/hooks/useMediaUrl";
 import { withAlpha } from "@/lib/themes";
+import { stageEdge, stageVignette } from "@/lib/themeInk";
 
 interface Props {
   kind: BgAnimation;
@@ -40,7 +41,7 @@ export function AnimatedBackground({
     <div
       aria-hidden
       className={`pointer-events-none inset-0 overflow-hidden ${contained ? "absolute" : "fixed -z-10"}`}
-      style={{ background: `radial-gradient(120% 120% at 50% 0%, ${withAlpha(glow, subtle ? 0.1 : 0.22)} 0%, ${surface} 55%, #04050a 100%)` }}
+      style={{ background: `radial-gradient(120% 120% at 50% 0%, ${withAlpha(glow, subtle ? 0.1 : 0.22)} 0%, ${surface} 55%, ${stageEdge(surface)} 100%)` }}
     >
       {/*
         The picture sits under the animation, with a dimming scrim between them
@@ -66,8 +67,11 @@ export function AnimatedBackground({
       {useCanvas && !reduced && <ParticleCanvas kind={kind} accent={accent} glow={glow} subtle={subtle} />}
       {useCanvas && reduced && <Aurora accent={accent} glow={glow} subtle={subtle} still />}
 
-      {/* A faint vignette keeps big white text readable over any of the above. */}
-      <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_50%,transparent_35%,rgba(0,0,0,0.55)_100%)]" />
+      {/* Dark themes keep the black vignette. Light themes use a soft slate wash so dark text stays visible. */}
+      <div
+        className="absolute inset-0"
+        style={{ background: `radial-gradient(120% 90% at 50% 50%, transparent 35%, ${stageVignette(surface)} 100%)` }}
+      />
     </div>
   );
 }

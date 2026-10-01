@@ -1,5 +1,5 @@
 import type { Theme } from "@/types/quiz";
-import { relativeLuminance } from "@/lib/color";
+import { mixHex, relativeLuminance } from "@/lib/color";
 
 /** Shared by DOM playback and the video renderer. */
 export const DARK_INK = {
@@ -14,5 +14,27 @@ const LIGHT_INK: typeof DARK_INK = {
 };
 export function themeInk(theme: Theme): typeof DARK_INK {
   return (relativeLuminance(theme.surface) ?? 0) > 0.1791 ? LIGHT_INK : DARK_INK;
+}
+
+const LIGHT_SURFACE = 0.1791;
+
+function lightSurface(surface: string): boolean {
+  return (relativeLuminance(surface) ?? 0) > LIGHT_SURFACE;
+}
+
+/**
+ * The colour the stage gradient fades to. Dark themes keep the near-black edge.
+ * Light themes only deepen their own surface, so the dark text those themes use
+ * does not sit on black.
+ */
+export function stageEdge(surface: string): string {
+  if (!lightSurface(surface)) return "#04050a";
+  return mixHex(surface, "#1e293b", 0.22);
+}
+
+/** Outer vignette. Dark themes keep the existing black wash. */
+export function stageVignette(surface: string): string {
+  if (!lightSurface(surface)) return "rgba(0,0,0,0.55)";
+  return "rgba(15, 23, 42, 0.16)";
 }
 

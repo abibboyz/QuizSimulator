@@ -12,13 +12,18 @@ import { createQuiz } from "@/lib/factory";
 import { sampleQuiz } from "@/lib/sampleQuiz";
 import { ensureSeeded } from "@/lib/seed";
 import { formatBytes } from "@/lib/media";
-import { getPreset, withAlpha } from "@/lib/themes";
+import { DEFAULT_THEME, getPreset, themeVars, withAlpha } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
-import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
 
-
+/** Warm paper with rose, gold, and sky. Home page only. */
+const HOME_THEME = {
+  ...DEFAULT_THEME,
+  preset: "peach" as const,
+  accent: "#e11d48",
+  surface: "#fff6ea",
+};
 
 export default function Dashboard() {
   const router = useRouter();
@@ -102,14 +107,26 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="relative min-h-dvh">
-      <AnimatedBackground kind="aurora" accent={DEFAULT_THEME.accent} glow="#6366f1" surface="#070b1a" subtle />
+    <div
+      className="relative min-h-dvh text-ink-100"
+      style={{ ...themeVars(HOME_THEME), fontFamily: "var(--font-page), sans-serif" }}
+    >
+      <AnimatedBackground kind="aurora" accent="#fb7185" glow="#fbbf24" surface={HOME_THEME.surface} />
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+        <div
+          className="absolute left-1/2 top-[18%] h-[50vh] w-[46vw] -translate-x-1/2 rounded-full blur-3xl"
+          style={{ background: "rgba(56, 189, 248, 0.34)" }}
+        />
+      </div>
 
       <main className="mx-auto w-full max-w-6xl px-5 py-10 md:py-16">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="stage-prompt text-4xl font-extrabold md:text-5xl">
-              Quiz <span style={{ color: "var(--accent)" }}>Simulator</span>
+            <h1
+              className="text-3xl leading-tight md:text-5xl"
+              style={{ fontFamily: "var(--font-fancy), serif", fontWeight: 900, color: "#e4572e" }}
+            >
+              Quiz Simulator
             </h1>
             <p className="mt-2 max-w-xl text-ink-300">
               Build a quiz, theme it, then run it solo or throw it on the big screen for a room.
@@ -138,7 +155,7 @@ export default function Dashboard() {
         </header>
 
         {error && (
-          <div className="mt-6 rounded-xl border border-bad/40 bg-bad/10 px-4 py-3 text-sm text-red-200">{error}</div>
+          <div className="mt-6 rounded-xl border border-bad/40 bg-bad/10 px-4 py-3 text-sm text-bad">{error}</div>
         )}
 
         {quizzes === null && <p className="mt-12 text-ink-400">Loading your quizzes…</p>}
