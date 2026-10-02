@@ -8,6 +8,8 @@ import { validateQuiz } from "@/types/quiz";
 import { getQuiz, saveQuiz } from "@/lib/storage";
 import { createQuestion, duplicateQuestion } from "@/lib/factory";
 import { exportQuizFile } from "@/lib/transfer";
+import { copyQuestion, pasteQuestion } from "@/lib/questionClipboard";
+import { QUESTION_CLIPBOARD_KEY, readQuestionClipboard } from "@/lib/questionClipboardState";
 import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { themeVars } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
@@ -41,6 +43,10 @@ function EditView() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("preview");
   const [saveState, setSaveState] = useState<SaveState>("clean");
+  const [hasCopiedQuestion, setHasCopiedQuestion] = useState(false);
+  const [clipboardBusy, setClipboardBusy] = useState(false);
+  const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
+  const [clipboardError, setClipboardError] = useState(false);
 
   // Distinguishes "loaded from disk" from "edited by the user", so opening a
   // quiz doesn't immediately mark it dirty and rewrite updatedAt.
@@ -62,6 +68,23 @@ function EditView() {
 
     return () => {
       cancelled = true;
+    };
+  }, [quizId]);
+
+  useEffect(() => {
+    const refresh = () => {
+      const copied = readQuestionClipboard();
+      setHasCopiedQuestion(!!copied && copied.sourceQuizId !== quizId);
+    };
+    refresh();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === QUESTION_CLIPBOARD_KEY) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", refresh);
     };
   }, [quizId]);
 
@@ -119,6 +142,48 @@ function EditView() {
       }),
     [mutate],
   );
+
+  const copy = useCallback(async (id: string) => {
+    if (!quiz || clipboardBusy) return;
+    const source = quiz?.questions.find((question) => question.id === id);
+    if (!source) return;
+    setClipboardBusy(true);
+    setClipboardMessage(null);
+    try {
+      await copyQuestion(quiz.id, source);
+      setHasCopiedQuestion(false);
+      setClipboardError(false);
+      setClipboardMessage("Copied. Open another quiz to paste it.");
+    } catch (error) {
+      setClipboardError(true);
+      setClipboardMessage(error instanceof Error ? error.message : "Could not copy this question.");
+    } finally {
+      setClipboardBusy(false);
+    }
+  }, [quiz, clipboardBusy]);
+
+  const paste = useCallback(async () => {
+    if (!quiz || clipboardBusy) return;
+    setClipboardBusy(true);
+    setClipboardMessage(null);
+    try {
+      const result = await pasteQuestion(quiz, activeId);
+      setHasCopiedQuestion(false);
+      if (result) {
+        dirtyRef.current = false;
+        setQuiz(result.quiz);
+        setActiveId(result.question.id);
+        setSaveState("saved");
+        setClipboardError(false);
+        setClipboardMessage("Question pasted.");
+      }
+    } catch (error) {
+      setClipboardError(true);
+      setClipboardMessage(error instanceof Error ? error.message : "Could not paste this question.");
+    } finally {
+      setClipboardBusy(false);
+    }
+  }, [quiz, activeId, clipboardBusy]);
 
   const remove = useCallback(
     (id: string) =>
@@ -231,6 +296,7 @@ function EditView() {
             invalidIds={invalidIds}
             onSelect={setActiveId}
             onReorder={(questions) => patchQuiz({ questions })}
+            onCopy={(id) => { void copy(id); }}
             onDuplicate={duplicate}
             onDelete={remove}
           />
@@ -252,6 +318,12 @@ function EditView() {
               + Reveal
             </Button>
           </div>
+          {hasCopiedQuestion && (
+            <Button variant="primary" size="sm" className="w-full" disabled={clipboardBusy} onClick={() => { void paste(); }}>
+              📋 Paste copied question
+            </Button>
+          )}
+          {clipboardMessage && <p role="status" className={`text-xs ${clipboardError ? "text-bad" : "text-ink-300"}`}>{clipboardMessage}</p>}
         </aside>
 
         <section className="glass min-w-0 rounded-2xl p-5">

@@ -3,8 +3,8 @@
  * Pure — no IndexedDB — so storage, import/export and `node --test` share it.
  */
 
-import type { CueSet, MediaRef, Quiz } from "@/types/quiz";
-import { mapCueSet, quizCueRefs } from "./cues.ts";
+import type { CueSet, MediaRef, Question, Quiz } from "@/types/quiz";
+import { cueSetRefs, mapCueSet, quizCueRefs } from "./cues.ts";
 
 /** Same key the video renderer uses to look a picture up once it is loaded. */
 export function mediaKey(ref: MediaRef): string {
@@ -66,6 +66,36 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
   refs.push(...quizCueRefs(quiz));
   if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
   return refs;
+}
+
+/** All media owned by one question, including disabled images and cue sounds. */
+export function questionMediaRefs(question: Question): MediaRef[] {
+  return [
+    question.background?.image,
+    question.media,
+    ...question.options.map((option) => option.media),
+    question.reveal?.cover,
+    question.celebration?.image,
+    ...cueSetRefs(question.cues),
+  ].filter((ref): ref is MediaRef => !!ref);
+}
+
+/** Rewrites only a question's stored media, for a cross-quiz question copy. */
+export function remapQuestionMedia(question: Question, remap: Map<string, string>): Question {
+  const swap = (ref?: MediaRef): MediaRef | undefined => {
+    if (!ref || ref.kind !== "stored") return ref;
+    const next = remap.get(ref.id);
+    return next ? { ...ref, id: next } : ref;
+  };
+  return {
+    ...question,
+    media: swap(question.media),
+    ...(question.background ? { background: { ...question.background, image: swap(question.background.image) } } : {}),
+    options: question.options.map((option) => ({ ...option, media: swap(option.media) })),
+    cues: mapCueSet(question.cues, swap),
+    ...(question.reveal ? { reveal: { ...question.reveal, cover: swap(question.reveal.cover) } } : {}),
+    ...(question.celebration ? { celebration: { ...question.celebration, image: swap(question.celebration.image) } } : {}),
+  };
 }
 
 /** Rewrites stored-media ids through a mapping (used when copying/importing). */

@@ -27,6 +27,7 @@ interface Props {
   invalidIds: Set<string>;
   onSelect: (id: string) => void;
   onReorder: (questions: Question[]) => void;
+  onCopy: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -39,7 +40,7 @@ const KIND_LABEL: Record<Question["kind"], string> = {
   reveal: "Reveal",
 };
 
-export function QuestionList({ questions, activeId, invalidIds, onSelect, onReorder, onDuplicate, onDelete }: Props) {
+export function QuestionList({ questions, activeId, invalidIds, onSelect, onReorder, onCopy, onDuplicate, onDelete }: Props) {
   const sensors = useSensors(
     // A small distance threshold keeps a click on the row from starting a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -76,6 +77,7 @@ export function QuestionList({ questions, activeId, invalidIds, onSelect, onReor
               canMoveDown={index < questions.length - 1}
               onSelect={() => onSelect(question.id)}
               onMove={(direction) => onReorder(arrayMove(questions, index, index + direction))}
+              onCopy={() => onCopy(question.id)}
               onDuplicate={() => onDuplicate(question.id)}
               onDelete={() => onDelete(question.id)}
             />
@@ -97,6 +99,7 @@ interface RowProps {
   onSelect: () => void;
   /** -1 moves the question up, +1 moves it down. */
   onMove: (direction: -1 | 1) => void;
+  onCopy: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
@@ -111,6 +114,7 @@ function QuestionRow({
   canMoveDown,
   onSelect,
   onMove,
+  onCopy,
   onDuplicate,
   onDelete,
 }: RowProps) {
@@ -151,6 +155,16 @@ function QuestionRow({
             {invalid && <span className="text-amber-400">· needs attention</span>}
           </span>
         </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onCopy}
+        className="focus-ring shrink-0 rounded-md px-1.5 py-1 text-xs text-ink-400 hover:bg-ink-800 hover:text-ink-200"
+        aria-label={`Copy question ${index + 1} to another quiz`}
+        title="Copy question to another quiz"
+      >
+        📋
       </button>
 
       {/*

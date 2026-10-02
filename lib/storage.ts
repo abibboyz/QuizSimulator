@@ -12,11 +12,12 @@
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Quiz, QuizSummary } from "@/types/quiz";
+import type { Question, Quiz, QuizSummary } from "@/types/quiz";
 import { toSummary } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
-import { collectRefs, remapMedia } from "@/lib/mediaRefs";
+import { collectRefs, questionMediaRefs, remapMedia } from "@/lib/mediaRefs";
+import { readQuestionClipboard } from "@/lib/questionClipboardState";
 import { normalizeRevealQuestion } from "@/lib/reveal";
 
 const DB_NAME = "quiz-simulator";
@@ -162,11 +163,35 @@ export async function collectGarbage(): Promise<number> {
       if (ref.kind === "stored") live.add(ref.id);
     }
   }
+  // A copied question is a temporary owner of its private media copies. A
+  // source quiz can be deleted before paste without losing those pictures.
+  const copied = readQuestionClipboard();
+  if (copied) {
+    for (const ref of questionMediaRefs(copied.question)) {
+      if (ref.kind === "stored") live.add(ref.id);
+    }
+  }
 
   const ids = await database.getAllKeys("media");
   const orphans = ids.filter((id) => !live.has(id));
   await Promise.all(orphans.map((id) => database.delete("media", id)));
   return orphans.length;
+}
+
+/** Reclaim only an older clipboard's private blobs, never unrelated unsaved edits. */
+export async function releaseCopiedQuestionMedia(question: Question): Promise<void> {
+  const ids = new Set(questionMediaRefs(question).filter((ref) => ref.kind === "stored").map((ref) => ref.id));
+  if (!ids.size) return;
+  const database = await db();
+  const live = new Set<string>();
+  for (const quiz of await database.getAll("quizzes")) {
+    for (const ref of collectRefs(quiz)) if (ref.kind === "stored") live.add(ref.id);
+  }
+  const copied = readQuestionClipboard();
+  if (copied) {
+    for (const ref of questionMediaRefs(copied.question)) if (ref.kind === "stored") live.add(ref.id);
+  }
+  await Promise.all([...ids].filter((id) => !live.has(id)).map((id) => database.delete("media", id)));
 }
 
 /** Rough footprint, shown on the dashboard so storage pressure isn't a surprise. */
