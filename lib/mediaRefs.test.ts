@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
+import { collectRefs, imageRefs, questionMediaRefs, remapMedia, remapQuestionMedia } from "./mediaRefs.ts";
 import { schemaVersionFor, validateQuiz, type MediaRef, type Question, type Quiz } from "../types/quiz.ts";
 
 const ref = (id: string): MediaRef => ({ kind: "stored", id, w: 400, h: 300 });
@@ -86,6 +86,22 @@ test("a cover is kept even after the question is switched to another kind (no GC
   const switched: Question = { ...revealQuestion, kind: "multiple-choice" };
   const ids = collectRefs({ ...oldQuiz(), questions: [switched] }).map((r) => (r.kind === "stored" ? r.id : ""));
   assert.ok(ids.includes("cover"));
+});
+
+test("cross-quiz copy includes and remaps every question-owned picture and cue sound", () => {
+  const question: Question = {
+    ...revealQuestion,
+    background: { enabled: false, image: ref("background"), fit: "contain", dim: 0.2 },
+    options: [{ id: "a", text: "Yes", correct: true, media: ref("answer-tile") }],
+    celebration: { enabled: false, image: ref("celebration") },
+    cues: { correct: { animation: "image", media: ref("cue-picture"), sound: "custom", soundMedia: ref("cue-sound"), durationMs: 500 } },
+  };
+  const ids = questionMediaRefs(question).map((media) => media.kind === "stored" ? media.id : "");
+  assert.deepEqual(ids, ["background", "answer", "answer-tile", "cover", "celebration", "cue-picture", "cue-sound"]);
+  const remap = new Map(ids.map((id) => [id, `${id}-copy`]));
+  const copied = remapQuestionMedia(question, remap);
+  assert.deepEqual(questionMediaRefs(copied).map((media) => media.kind === "stored" ? media.id : ""), ids.map((id) => `${id}-copy`));
+  assert.deepEqual(questionMediaRefs(question).map((media) => media.kind === "stored" ? media.id : ""), ids);
 });
 
 test("schemaVersionFor: files that use nothing new stay version 1 so older builds can open them", () => {

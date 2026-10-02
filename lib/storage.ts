@@ -16,7 +16,8 @@ import type { Quiz, QuizSummary } from "@/types/quiz";
 import { toSummary } from "@/types/quiz";
 import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
-import { collectRefs, remapMedia } from "@/lib/mediaRefs";
+import { collectRefs, questionMediaRefs, remapMedia } from "@/lib/mediaRefs";
+import { readQuestionClipboard } from "@/lib/questionClipboardState";
 import { normalizeRevealQuestion } from "@/lib/reveal";
 
 const DB_NAME = "quiz-simulator";
@@ -159,6 +160,14 @@ export async function collectGarbage(): Promise<number> {
   const live = new Set<string>();
   for (const quiz of quizzes) {
     for (const ref of collectRefs(quiz)) {
+      if (ref.kind === "stored") live.add(ref.id);
+    }
+  }
+  // A copied question is a temporary owner of its private media copies. A
+  // source quiz can be deleted before paste without losing those pictures.
+  const copied = readQuestionClipboard();
+  if (copied) {
+    for (const ref of questionMediaRefs(copied.question)) {
       if (ref.kind === "stored") live.add(ref.id);
     }
   }
