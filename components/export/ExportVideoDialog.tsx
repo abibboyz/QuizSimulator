@@ -407,7 +407,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
           </p>
 
           {status.kind === "cancelled" && <p role="status">Export cancelled. You can start again when ready.</p>}
-          <p className="text-xs text-ink-400">Exports use the selected framing and simulated answers. Player controls are omitted. Animated image uploads are exported as still pictures. Questions and answers use their saved order.</p>
+          <p className="text-xs text-ink-400">Exports use the selected framing and simulated answers. Player controls are omitted. Animated GIF, APNG, and animated WebP pictures play in the video. Questions and answers use their saved order, even when live shuffle is on.</p>
 
           {status.kind === "error" && (
             <div role="alert" className="rounded-xl border border-bad/40 bg-bad/10 p-3">

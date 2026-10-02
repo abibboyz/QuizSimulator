@@ -12,6 +12,7 @@ import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, pri
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
@@ -161,6 +162,8 @@ function PlayView() {
   // Keyed by the session's per-question stamp, and derived during render so the
   // clock never starts for a frame first.
   const runKey = `${index}:${session.startedAt}`;
+  const [completedRevealRun, setCompletedRevealRun] = useState<string | null>(null);
+  const celebrationReady = question?.kind !== "reveal" || completedRevealRun === runKey;
   const leaving = index > 0 ? order[index - 1] : undefined;
   const holdMs =
     leaving && quiz && !reduced ? clockHoldMs(resolveMotion(quiz.settings, leaving), leaving.options.length) : 0;
@@ -302,13 +305,14 @@ function PlayView() {
   const advancingAfterTimeout = quiz
     ? shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
     : false;
+  const autoAdvanceReady = advancingAfterTimeout && (!question?.celebration?.enabled || celebrationReady);
   const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
 
   useEffect(() => {
-    if (!advancingAfterTimeout) return;
+    if (!autoAdvanceReady) return;
     const id = window.setTimeout(() => goNextRef.current(false), holdSeconds * 1000);
     return () => window.clearTimeout(id);
-  }, [advancingAfterTimeout, holdSeconds]);
+  }, [autoAdvanceReady, holdSeconds]);
 
   const submitAnswer = useCallback(() => {
     const elapsed = limit !== null ? countdown.elapsedMs : Date.now() - startedAtRef.current;
@@ -444,7 +448,7 @@ function PlayView() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <div className={`mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
+        <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
           <QuizProgress
@@ -493,6 +497,7 @@ function PlayView() {
                 narrow={mobile}
                 theme={quiz.theme}
                 motion={stageMotion}
+                onRevealComplete={() => setCompletedRevealRun(runKey)}
                 header={
                   <div className="flex items-center gap-4">
                     <ScoreBadge score={score} streak={streak} compact />
@@ -529,9 +534,9 @@ function PlayView() {
             )}
           </div>
 
-          {advancingAfterTimeout ? (
+          {autoAdvanceReady ? (
             <AutoAdvanceBar
-              key={question.id}
+              key={`advance-${question.id}`}
               seconds={holdSeconds}
               label={index + 1 >= order.length ? "results" : "next question"}
             />
@@ -550,6 +555,13 @@ function PlayView() {
                     : `Press 1–${question.options.length} to answer`
                   : "Press Enter for the next question"}
             </p>
+          )}
+
+          {/* Mobile celebration stays centred in the visible phone frame;
+              web view uses the viewport. Keep it outside the sliding question
+              frame so that transform cannot move its fixed position. */}
+          {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && (
+            <CelebrationCard question={question} mode="solo" contained={mobile} />
           )}
         </div>
       )}

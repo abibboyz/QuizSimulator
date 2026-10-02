@@ -3,7 +3,8 @@
 import { themeInk } from "@/lib/themeInk";
 
 import { useEffect, useRef, useState } from "react";
-import type { Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
+import type { CelebrationAnimation, Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
+import { CELEBRATION_ANIMATIONS } from "@/lib/celebration";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { FONT_GROUPS, fontFamily, optionPalette } from "@/lib/themes";
@@ -350,6 +351,80 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           rows={2}
         />
       </Field>
+
+      <div className="space-y-3 rounded-2xl border border-ink-700 p-3">
+        <Toggle
+          label="Celebrate the correct answer"
+          hint="This question only. On reveal, a card in the middle shows the answer, then the animation you pick. Leave it off and the reveal stays as it is."
+          checked={question.celebration?.enabled ?? false}
+          onChange={(enabled) =>
+            onChange({
+              ...question,
+              celebration: { animation: "confetti", ...question.celebration, enabled },
+            })
+          }
+        />
+        {question.celebration?.enabled && (
+          <>
+            <MediaDropZone
+              label="Correct answer image"
+              media={question.celebration.image}
+              onChange={(image) => onChange({ ...question, celebration: { ...question.celebration!, image } })}
+            />
+            <p className="text-xs text-ink-500">
+              Optional. PNG, JPG, WebP, or an animated GIF. {question.kind === "reveal"
+                ? "After the Reveal animation, the card shows this picture unless you choose to repeat the revealed answer below. Without either picture, it shows the answer text."
+                : question.kind === "image-choice"
+                  ? "This picture replaces the correct answer's picture on the card."
+                  : "The card shows this picture unless you choose the correct answer's own picture below. Without either picture, it shows the answer text."}
+            </p>
+            {question.kind !== "image-choice" && (
+              <label className="flex items-start gap-2 text-sm text-ink-200">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={!!question.celebration.useAnswerImage}
+                  onChange={(event) =>
+                    onChange({
+                      ...question,
+                      celebration: { ...question.celebration!, useAnswerImage: event.target.checked },
+                    })
+                  }
+                />
+                <span>
+                  {question.kind === "reveal" ? "Repeat the revealed answer picture" : "Use the correct answer's picture, if it has one"}
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    {question.kind === "reveal"
+                      ? "Shown after the Reveal animation; takes priority over the uploaded card picture."
+                      : "Takes priority over the uploaded card picture when the correct answer has an image."}
+                  </span>
+                </span>
+              </label>
+            )}
+            <Field label="Animation" hint="Plays once the card has appeared. Card only skips the extra motion.">
+              <Select
+                aria-label="Celebration animation"
+                value={question.celebration.animation ?? "confetti"}
+                onChange={(event) =>
+                  onChange({
+                    ...question,
+                    celebration: {
+                      ...question.celebration!,
+                      animation: event.target.value as CelebrationAnimation,
+                    },
+                  })
+                }
+              >
+                {CELEBRATION_ANIMATIONS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </>
+        )}
+      </div>
 
       {question.kind !== "image-choice" && question.kind !== "reveal" && (
       <div>

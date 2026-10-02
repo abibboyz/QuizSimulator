@@ -1,13 +1,15 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 4 adds an optional per-question celebration card. Absent, or switched off,
+ * the reveal looks exactly as it did before.
  * 3 adds local backgrounds and prompt placement.
  * 2 added the `reveal` question kind and the optional `motion` settings. Both
  * are additive: a version-1 quiz loads unchanged and resolves to exactly what
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -17,6 +19,7 @@ export const SCHEMA_VERSION = 3;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.questions.some((q) => q.celebration?.enabled)) return 4;
   if (quiz.theme?.font && !["sans", "display", "mono"].includes(quiz.theme.font)) return 3;
   if (quiz.settings.loopMotion || quiz.questions.some((q) => q.background || q.promptPlacement || q.promptStyle || q.loopMotion || q.options.some((o) => o.loopMotion))) return 3;
   const usesV2 =
@@ -216,6 +219,27 @@ export interface MotionOverrides {
 
 export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
 
+/**
+ * Motion that plays once the celebration card has popped in.
+ * `none` is the card by itself. `confetti` is the default when a question
+ * turns the card on and doesn't pick one.
+ */
+export type CelebrationAnimation = "confetti" | "stars" | "pulse-ring" | "stamp" | "none";
+
+/**
+ * Optional, per question. `enabled: false` (or a missing object) leaves the
+ * reveal exactly as it is. The picture, the answer-picture checkbox, and the
+ * animation are kept when the switch is turned off so they aren't lost.
+ */
+export interface Celebration {
+  enabled: boolean;
+  /** Picture uploaded for this card. The answer-picture checkbox takes priority when that picture exists. */
+  image?: MediaRef;
+  /** Use the correct answer's own picture when it has one, ahead of the uploaded card picture. */
+  useAnswerImage?: boolean;
+  animation?: CelebrationAnimation;
+}
+
 export type LoopStyle = "none" | "hop" | "bounce" | "float" | "sideways" | "rock" | "wiggle" | "pulse" | "jelly" | "seesaw" | "orbit" | "dance" | "butterfly" | "flutter" | "shuffle" | "boomerang" | "figure-eight" | "heartbeat" | "leaf" | "pendulum" | "rubberband" | "shake" | "skipping" | "spiral" | "swing" | "tiptoe" | "wave" | "zigzag";
 export interface LoopMotion {
   style: LoopStyle;
@@ -277,6 +301,11 @@ export interface Question {
   promptPlacement?: { mode: "top" | "overlay" | "bottom"; x: number; y: number };
   media?: MediaRef;
   explanation?: string;
+  /**
+   * Middle-of-screen card when this question's answer is revealed. Missing
+   * means the question reveals the way it always has.
+   */
+  celebration?: Celebration;
   options: Option[];
   /**
    * Gap in pixels between answer tiles. Used by `image-choice` (and ignored by

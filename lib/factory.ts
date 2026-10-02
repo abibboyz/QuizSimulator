@@ -110,6 +110,7 @@ export function duplicateQuestion(question: Question): Question {
     // back into the question it came from.
     cues: question.cues ? { ...question.cues } : undefined,
     ...(question.reveal ? { reveal: { ...question.reveal } } : {}),
+    ...(question.celebration ? { celebration: { ...question.celebration } } : {}),
     ...(question.motion
       ? {
           motion: {

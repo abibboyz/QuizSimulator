@@ -5,10 +5,17 @@
  */
 
 import { exportWait } from "@/lib/videoExport/wait";
+import { decodeAnimatedBlob } from "@/lib/videoExport/animatedImage";
 import type { MediaRef, Quiz } from "@/types/quiz";
 import { getMedia } from "@/lib/storage";
 import { imageRefs, mediaKey } from "@/lib/mediaRefs";
 import type { FontSet, LoadedImage, RenderAssets } from "@/lib/videoExport/renderer";
+
+async function decodePicture(blob: Blob): Promise<LoadedImage> {
+  const animated = await decodeAnimatedBlob(blob);
+  if (animated) return animated;
+  return decodeBlob(blob);
+}
 
 async function decodeBlob(blob: Blob): Promise<LoadedImage> {
   if (typeof createImageBitmap === "function") {
@@ -44,13 +51,13 @@ async function loadImage(ref: MediaRef, signal?: AbortSignal): Promise<LoadedIma
   try {
     if (ref.kind === "stored") {
       const record = await getMedia(ref.id);
-      return record ? await decodeBlob(record.blob) : null;
+      return record ? await decodePicture(record.blob) : null;
     }
     // Web images must allow CORS: drawing one that doesn't would taint the
     // canvas and make every frame unreadable to the encoder.
     try {
       const response = await fetch(ref.url, { mode: "cors", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000) });
-      if (response.ok) return await decodeBlob(await response.blob());
+      if (response.ok) return await decodePicture(await response.blob());
     } catch {
       // try the <img crossorigin> route below
     }
@@ -136,7 +143,14 @@ export async function loadAssets(
 /** Frees decoded bitmaps once an export is finished. */
 export function releaseAssets(assets: RenderAssets) {
   for (const img of assets.images.values()) {
-    if (typeof ImageBitmap !== "undefined" && img.source instanceof ImageBitmap) img.source.close();
+    const seen = new Set<ImageBitmap>();
+    const close = (source: CanvasImageSource) => {
+      if (typeof ImageBitmap === "undefined" || !(source instanceof ImageBitmap) || seen.has(source)) return;
+      seen.add(source);
+      source.close();
+    };
+    close(img.source);
+    for (const frame of img.frames ?? []) close(frame.source);
   }
   assets.images.clear();
 }

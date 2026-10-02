@@ -31,6 +31,9 @@ export function imageRefs(quiz: Quiz): MediaRef[] {
     if (q.background?.enabled && q.background.image) refs.push(q.background.image);
     for (const o of q.options) if (o.media) refs.push(o.media);
     if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
+    // Shown only while the celebration is on. A saved-but-disabled picture stays
+    // out of the play/export load, same as a disabled question background.
+    if (q.celebration?.enabled && q.celebration.image) refs.push(q.celebration.image);
     refs.push(...cueImages(q.cues));
   }
   const seen = new Set<string>();
@@ -57,6 +60,8 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
     // Kept whatever the kind, so flipping a question away from Reveal and
     // back doesn't lose its cover to the garbage collector.
     if (q.reveal?.cover) refs.push(q.reveal.cover);
+    // Kept while the switch is off, so turning it back on still has the picture.
+    if (q.celebration?.image) refs.push(q.celebration.image);
   }
   refs.push(...quizCueRefs(quiz));
   if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
@@ -87,6 +92,8 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
       cues: mapCueSet(q.cues, swap),
       // Only questions that have reveal settings get the key — older quizzes come back byte-identical.
       ...(q.reveal ? { reveal: { ...q.reveal, cover: swap(q.reveal.cover) } } : {}),
+      // Only questions that have a celebration get the key — older quizzes come back byte-identical.
+      ...(q.celebration ? { celebration: { ...q.celebration, image: swap(q.celebration.image) } } : {}),
     })),
   };
 }

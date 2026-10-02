@@ -33,6 +33,7 @@ interface Props {
   /** Stage clock (lib/stageMotion inputs): ms since the question mounted / started leaving. */
   sinceMount?: number;
   sinceExit?: number | null;
+  onRevealComplete?: () => void;
 }
 
 /**
@@ -92,6 +93,7 @@ export function AnswerGrid({
   motion,
   sinceMount = Infinity,
   sinceExit = null,
+  onRevealComplete,
 }: Props) {
   const reduced = useReducedMotion();
   const ageBand = themeAgeBand(theme);
@@ -165,7 +167,8 @@ export function AnswerGrid({
                       theme={theme}
                       revealKey="reveal"
                       maxHeight="100%"
-                      instant={mode === "preview" || reduced}
+                      instant={reduced}
+                      onRevealComplete={onRevealComplete}
                       captionClass={null}
                       fill
                       radius={REVEAL_TILE.radius}
@@ -199,7 +202,7 @@ export function AnswerGrid({
         <RevealCaption
           settings={settings}
           revealKey={revealed ? `${question.id}:reveal` : null}
-          instant={mode === "preview" || reduced}
+          instant={reduced}
           className={`mt-2 text-center font-bold ${captionText}`}
         />
       </div>

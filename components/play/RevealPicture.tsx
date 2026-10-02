@@ -27,6 +27,8 @@ interface Props {
   radius?: number;
   /** How pictures sit in the box; answer tiles use REVEAL_TILE (contain on white). Pass a stable object. */
   fit?: RevealFit;
+  /** Fires after the answer picture has finished uncovering. */
+  onRevealComplete?: () => void;
 }
 
 /** How long a reveal waits for its pictures to decode before going ahead without them. */
@@ -77,6 +79,7 @@ export function RevealPicture({
   fill = false,
   radius = 16,
   fit,
+  onRevealComplete,
 }: Props) {
   const reveal = question.reveal;
   const settings = useMemo(() => resolveReveal({ reveal }), [reveal]);
@@ -154,6 +157,16 @@ export function RevealPicture({
   }, [size, settings, progress, image, cover, theme.accent, radius, fit, ready]);
 
   const shown = progress >= 1;
+  const completedKey = useRef<string | null>(null);
+  const completionRef = useRef(onRevealComplete);
+  useEffect(() => {
+    completionRef.current = onRevealComplete;
+  }, [onRevealComplete]);
+  useEffect(() => {
+    if (!ready || !shown || revealKey === null || completedKey.current === revealKey) return;
+    completedKey.current = revealKey;
+    completionRef.current?.();
+  }, [ready, shown, revealKey]);
 
   if (fill) {
     return (

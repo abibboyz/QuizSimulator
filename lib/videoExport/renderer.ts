@@ -69,7 +69,16 @@ import {
 import { sceneAt, type CueInstance, type QuestionRun, type Timeline } from "@/lib/videoExport/timeline";
 import { answerPoseAt, questionPoseAt, typewriterChars, type Pose } from "@/lib/stageMotion";
 import { captionPose, resolveReveal, revealAnswerMedia, revealFallbackColor, revealProgress } from "@/lib/reveal";
+import {
+  CELEBRATION_FOLLOW_MS,
+  celebrationAnimation,
+  celebrationDelayMs,
+  celebrationMotionMs,
+  celebrationView,
+  type CelebrationView,
+} from "@/lib/celebration";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
+import { frameSource } from "@/lib/videoExport/animatedImage";
 
 /* ---------------------------------------------------------------- framing */
 
@@ -91,6 +100,11 @@ export interface LoadedImage {
   source: CanvasImageSource;
   width: number;
   height: number;
+  /**
+   * Set for an animated GIF, APNG, or animated WebP. Each entry is one full
+   * frame. `durationUs` is how long that frame stays up, in microseconds.
+   */
+  frames?: { source: CanvasImageSource; durationUs: number }[];
 }
 
 export interface FontSet {
@@ -161,6 +175,8 @@ export class FrameRenderer {
   private readonly metricCache = new Map<string, { ascent: number; descent: number }>();
   private readonly dots: { x: number; y: number; vx: number; vy: number; r: number; depth: number }[] = [];
   private readonly reachedSteps: { at: number; value: number }[] = [];
+  /** Timeline time of the frame being drawn, in milliseconds. Animated pictures read it. */
+  private t = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -206,6 +222,7 @@ export class FrameRenderer {
 
   render(t: number) {
     const { ctx } = this;
+    this.t = t;
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
@@ -217,6 +234,8 @@ export class FrameRenderer {
     if (scene.kind === "intro") this.drawIntro();
     else if (scene.kind === "results") this.drawResults(t);
     else this.drawStage(scene.index, scene.shown, scene.motion, scene.progress, t);
+
+    this.drawCelebration(t);
 
     for (const cue of this.timeline.cues) {
       if (t >= cue.start && t < cue.end) this.drawCue(cue, t - cue.start);
@@ -249,7 +268,7 @@ export class FrameRenderer {
         const startX = ((W / 2 - bg.width / 2) % bg.width) - bg.width;
         const startY = ((H / 2 - bg.height / 2) % bg.height) - bg.height;
         for (let y = startY; y < H; y += bg.height) {
-          for (let x = startX; x < W; x += bg.width) ctx.drawImage(bg.source, x, y, bg.width, bg.height);
+          for (let x = startX; x < W; x += bg.width) ctx.drawImage(frameSource(bg, t), x, y, bg.width, bg.height);
         }
       } else if (theme.bgImageFit === "contain") {
         this.drawContain(bg, 0, 0, W, H);
@@ -529,7 +548,7 @@ export class FrameRenderer {
     const showsButton =
       (revealedNow && this.quiz.settings.revealAfterEach) || (!revealedNow && current.question.kind === "multi-select");
     const buttonRow = 32 + (showsButton ? 48 : 0);
-    const barShown = current.timeoutBar && revealedNow;
+    const barShown = current.timeoutBar && t >= current.revealAt + celebrationDelayMs(current.question);
     const bottom = barShown ? 42 : 32;
 
     const qpH = progressBox ? progressBox.h + 20 : 0;
@@ -564,7 +583,7 @@ export class FrameRenderer {
   private drawTimeoutBar(run: QuestionRun, t: number, x0: number, y: number, CW: number) {
     const { ctx } = this;
     const total = Math.max(1, run.holdSeconds);
-    const since = t - run.revealAt;
+    const since = t - run.revealAt - celebrationDelayMs(run.question);
     const left = Math.max(0, total - Math.floor(since / 1000));
     const isLast = run.index + 1 >= this.timeline.questions.length;
     const w = Math.min(320, CW);
@@ -1656,6 +1675,114 @@ export class FrameRenderer {
     };
   }
 
+  /**
+   * The correct-answer card, centred on the frame once the answer is out.
+   * Questions that leave the celebration off draw nothing here. The card pops
+   * in, then the chosen motion plays; confetti is scheduled on the timeline.
+   */
+  private drawCelebration(t: number) {
+    if (!this.quiz.settings.revealAfterEach) return;
+    const scene = sceneAt(this.timeline, t);
+    if (scene.kind !== "stage") return;
+    const run = this.timeline.questions[scene.index];
+    if (!run || t < run.revealAt || t >= run.exitAt) return;
+    const view = celebrationView(run.question);
+    if (!view) return;
+
+    const { ctx, W, H } = this;
+    ctx.save();
+    const since = t - run.revealAt - celebrationDelayMs(run.question);
+    if (since < 0) {
+      ctx.restore();
+      return;
+    }
+    const p = popEase(clamp01(since / POP_IN.durationMs));
+    const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
+    if (hasBody) {
+      this.withTransform(W / 2, H / 2, lerp(0.97, 1, p), 0, p, () => this.drawCelebrationCard(view, since));
+    }
+
+    const animation = celebrationAnimation(run.question);
+    if (animation === "stars" || animation === "pulse-ring" || animation === "stamp") {
+      const hold = celebrationMotionMs(animation);
+      const local = since - CELEBRATION_FOLLOW_MS;
+      if (local >= 0 && local < hold) {
+        if (animation === "stars") this.drawStars(hold, local);
+        else if (animation === "pulse-ring") this.drawPulseRing(hold, local);
+        else this.drawStamp(hold, local);
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawCelebrationCard(view: CelebrationView, at: number) {
+    const { ctx, W, H } = this;
+    // Match the larger live card while keeping the vertical export inside its phone frame.
+    const maxW = this.narrow ? Math.min(W * 0.82, 352) : Math.min(W * 0.4, 512);
+    const pad = this.narrow ? 20 : 24;
+    const pictures = view.images.flatMap((item) => {
+      const img = this.image(item.media);
+      return img ? [{ ...item, img }] : [];
+    });
+    const face = promptHasEmoji(view.text) ? promptFontStack(this.quizFont) : this.quizFont;
+
+    if (pictures.length) {
+      const gap = 12;
+      const cellW = Math.min(this.narrow ? 300 : 384, (maxW - pad * 2 - gap * (pictures.length - 1)) / pictures.length);
+      const cellH = Math.min(H * 0.35, this.narrow ? 256 : 288);
+      const cardW = Math.min(maxW, pad * 2 + pictures.length * cellW + gap * (pictures.length - 1));
+      const cardH = pad + cellH + pad;
+      const x = (W - cardW) / 2;
+      const y = (H - cardH) / 2;
+      this.paintCelebrationCard(x, y, cardW, cardH);
+      this.strokeRR(x + 0.5, y + 0.5, cardW - 1, cardH - 1, 15.5, this.ink[600], 1);
+      const rowW = pictures.length * cellW + gap * (pictures.length - 1);
+      let cx = x + (cardW - rowW) / 2;
+      const cy = y + pad;
+      for (const item of pictures) {
+        ctx.save();
+        this.rr(cx, cy, cellW, cellH, 12);
+        ctx.clip();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(cx, cy, cellW, cellH);
+        this.drawContain(item.img, cx, cy, cellW, cellH, at);
+        ctx.restore();
+        cx += cellW + gap;
+      }
+      return;
+    }
+
+    if (!view.lines.some((line) => line.trim())) return;
+
+    const font = this.font(800, this.md ? 30 : 24, face);
+    const lines = view.lines.flatMap((line) => this.wrap(line, font, maxW - pad * 2));
+    const lineH = this.md ? 38 : 32;
+    ctx.save();
+    ctx.font = font;
+    const textW = Math.max(72, ...lines.map((line) => ctx.measureText(line).width), 0);
+    ctx.restore();
+    const cardW = Math.min(maxW, textW + pad * 2);
+    const cardH = pad + Math.max(1, lines.length) * lineH + pad;
+    const x = (W - cardW) / 2;
+    const y = (H - cardH) / 2;
+    this.paintCelebrationCard(x, y, cardW, cardH);
+    this.strokeRR(x + 0.5, y + 0.5, cardW - 1, cardH - 1, 15.5, this.ink[600], 1);
+    lines.forEach((line, i) =>
+      this.drawLine(line, W / 2, y + pad + i * lineH, lineH, font, this.ink[100], "center"),
+    );
+  }
+
+  /** Solid rounded card with a soft drop shadow, and no full-frame wash behind it. */
+  private paintCelebrationCard(x: number, y: number, w: number, h: number) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.shadowColor = "rgb(0 0 0 / 0.45)";
+    ctx.shadowBlur = 28 * this.scale;
+    ctx.shadowOffsetY = 14 * this.scale;
+    this.fillRR(x, y, w, h, 16, this.ink[900]);
+    ctx.restore();
+  }
+
   /* ================================================================== cues */
 
   private drawCue(instance: CueInstance, local: number) {
@@ -1805,7 +1932,7 @@ export class FrameRenderer {
       ctx.save();
       this.rr(x, y, w, h, 24);
       ctx.clip();
-      ctx.drawImage(img.source, x, y, w, h);
+      ctx.drawImage(frameSource(img, local), x, y, w, h);
       ctx.restore();
     });
   }
@@ -2027,18 +2154,18 @@ export class FrameRenderer {
     return this.assets.images.get(mediaKey(ref)) ?? null;
   }
 
-  private drawContain(img: LoadedImage, x: number, y: number, w: number, h: number) {
+  private drawContain(img: LoadedImage, x: number, y: number, w: number, h: number, at = this.t) {
     const k = Math.min(w / img.width, h / img.height);
     const dw = img.width * k;
     const dh = img.height * k;
-    this.ctx.drawImage(img.source, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    this.ctx.drawImage(frameSource(img, at), x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
   }
 
-  private drawCover(img: LoadedImage, x: number, y: number, w: number, h: number) {
+  private drawCover(img: LoadedImage, x: number, y: number, w: number, h: number, at = this.t) {
     const k = Math.max(w / img.width, h / img.height);
     const sw = w / k;
     const sh = h / k;
-    this.ctx.drawImage(img.source, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, w, h);
+    this.ctx.drawImage(frameSource(img, at), (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, w, h);
   }
 
   /** An image laid out like the stage's <img>: natural size, shrunk to fit the width and max-height. */
@@ -2059,7 +2186,7 @@ export class FrameRenderer {
         ctx.save();
         this.rr(x, y, w, h, radius);
         ctx.clip();
-        if (img) ctx.drawImage(img.source, x, y, w, h);
+        if (img) ctx.drawImage(frameSource(img, this.t), x, y, w, h);
         else {
           ctx.fillStyle = this.ink[800];
           ctx.fillRect(x, y, w, h);
