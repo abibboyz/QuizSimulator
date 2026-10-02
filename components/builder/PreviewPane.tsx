@@ -21,6 +21,7 @@ interface Props {
  */
 export function PreviewPane({ quiz, question, index, onChange }: Props) {
   const [revealed, setRevealed] = useState(false);
+  const [completedRevealQuestion, setCompletedRevealQuestion] = useState<string | null>(null);
   const theme = questionTheme(quiz.theme, question);
   const preset = getPreset(theme.preset);
 
@@ -30,7 +31,10 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">Live preview</span>
         <button
           type="button"
-          onClick={() => setRevealed((value) => !value)}
+          onClick={() => {
+            setCompletedRevealQuestion(null);
+            setRevealed((value) => !value);
+          }}
           className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
         >
           {revealed ? "Hide answer" : "Show answer"}
@@ -59,6 +63,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             total={quiz.questions.length}
             selected={[]}
             revealed={revealed}
+            onRevealComplete={() => setCompletedRevealQuestion(question.id)}
             interactive={false}
             onPick={() => {}}
             mode="preview"
@@ -66,7 +71,9 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
           />
         </div>
-        {revealed && <CelebrationCard question={question} mode="preview" />}
+        {revealed && (question.kind !== "reveal" || completedRevealQuestion === question.id) && (
+          <CelebrationCard question={question} mode="preview" />
+        )}
       </div>
     </div>
   );

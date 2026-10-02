@@ -23,6 +23,8 @@ import type { StageMode } from "@/components/play/AnswerGrid";
  *
  * The frame only centres the card. It has no wash, so the stage stays visible
  * around a small card. Preview stays inside the preview frame (`absolute`).
+ * Mobile play is centred on the visible phone frame, even if the question
+ * content makes its column taller than the viewport.
  * The overlay ignores pointers, so Next / Reveal keep working underneath.
  */
 export function CelebrationCard({
@@ -44,21 +46,27 @@ export function CelebrationCard({
   const lines = view.images.length > 0 ? [] : view.lines.filter((line) => line.trim());
   const showCard = view.images.length > 0 || lines.length > 0;
   const frame = contained
-    ? "absolute inset-0 z-30 overflow-hidden lg:rounded-[2rem]"
+    ? "fixed inset-y-0 left-1/2 z-30 w-full max-w-[26rem] -translate-x-1/2 overflow-hidden lg:rounded-[2rem]"
     : mode === "preview"
       ? "absolute inset-0 z-20 overflow-hidden"
       : "fixed inset-0 z-30";
   const picture =
     mode === "preview"
-      ? "max-h-16 max-w-[7rem]"
+      ? "max-h-32 max-w-[14rem]"
       : view.images.length > 1
-        ? "max-h-24 max-w-[6.5rem]"
-        : "max-h-32 max-w-[12rem]";
-  const answer = mode === "preview" ? "text-xs" : "text-lg";
+        ? contained
+          ? "max-h-40 max-w-[9rem]"
+          : "max-h-48 max-w-[13rem]"
+        : contained
+          ? "max-h-[min(16rem,40dvh)] max-w-[20rem]"
+          : "max-h-[min(20rem,50dvh)] max-w-[24rem]";
+  const answer = mode === "preview" ? "text-base" : contained ? "text-2xl" : "text-3xl";
   const shell =
     mode === "preview"
-      ? "max-w-[min(9.5rem,100%)] rounded-xl px-3 py-2"
-      : "max-w-[min(16rem,100%)] rounded-2xl px-4 py-3";
+      ? "max-w-[min(19rem,100%)] rounded-xl px-4 py-3"
+      : contained
+        ? "max-w-[min(22rem,100%)] rounded-2xl px-5 py-4"
+        : "max-w-[min(32rem,100%)] rounded-2xl px-6 py-5";
 
   return (
     <div

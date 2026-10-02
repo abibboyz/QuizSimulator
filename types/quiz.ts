@@ -233,9 +233,9 @@ export type CelebrationAnimation = "confetti" | "stars" | "pulse-ring" | "stamp"
  */
 export interface Celebration {
   enabled: boolean;
-  /** Picture uploaded for this card. Wins over the answer's own picture. */
+  /** Picture uploaded for this card. The answer-picture checkbox takes priority when that picture exists. */
   image?: MediaRef;
-  /** When nothing was uploaded, use the correct answer's picture if it has one. */
+  /** Use the correct answer's own picture when it has one, ahead of the uploaded card picture. */
   useAnswerImage?: boolean;
   animation?: CelebrationAnimation;
 }

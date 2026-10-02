@@ -43,7 +43,7 @@ import {
   type ResolvedMotion,
 } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
-import { celebrationAnimation, celebrationEnabled } from "@/lib/celebration";
+import { celebrationAnimation, celebrationDelayMs, celebrationEnabled } from "@/lib/celebration";
 
 /* ----------------------------------------------------------------- options */
 
@@ -311,7 +311,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       celebrationEnabled(question) &&
       celebrationAnimation(question) === "confetti"
     ) {
-      confetti.push({ at: revealAt + POP_IN.durationMs, preset: CUE_CONFETTI, seed: seed++ });
+      confetti.push({ at: revealAt + celebrationDelayMs(question) + POP_IN.durationMs, preset: CUE_CONFETTI, seed: seed++ });
     }
 
     const holdSeconds = revealHoldSeconds(settings);
@@ -325,7 +325,9 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     });
     // A player who answered would be left to click on; the video carries on
     // after the same hold the timeout path uses.
-    const advanceAt = settings.revealAfterEach ? revealAt + holdSeconds * 1000 : revealAt + REVEAL_OFF_HOLD_MS;
+    const advanceAt = settings.revealAfterEach
+      ? revealAt + celebrationDelayMs(question) + holdSeconds * 1000
+      : revealAt + REVEAL_OFF_HOLD_MS;
 
     // goNext(false): the automatic path — no stock whoosh.
     const isLast = index + 1 >= questions.length;

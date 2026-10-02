@@ -213,6 +213,8 @@ function HostQuestion({
   loopSettings,
 }: HostQuestionProps) {
   const [revealed, setRevealed] = useState(false);
+  const [revealComplete, setRevealComplete] = useState(false);
+  const celebrationReady = question.kind !== "reveal" || revealComplete;
   const [remainingMs, setRemainingMs] = useState(limitSeconds === null ? null : limitSeconds * 1000);
   const [running, setRunning] = useState(limitSeconds !== null);
 
@@ -253,10 +255,10 @@ function HostQuestion({
 
   // Hands-free run: roll on to the next question by itself.
   useEffect(() => {
-    if (!revealed || autoAdvanceSeconds === null || isLast) return;
+    if (!revealed || autoAdvanceSeconds === null || isLast || (question.celebration?.enabled && !celebrationReady)) return;
     const id = window.setTimeout(advance, autoAdvanceSeconds * 1000);
     return () => window.clearTimeout(id);
-  }, [revealed, autoAdvanceSeconds, isLast, advance]);
+  }, [revealed, autoAdvanceSeconds, isLast, advance, question.celebration?.enabled, celebrationReady]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -300,6 +302,7 @@ function HostQuestion({
           total={total}
           selected={[]}
           revealed={revealed}
+          onRevealComplete={() => setRevealComplete(true)}
           interactive={false}
           onPick={() => {}}
           mode="host"
@@ -356,10 +359,10 @@ function HostQuestion({
         )}
       </div>
 
-      {revealed && <CelebrationCard question={question} mode="host" />}
+      {revealed && celebrationReady && <CelebrationCard question={question} mode="host" />}
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
-        {revealed && autoAdvanceSeconds !== null && !isLast ? (
+        {revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
           <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
         ) : (
           <>

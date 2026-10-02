@@ -9,7 +9,7 @@
 import type { CelebrationAnimation, MediaRef, Option, Question } from "@/types/quiz";
 import { ANIMATIONS } from "./animations.ts";
 import { POP_IN } from "./playTiming.ts";
-import { revealAnswerMedia } from "./reveal.ts";
+import { resolveReveal, revealAnswerMedia } from "./reveal.ts";
 
 export const CELEBRATION_ANIMATIONS: { id: CelebrationAnimation; label: string }[] = [
   { id: "confetti", label: "Confetti burst" },
@@ -26,6 +26,11 @@ const ANIMATION_IDS = new Set<string>(CELEBRATION_ANIMATIONS.map((item) => item.
 
 export function celebrationEnabled(question: Pick<Question, "celebration"> | undefined): boolean {
   return question?.celebration?.enabled === true;
+}
+
+/** Reveal questions finish uncovering before their optional card appears. */
+export function celebrationDelayMs(question: Question): number {
+  return celebrationEnabled(question) && question.kind === "reveal" ? resolveReveal(question).durationMs : 0;
 }
 
 /** Unset or unknown falls back to confetti, including while the switch is off. */
@@ -78,14 +83,21 @@ export function celebrationView(question: Question): CelebrationView | null {
   const spoken = names.join(", ");
   const uploaded = question.celebration?.image;
 
+  // The checkbox always gives the correct answer's own picture priority over
+  // an uploaded card picture, whatever kind of question supplied that answer.
+  if (question.celebration?.useAnswerImage === true) {
+    const images = correct.flatMap((option) => {
+      const media = answerPicture(question, option);
+      return media ? [{ media }] : [];
+    });
+    if (images.length) return { images, lines: [], text: spoken };
+  }
+
   // A picture is the whole card. Words appear only when there is no picture,
   // and then only the right answer's own words — never a label.
   if (usable(uploaded)) return { images: [{ media: uploaded }], lines: [], text: spoken };
 
-  const usePicture =
-    question.kind === "image-choice" || question.kind === "reveal" || question.celebration?.useAnswerImage === true;
-
-  if (usePicture) {
+  if (question.kind === "image-choice") {
     const images: CelebrationImage[] = [];
     for (const option of correct) {
       const media = answerPicture(question, option);

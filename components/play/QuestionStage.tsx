@@ -53,6 +53,7 @@ interface Props {
    */
   motion?: ResolvedMotion;
   onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
+  onRevealComplete?: () => void;
 }
 
 const PROMPT_TEXT: Record<StageMode, string> = {
@@ -87,6 +88,7 @@ export function QuestionStage({
   theme,
   motion,
   onPositionChange,
+  onRevealComplete,
 }: Props) {
   const loops = resolveLoops(loopSettings, question);
   const placement = question.promptPlacement;
@@ -276,6 +278,7 @@ export function QuestionStage({
         motion={animated ? motion.answers : undefined}
         sinceMount={sinceMount}
         sinceExit={sinceExit}
+        onRevealComplete={onRevealComplete}
       />
 
       {revealed &&

@@ -5,6 +5,7 @@ import { buildTimeline } from "./videoExport/timeline.ts";
 import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
 import {
   celebrationAnimation,
+  celebrationDelayMs,
   celebrationEnabled,
   celebrationView,
 } from "./celebration.ts";
@@ -61,10 +62,10 @@ test("the card shows only the right answer's own words", () => {
   assert.deepEqual(celebrationView(many), { images: [], lines: ["Red", "Blue"], text: "Red, Blue" });
 });
 
-test("an uploaded picture wins over the answer picture and over the text", () => {
+test("an uploaded picture wins over the answer text when the checkbox is off", () => {
   const view = celebrationView(
     question({
-      celebration: { enabled: true, image: picture("card"), useAnswerImage: true },
+      celebration: { enabled: true, image: picture("card") },
       options: [
         { id: "a", text: "Paris", correct: true, media: picture("answer") },
         { id: "b", text: "Lyon", correct: false },
@@ -74,6 +75,20 @@ test("an uploaded picture wins over the answer picture and over the text", () =>
   assert.deepEqual(view?.images, [{ media: picture("card") }]);
   assert.deepEqual(view?.lines, []);
   assert.equal(view?.text, "Paris");
+});
+
+test("a text answer's picture wins over the uploaded card picture when checked", () => {
+  const view = celebrationView(
+    question({
+      celebration: { enabled: true, image: picture("card"), useAnswerImage: true },
+      options: [
+        { id: "a", text: "Paris", correct: true, media: picture("answer") },
+        { id: "b", text: "Lyon", correct: false },
+      ],
+    }),
+  );
+  assert.deepEqual(view?.images, [{ media: picture("answer") }]);
+  assert.deepEqual(view?.lines, []);
 });
 
 test("the answer-picture checkbox uses that picture, and falls back to text when there isn't one", () => {
@@ -107,7 +122,7 @@ test("a choice question's prompt picture is not treated as the answer", () => {
   assert.deepEqual(view?.lines, ["Paris"]);
 });
 
-test("image and reveal questions use the correct answer picture without an extra checkbox", () => {
+test("image questions use the correct answer picture without an extra checkbox", () => {
   const image = celebrationView(
     question({
       kind: "image-choice",
@@ -121,6 +136,31 @@ test("image and reveal questions use the correct answer picture without an extra
   assert.deepEqual(image?.images, [{ media: picture("cat") }]);
   assert.deepEqual(image?.lines, []);
 
+});
+
+test("Reveal repeats its uncovered picture only when selected, after the uncover finishes", () => {
+  const reveal = question({
+    kind: "reveal",
+    reveal: { animation: "tiles", durationMs: 1800 },
+    celebration: { enabled: true, image: picture("card") },
+    options: [
+      { id: "a", text: "Cat", correct: true, media: picture("cat") },
+      { id: "b", text: "Dog", correct: false },
+    ],
+  });
+  assert.deepEqual(celebrationView(reveal)?.images, [{ media: picture("card") }]);
+  assert.equal(celebrationDelayMs(reveal), 1800);
+  reveal.celebration = { ...reveal.celebration!, useAnswerImage: true };
+  assert.deepEqual(celebrationView(reveal)?.images, [{ media: picture("cat") }]);
+
+  const quiz = createQuiz("Reveal");
+  quiz.questions = [reveal];
+  const run = buildTimeline(quiz, { answerMode: "pick-correct", sound: false });
+  assert.equal(run.questions[0].advanceAt - run.questions[0].revealAt, 1800 + 5000);
+  assert.ok(run.confetti.some((cue) => cue.at - run.questions[0].revealAt === 1800 + 280));
+});
+
+test("Reveal without a card picture falls back to answer words when its checkbox is off", () => {
   const reveal = celebrationView(
     question({
       kind: "reveal",
@@ -131,8 +171,8 @@ test("image and reveal questions use the correct answer picture without an extra
       ],
     }),
   );
-  assert.deepEqual(reveal?.images, [{ media: picture("cat") }]);
-  assert.deepEqual(reveal?.lines, []);
+  assert.deepEqual(reveal?.images, []);
+  assert.deepEqual(reveal?.lines, ["Cat"]);
 });
 
 test("a text question keeps its words unless it asks to use the answer picture", () => {

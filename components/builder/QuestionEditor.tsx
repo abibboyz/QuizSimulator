@@ -372,12 +372,13 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               onChange={(image) => onChange({ ...question, celebration: { ...question.celebration!, image } })}
             />
             <p className="text-xs text-ink-500">
-              Optional. PNG, JPG, WebP, or an animated GIF. An uploaded picture is what the card shows. With no picture,{" "}
-              {question.kind === "image-choice" || question.kind === "reveal"
-                ? "the card shows the correct answer's picture, the same small card as any other question."
-                : "the card shows the correct answer text."}
+              Optional. PNG, JPG, WebP, or an animated GIF. {question.kind === "reveal"
+                ? "After the Reveal animation, the card shows this picture unless you choose to repeat the revealed answer below. Without either picture, it shows the answer text."
+                : question.kind === "image-choice"
+                  ? "This picture replaces the correct answer's picture on the card."
+                  : "The card shows this picture unless you choose the correct answer's own picture below. Without either picture, it shows the answer text."}
             </p>
-            {question.kind !== "image-choice" && question.kind !== "reveal" && (
+            {question.kind !== "image-choice" && (
               <label className="flex items-start gap-2 text-sm text-ink-200">
                 <input
                   type="checkbox"
@@ -391,9 +392,11 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                   }
                 />
                 <span>
-                  Use the correct answer&apos;s picture, if it has one
+                  {question.kind === "reveal" ? "Repeat the revealed answer picture" : "Use the correct answer's picture, if it has one"}
                   <span className="mt-0.5 block text-xs text-ink-500">
-                    Used only when you have not uploaded a picture above.
+                    {question.kind === "reveal"
+                      ? "Shown after the Reveal animation; takes priority over the uploaded card picture."
+                      : "Takes priority over the uploaded card picture when the correct answer has an image."}
                   </span>
                 </span>
               </label>

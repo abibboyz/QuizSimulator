@@ -72,6 +72,7 @@ import { captionPose, resolveReveal, revealAnswerMedia, revealFallbackColor, rev
 import {
   CELEBRATION_FOLLOW_MS,
   celebrationAnimation,
+  celebrationDelayMs,
   celebrationMotionMs,
   celebrationView,
   type CelebrationView,
@@ -547,7 +548,7 @@ export class FrameRenderer {
     const showsButton =
       (revealedNow && this.quiz.settings.revealAfterEach) || (!revealedNow && current.question.kind === "multi-select");
     const buttonRow = 32 + (showsButton ? 48 : 0);
-    const barShown = current.timeoutBar && revealedNow;
+    const barShown = current.timeoutBar && t >= current.revealAt + celebrationDelayMs(current.question);
     const bottom = barShown ? 42 : 32;
 
     const qpH = progressBox ? progressBox.h + 20 : 0;
@@ -582,7 +583,7 @@ export class FrameRenderer {
   private drawTimeoutBar(run: QuestionRun, t: number, x0: number, y: number, CW: number) {
     const { ctx } = this;
     const total = Math.max(1, run.holdSeconds);
-    const since = t - run.revealAt;
+    const since = t - run.revealAt - celebrationDelayMs(run.question);
     const left = Math.max(0, total - Math.floor(since / 1000));
     const isLast = run.index + 1 >= this.timeline.questions.length;
     const w = Math.min(320, CW);
@@ -1690,7 +1691,11 @@ export class FrameRenderer {
 
     const { ctx, W, H } = this;
     ctx.save();
-    const since = t - run.revealAt;
+    const since = t - run.revealAt - celebrationDelayMs(run.question);
+    if (since < 0) {
+      ctx.restore();
+      return;
+    }
     const p = popEase(clamp01(since / POP_IN.durationMs));
     const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
     if (hasBody) {
@@ -1712,9 +1717,9 @@ export class FrameRenderer {
 
   private drawCelebrationCard(view: CelebrationView, at: number) {
     const { ctx, W, H } = this;
-    // A small card in the middle of the frame. The stage around it stays as it is.
-    const maxW = Math.min(W * 0.62, 280);
-    const pad = 16;
+    // Match the larger live card while keeping the vertical export inside its phone frame.
+    const maxW = this.narrow ? Math.min(W * 0.82, 352) : Math.min(W * 0.4, 512);
+    const pad = this.narrow ? 20 : 24;
     const pictures = view.images.flatMap((item) => {
       const img = this.image(item.media);
       return img ? [{ ...item, img }] : [];
@@ -1722,9 +1727,9 @@ export class FrameRenderer {
     const face = promptHasEmoji(view.text) ? promptFontStack(this.quizFont) : this.quizFont;
 
     if (pictures.length) {
-      const gap = 10;
-      const cellW = Math.min(176, (maxW - pad * 2 - gap * (pictures.length - 1)) / pictures.length);
-      const cellH = Math.min(H * 0.18, 120);
+      const gap = 12;
+      const cellW = Math.min(this.narrow ? 300 : 384, (maxW - pad * 2 - gap * (pictures.length - 1)) / pictures.length);
+      const cellH = Math.min(H * 0.35, this.narrow ? 256 : 288);
       const cardW = Math.min(maxW, pad * 2 + pictures.length * cellW + gap * (pictures.length - 1));
       const cardH = pad + cellH + pad;
       const x = (W - cardW) / 2;
@@ -1749,9 +1754,9 @@ export class FrameRenderer {
 
     if (!view.lines.some((line) => line.trim())) return;
 
-    const font = this.font(800, this.md ? 22 : 18, face);
+    const font = this.font(800, this.md ? 30 : 24, face);
     const lines = view.lines.flatMap((line) => this.wrap(line, font, maxW - pad * 2));
-    const lineH = this.md ? 28 : 24;
+    const lineH = this.md ? 38 : 32;
     ctx.save();
     ctx.font = font;
     const textW = Math.max(72, ...lines.map((line) => ctx.measureText(line).width), 0);
