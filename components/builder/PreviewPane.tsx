@@ -6,6 +6,7 @@ import type { Question, Quiz } from "@/types/quiz";
 import { getPreset, themeVars } from "@/lib/themes";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { CelebrationCard } from "@/components/play/CelebrationCard";
 
 interface Props {
   quiz: Quiz;
@@ -65,6 +66,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
           />
         </div>
+        {revealed && <CelebrationCard question={question} mode="preview" />}
       </div>
     </div>
   );

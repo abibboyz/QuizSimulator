@@ -12,6 +12,7 @@ import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, pri
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
@@ -444,7 +445,7 @@ function PlayView() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <div className={`mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
+        <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
           <QuizProgress
@@ -550,6 +551,14 @@ function PlayView() {
                     : `Press 1–${question.options.length} to answer`
                   : "Press Enter for the next question"}
             </p>
+          )}
+
+          {/* Inside the phone column in mobile view, so the card and its
+              motion stay in that frame. Web view stays on the viewport.
+              Outside the question's sliding frame: a transform there would
+              pin this card to the stage instead of the middle. */}
+          {phase === "revealed" && quiz.settings.revealAfterEach && (
+            <CelebrationCard key={question.id} question={question} mode="solo" contained={mobile} />
           )}
         </div>
       )}

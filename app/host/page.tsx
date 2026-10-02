@@ -12,6 +12,7 @@ import { resolveReveal } from "@/lib/reveal";
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
@@ -354,6 +355,8 @@ function HostQuestion({
           </Button>
         )}
       </div>
+
+      {revealed && <CelebrationCard question={question} mode="host" />}
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
         {revealed && autoAdvanceSeconds !== null && !isLast ? (

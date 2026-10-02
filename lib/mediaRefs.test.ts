@@ -54,6 +54,7 @@ test("back-compat: remapping an old quiz adds no new keys (it saves back byte-id
   const out = remapMedia(oldQuiz(), new Map());
   assert.equal("reveal" in out.questions[0], false);
   assert.equal("motion" in out.questions[0], false);
+  assert.equal("celebration" in out.questions[0], false);
   assert.equal("motion" in out.settings, false);
   const remapped = remapMedia(oldQuiz(), new Map([["planet", "planet2"]]));
   assert.deepEqual(remapped.questions[0].media, ref("planet2"));
