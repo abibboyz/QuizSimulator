@@ -53,6 +53,9 @@ test("an unset prompt size and alignment stay on today's values", () => {
   assert.equal(promptFontSize({ fontSize: 30 }, 20), 20);
   assert.equal(promptFontSize({ fontSize: 60 }, 30), 60);
   assert.equal(promptFontSize({ fontSize: 60 }, 11), 22);
+  assert.equal(promptFontSize({ fontSize: 120 }, 30), 120);
+  assert.equal(promptFontSize({ fontSize: 144 }, 20), 96);
+  assert.equal(promptFontSize({ fontSize: 150 }, 30), 150);
   assert.equal(promptAlign(undefined), "center");
   assert.equal(promptAlign({ align: "left" }), "left");
 });
