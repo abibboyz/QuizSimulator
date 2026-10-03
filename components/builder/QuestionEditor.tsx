@@ -166,11 +166,20 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               style={{ fontWeight: key === 'bold' ? 700 : undefined, fontStyle: key === 'italic' ? 'italic' : undefined, textDecoration: key === 'underline' ? 'underline' : undefined }}
               onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, [key]: !active } })}>{label}</button>;
           })}
-          <Select aria-label="Prompt font size" className="w-auto" value={question.promptStyle?.fontSize ? String(question.promptStyle.fontSize) : ""}
-            onChange={(event) => onChange({ ...question, promptStyle: { ...question.promptStyle, fontSize: event.target.value ? Number(event.target.value) : undefined } })}>
+          <Select aria-label="Prompt font size" className="w-auto"
+            value={question.promptStyle?.fontSize
+              ? PROMPT_FONT_SIZES.some((size) => size === question.promptStyle?.fontSize) ? String(question.promptStyle.fontSize) : "custom"
+              : ""}
+            onChange={(event) => {
+              if (event.target.value === "custom") return;
+              onChange({ ...question, promptStyle: { ...question.promptStyle, fontSize: event.target.value ? Number(event.target.value) : undefined } });
+            }}>
             <option value="">Auto</option>
             {PROMPT_FONT_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            {question.promptStyle?.fontSize && !PROMPT_FONT_SIZES.some((size) => size === question.promptStyle?.fontSize) && <option value="custom">Custom</option>}
           </Select>
+          <PromptFontSizeInput key={`${question.id}-${question.promptStyle?.fontSize ?? "auto"}`} value={question.promptStyle?.fontSize}
+            onChange={(fontSize) => onChange({ ...question, promptStyle: { ...question.promptStyle, fontSize } })} />
           {(["left", "center", "right"] as const).map((align) => {
             const active = promptAlign(question.promptStyle) === align;
             const mark = align === "left" ? "L" : align === "right" ? "R" : "C";
@@ -504,5 +513,42 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         ))}
       </div>
     </div>
+  );
+}
+
+function PromptFontSizeInput({ value, onChange }: { value?: number; onChange: (size?: number) => void }) {
+  const [draft, setDraft] = useState(value === undefined ? "" : String(value));
+
+  const commit = () => {
+    if (draft.trim() === "") {
+      onChange(undefined);
+      return;
+    }
+    const parsed = Number(draft);
+    if (!Number.isFinite(parsed)) {
+      setDraft(value === undefined ? "" : String(value));
+      return;
+    }
+    const size = Math.min(150, Math.max(12, Math.round(parsed)));
+    setDraft(String(size));
+    onChange(size);
+  };
+
+  return (
+    <input
+      type="number"
+      min={12}
+      max={150}
+      step={1}
+      inputMode="numeric"
+      aria-label="Custom prompt font size in pixels"
+      title="Custom prompt font size, 12 to 150 pixels"
+      placeholder="Custom px"
+      className="focus-ring w-28 rounded-lg border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+    />
   );
 }

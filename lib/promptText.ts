@@ -1,7 +1,7 @@
 import { contrastRatio, readableTextOn } from "./color.ts";
 
 /** Sizes offered on the prompt. The number is the web play size, in pixels. */
-export const PROMPT_FONT_SIZES = [16, 18, 20, 24, 28, 32, 40, 48, 60, 72] as const;
+export const PROMPT_FONT_SIZES = [16, 18, 20, 24, 28, 32, 40, 48, 60, 72, 80, 96, 120, 144, 150] as const;
 
 export type PromptAlign = "left" | "center" | "right";
 
@@ -75,7 +75,7 @@ export function promptAlign(style: { align?: string } | undefined): PromptAlign 
 export function promptFontSize(style: { fontSize?: number } | undefined, base: number): number {
   const n = style?.fontSize;
   if (typeof n !== "number" || !Number.isFinite(n)) return base;
-  const chosen = Math.min(96, Math.max(12, Math.round(n)));
+  const chosen = Math.min(150, Math.max(12, Math.round(n)));
   return Math.max(8, Math.round((base * chosen) / 30));
 }
 
