@@ -340,7 +340,7 @@ function EditView() {
           )}
         </section>
 
-        <aside id="quiz-appearance-panel" className="scroll-mt-40 space-y-3">
+        <aside id="quiz-appearance-panel" className="scroll-mt-40 space-y-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto">
           <div className="flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
             {(["preview", "theme", "settings", "animate"] as Tab[]).map((id) => (
               <button

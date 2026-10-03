@@ -16,7 +16,8 @@ import { OptionList } from "@/components/builder/OptionList";
 import { CueEditor, describeCue } from "@/components/builder/CueEditor";
 import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 import { AnimationSection } from "@/components/builder/AnimationSection";
-import { PROMPT_FONT_SIZES, WORD_ART_STYLES, promptAlign, promptCharCount, promptFontSize, promptFontStack, wordArtCss, wordArtInk, wordArtStyleOf } from "@/lib/promptText";
+import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
+import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
 
 const PROMPT_EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -57,9 +58,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   const { theme } = quiz;
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const emojiPanel = useRef<HTMLDivElement>(null);
-  const wordArtPanel = useRef<HTMLDivElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [wordArtOpen, setWordArtOpen] = useState(false);
+  const [promptDesignOpen, setPromptDesignOpen] = useState(false);
   const [emojiPasteKey, setEmojiPasteKey] = useState(0);
 
   const insertEmoji = (emoji: string) => {
@@ -79,15 +79,14 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   };
 
   useEffect(() => {
-    if (!emojiOpen && !wordArtOpen) return;
+    if (!emojiOpen) return;
     const close = (event: PointerEvent) => {
       const target = event.target as Node;
       if (emojiOpen && !emojiPanel.current?.contains(target)) setEmojiOpen(false);
-      if (wordArtOpen && !wordArtPanel.current?.contains(target)) setWordArtOpen(false);
     };
     window.addEventListener("pointerdown", close);
     return () => window.removeEventListener("pointerdown", close);
-  }, [emojiOpen, wordArtOpen]);
+  }, [emojiOpen]);
   const setTheme = (patch: Partial<Theme>) => onChangeTheme({ ...theme, ...patch });
   const ageBand = themeAgeBand(theme);
   const tileColors = optionPalette(ageBand).map((style) => style.bg);
@@ -166,19 +165,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               style={{ fontWeight: key === 'bold' ? 700 : undefined, fontStyle: key === 'italic' ? 'italic' : undefined, textDecoration: key === 'underline' ? 'underline' : undefined }}
               onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, [key]: !active } })}>{label}</button>;
           })}
-          <Select aria-label="Prompt font size" className="w-auto"
-            value={question.promptStyle?.fontSize
-              ? PROMPT_FONT_SIZES.some((size) => size === question.promptStyle?.fontSize) ? String(question.promptStyle.fontSize) : "custom"
-              : ""}
-            onChange={(event) => {
-              if (event.target.value === "custom") return;
-              onChange({ ...question, promptStyle: { ...question.promptStyle, fontSize: event.target.value ? Number(event.target.value) : undefined } });
-            }}>
-            <option value="">Auto</option>
-            {PROMPT_FONT_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            {question.promptStyle?.fontSize && !PROMPT_FONT_SIZES.some((size) => size === question.promptStyle?.fontSize) && <option value="custom">Custom</option>}
-          </Select>
-          <PromptFontSizeInput key={`${question.id}-${question.promptStyle?.fontSize ?? "auto"}`} value={question.promptStyle?.fontSize}
+          <PromptFontSizeInput key={`${question.id}-${question.promptStyle?.fontSize ?? 24}`} value={question.promptStyle?.fontSize ?? 24}
             onChange={(fontSize) => onChange({ ...question, promptStyle: { ...question.promptStyle, fontSize } })} />
           {(["left", "center", "right"] as const).map((align) => {
             const active = promptAlign(question.promptStyle) === align;
@@ -187,40 +174,10 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               className={`focus-ring rounded-lg border px-3 py-1.5 text-sm text-ink-100 ${active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
               onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, align: align === "center" ? undefined : align } })}>{mark}</button>;
           })}
-          <div className="relative" ref={wordArtPanel}>
-            <button type="button" aria-label="Word art" aria-expanded={wordArtOpen} aria-pressed={!!wordArtStyleOf(question.promptStyle?.wordArt)}
-              className={`focus-ring rounded-lg border px-3 py-1.5 text-sm font-semibold text-ink-100 ${wordArtStyleOf(question.promptStyle?.wordArt) || wordArtOpen ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
-              onClick={() => { setWordArtOpen((open) => !open); setEmojiOpen(false); }}>WA</button>
-            {wordArtOpen && (
-              <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-ink-700 bg-ink-900 p-2 text-ink-100 shadow-xl">
-                <p className="mb-2 text-[10px] leading-snug text-ink-400">Pick a style. Each sample is shown on this theme so it stays readable.</p>
-                <div className="grid grid-cols-3 gap-1">
-                  <button type="button" aria-pressed={!wordArtStyleOf(question.promptStyle?.wordArt)}
-                    className={`focus-ring rounded-lg border p-1 text-ink-100 ${!wordArtStyleOf(question.promptStyle?.wordArt) ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
-                    onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, wordArt: undefined } })}>
-                    <span className="grid h-10 place-items-center rounded-md text-sm font-semibold" style={{ background: theme.surface, color: "var(--prompt-color, var(--color-ink-100))" }}>Aa</span>
-                    <span className="mt-1 block text-[10px] text-ink-100">Off</span>
-                  </button>
-                  {WORD_ART_STYLES.map((style) => {
-                    const paint = wordArtInk(theme.accent, theme.surface, style.id);
-                    const selected = wordArtStyleOf(question.promptStyle?.wordArt) === style.id;
-                    return (
-                      <button key={style.id} type="button" aria-label={`${style.label} word art`} aria-pressed={selected}
-                        className={`focus-ring rounded-lg border p-1 text-ink-100 ${selected ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
-                        onClick={() => onChange({ ...question, promptStyle: { ...question.promptStyle, wordArt: style.id } })}>
-                        <span className="grid h-10 place-items-center rounded-md text-xl font-black" style={{ background: theme.surface, color: paint.fill, textShadow: wordArtCss(paint, 22) }}>Aa</span>
-                        <span className="mt-1 block text-[10px] text-ink-100">{style.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
           <div className="relative" ref={emojiPanel}>
             <button type="button" aria-label="Insert emoji" aria-expanded={emojiOpen} aria-pressed={emojiOpen}
               className={`focus-ring rounded-lg border px-3 py-1.5 text-sm text-ink-100 ${emojiOpen ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
-              onClick={() => { setEmojiOpen((open) => !open); setWordArtOpen(false); }}>😀</button>
+              onClick={() => setEmojiOpen((open) => !open)}>😀</button>
             {emojiOpen && (
               <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-ink-700 bg-ink-900 p-2 shadow-xl">
                 <p className="mb-2 text-[10px] leading-snug text-ink-400">Pick one, or paste any emoji. It grows with the prompt size.</p>
@@ -239,12 +196,16 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               </div>
             )}
           </div>
+          <button type="button" aria-expanded={promptDesignOpen}
+            className={`focus-ring rounded-lg border px-3 py-1.5 text-sm font-semibold text-ink-100 ${promptDesignOpen ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
+            onClick={() => setPromptDesignOpen((open) => !open)}>✦ Prompt design</button>
           <Select aria-label="Question font" className="w-auto" value={question.promptStyle?.font ?? ""}
             onChange={(event) => onChange({ ...question, promptStyle: { ...question.promptStyle, font: (event.target.value || undefined) as FontChoice | undefined } })}>
             <option value="">Use global font</option>
             {FONT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.choices.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}</optgroup>)}
           </Select>
         </div>
+        {promptDesignOpen && <div className="mb-3"><PromptDesignPanel question={question} theme={theme} onChange={onChange} /></div>}
         {question.promptStyle?.font === "custom" && <Input className="mb-2" aria-label="Custom question font name" placeholder="Installed font name (fallback if unavailable)"
           value={question.promptStyle.customFont ?? ""} onChange={(event) => onChange({ ...question, promptStyle: { ...question.promptStyle, customFont: event.target.value } })} />}
         <Textarea
@@ -254,8 +215,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             fontStyle: question.promptStyle?.italic ? "italic" : "normal",
             textDecoration: question.promptStyle?.underline ? "underline" : "none",
             fontFamily: promptFontStack(question.promptStyle?.font ? fontFamily(question.promptStyle.font, question.promptStyle.customFont) : fontFamily(theme.font, theme.customFont)),
-            fontSize: question.promptStyle?.fontSize ? promptFontSize(question.promptStyle, 16) : undefined,
-            lineHeight: question.promptStyle?.fontSize ? 1.375 : undefined,
+            fontSize: promptFontSize(question.promptStyle, 16),
+            lineHeight: 1.375,
           }}
           value={question.prompt}
           onChange={(event) => onChange({ ...question, prompt: event.target.value })}
@@ -516,17 +477,14 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   );
 }
 
-function PromptFontSizeInput({ value, onChange }: { value?: number; onChange: (size?: number) => void }) {
-  const [draft, setDraft] = useState(value === undefined ? "" : String(value));
+function PromptFontSizeInput({ value, onChange }: { value: number; onChange: (size: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
 
   const commit = () => {
-    if (draft.trim() === "") {
-      onChange(undefined);
-      return;
-    }
+    if (draft.trim() === "") { setDraft(String(value)); return; }
     const parsed = Number(draft);
     if (!Number.isFinite(parsed)) {
-      setDraft(value === undefined ? "" : String(value));
+      setDraft(String(value));
       return;
     }
     const size = Math.min(150, Math.max(12, Math.round(parsed)));
@@ -541,10 +499,9 @@ function PromptFontSizeInput({ value, onChange }: { value?: number; onChange: (s
       max={150}
       step={1}
       inputMode="numeric"
-      aria-label="Custom prompt font size in pixels"
-      title="Custom prompt font size, 12 to 150 pixels"
-      placeholder="Custom px"
-      className="focus-ring w-28 rounded-lg border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100"
+      aria-label="Prompt font size in pixels"
+      title="Prompt font size, 12 to 150 pixels"
+      className="focus-ring w-20 rounded-lg border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}

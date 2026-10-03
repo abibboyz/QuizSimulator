@@ -48,8 +48,8 @@ test("prompt lines keep spaces and treat Enter as its own character", () => {
   assert.deepEqual(emoji.map((line) => line.text), ["a", "😀"]);
 });
 
-test("an unset prompt size and alignment stay on today's values", () => {
-  assert.equal(promptFontSize(undefined, 30), 30);
+test("an unset prompt uses 24px on web play and keeps centered alignment", () => {
+  assert.equal(promptFontSize(undefined, 30), 24);
   assert.equal(promptFontSize({ fontSize: 30 }, 20), 20);
   assert.equal(promptFontSize({ fontSize: 60 }, 30), 60);
   assert.equal(promptFontSize({ fontSize: 60 }, 11), 22);

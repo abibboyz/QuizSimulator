@@ -1,7 +1,6 @@
 import { contrastRatio, readableTextOn } from "./color.ts";
 
 /** Sizes offered on the prompt. The number is the web play size, in pixels. */
-export const PROMPT_FONT_SIZES = [16, 18, 20, 24, 28, 32, 40, 48, 60, 72, 80, 96, 120, 144, 150] as const;
 
 export type PromptAlign = "left" | "center" | "right";
 
@@ -68,14 +67,13 @@ export function promptAlign(style: { align?: string } | undefined): PromptAlign 
 }
 
 /**
- * Pixel size for one surface. `base` is the size that surface already uses
- * when the author hasn't picked one, so leaving the control alone changes nothing.
- * 30 is the web play size the other surfaces scale from.
+ * Pixel size for one surface. The editable default is 24px on web play;
+ * other surfaces scale from the 30px web play reference.
  */
 export function promptFontSize(style: { fontSize?: number } | undefined, base: number): number {
   const n = style?.fontSize;
-  if (typeof n !== "number" || !Number.isFinite(n)) return base;
-  const chosen = Math.min(150, Math.max(12, Math.round(n)));
+  const chosen = typeof n === "number" && Number.isFinite(n)
+    ? Math.min(150, Math.max(12, Math.round(n))) : 24;
   return Math.max(8, Math.round((base * chosen) / 30));
 }
 

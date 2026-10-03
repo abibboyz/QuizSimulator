@@ -21,6 +21,7 @@ interface Props {
  */
 export function PreviewPane({ quiz, question, index, onChange }: Props) {
   const [revealed, setRevealed] = useState(false);
+  const [promptReplay, setPromptReplay] = useState(0);
   const [completedRevealQuestion, setCompletedRevealQuestion] = useState<string | null>(null);
   const theme = questionTheme(quiz.theme, question);
   const preset = getPreset(theme.preset);
@@ -29,6 +30,9 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">Live preview</span>
+        <div className="flex items-center gap-2">
+        {question.promptStyle?.textAnimation && <button type="button" onClick={() => setPromptReplay((value) => value + 1)}
+          className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800">Replay prompt</button>}
         <button
           type="button"
           onClick={() => {
@@ -39,6 +43,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
         >
           {revealed ? "Hide answer" : "Show answer"}
         </button>
+        </div>
       </div>
 
       <div
@@ -67,6 +72,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             interactive={false}
             onPick={() => {}}
             mode="preview"
+            promptReplay={promptReplay}
             theme={theme}
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
           />

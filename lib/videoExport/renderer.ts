@@ -34,6 +34,7 @@ import {
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
 import { questionTheme, promptPosition } from "@/lib/questionPresentation";
+import { promptAnimationElapsed, promptParagraphLines, promptPathPose, promptSegments, promptSegmentPose, promptSegmentProgress } from "@/lib/promptDesign";
 import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
@@ -747,7 +748,7 @@ export class FrameRenderer {
 
     const placement = q.promptPlacement;
     const normalPrompt = placement?.mode !== "bottom" && !overlay;
-    const promptBox = this.promptBox(run, sinceMount, CW);
+    const promptBox = this.styledPromptBox(run, sinceMount, CW);
     if (!overlay && !imageLeads && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
       parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW)));
@@ -757,7 +758,7 @@ export class FrameRenderer {
 
     if (overlay && placement) {
       const bg = q.media ? this.image(q.media) : null;
-      const text = posed(this.promptBox(run, sinceMount, CW * 0.8));
+      const text = posed(this.styledPromptBox(run, sinceMount, CW * 0.8));
       const height = CW * 9 / 16;
       parts.push({ w: CW, h: height, draw: (x, y) => {
         this.ctx.save();
@@ -797,18 +798,91 @@ export class FrameRenderer {
     return this.stack(parts, gap, CW);
   }
 
+  private styledPromptBox(run: QuestionRun, sinceMount: number, width: number): Box {
+    const frame = run.question.promptStyle?.box;
+    if (!frame || frame.shape === "none") return this.promptBox(run, sinceMount, width);
+    const pad = frame.padding ?? 16;
+    const diameter = frame.shape === "circle" ? Math.min(width, Math.max(120, promptFontSize(run.question.promptStyle, this.md ? 30 : 20) * 3)) : width;
+    const text = this.promptBox(run, sinceMount, diameter - pad * 2);
+    const height = frame.shape === "circle" ? Math.max(diameter, text.h + pad * 2) : text.h + pad * 2;
+    return { w: width, h: height, draw: (x, y) => {
+      const { ctx } = this;
+      const left = x + (width - diameter) / 2;
+      ctx.save();
+      ctx.beginPath();
+      if (frame.shape === "circle") ctx.arc(left + diameter / 2, y + height / 2, diameter / 2, 0, Math.PI * 2);
+      else if (frame.shape === "banner") {
+        const notch = Math.min(24, diameter * 0.06);
+        ctx.moveTo(left + notch, y); ctx.lineTo(left + diameter - notch, y); ctx.lineTo(left + diameter, y + height / 2);
+        ctx.lineTo(left + diameter - notch, y + height); ctx.lineTo(left + notch, y + height); ctx.lineTo(left, y + height / 2); ctx.closePath();
+      } else if (ctx.roundRect) ctx.roundRect(left, y, diameter, height, frame.shape === "pill" ? height / 2 : frame.shape === "card" ? 16 : frame.shape === "rectangle" ? 0 : 8);
+      else ctx.rect(left, y, diameter, height);
+      if (frame.backgroundStyle === "image" && frame.image) {
+        const image = this.image(frame.image);
+        if (image) {
+          ctx.save(); ctx.clip(); this.drawCover(image, left, y, diameter, height); ctx.restore();
+        }
+      }
+      if (frame.backgroundStyle === "gradient") {
+        const radians = (frame.gradientAngle ?? 135) * Math.PI / 180;
+        const dx = Math.sin(radians) * diameter / 2;
+        const dy = -Math.cos(radians) * height / 2;
+        const gradient = ctx.createLinearGradient(left + diameter / 2 - dx, y + height / 2 - dy, left + diameter / 2 + dx, y + height / 2 + dy);
+        gradient.addColorStop(0, withAlpha(frame.fill ?? this.surface, frame.opacity ?? 0.85));
+        gradient.addColorStop(1, withAlpha(frame.gradientTo ?? this.accent, frame.opacity ?? 0.85));
+        ctx.fillStyle = gradient;
+      } else ctx.fillStyle = withAlpha(frame.fill ?? this.surface, frame.opacity ?? 0.85);
+      if (frame.shadow) { ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 12; }
+      ctx.fill();
+      ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      if (frame.backgroundStyle === "texture") {
+        ctx.save(); ctx.clip(); ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 2;
+        for (let offset = -height; offset < diameter + height; offset += 7) {
+          ctx.beginPath(); ctx.moveTo(left + offset, y); ctx.lineTo(left + offset + height, y + height); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.strokeStyle = frame.border ?? withAlpha(this.accent, 0.7); ctx.lineWidth = frame.borderWidth ?? 2;
+      ctx.setLineDash(frame.borderStyle === "dashed" ? [10, 6] : frame.borderStyle === "dotted" ? [2, 5] : []);
+      if (ctx.lineWidth > 0) ctx.stroke();
+      ctx.setLineDash([]);
+      if (frame.shape === "speech") {
+        ctx.beginPath(); ctx.moveTo(left + diameter * 0.22, y + height); ctx.lineTo(left + diameter * 0.27, y + height + 12); ctx.lineTo(left + diameter * 0.34, y + height); ctx.closePath();
+        ctx.fill();
+        ctx.setLineDash(frame.borderStyle === "dashed" ? [10, 6] : frame.borderStyle === "dotted" ? [2, 5] : []);
+        if (ctx.lineWidth > 0) ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      text.draw(left + pad, y + (height - text.h) / 2);
+      ctx.restore();
+    } };
+  }
+
+  private promptPaint(finish: NonNullable<NonNullable<QuestionRun["question"]["promptStyle"]>["fillEffect"]> | undefined): string | CanvasGradient {
+    if (!finish || finish === "solid") return this.promptColor;
+    const gradient = this.ctx.createLinearGradient(0, 0, this.W, finish === "gradient" ? 0 : this.H * 0.3);
+    if (finish === "metallic") {
+      gradient.addColorStop(0, "#fff7c2"); gradient.addColorStop(0.45, "#eab308"); gradient.addColorStop(0.53, "#78350f"); gradient.addColorStop(1, "#fef08a");
+    } else if (finish === "chalk") {
+      gradient.addColorStop(0, "#ffffff"); gradient.addColorStop(0.5, "#cbd5e1"); gradient.addColorStop(1, "#ffffff");
+    } else {
+      gradient.addColorStop(0, this.accent); gradient.addColorStop(0.5, "#ffffff"); gradient.addColorStop(1, this.accent);
+    }
+    return gradient;
+  }
+
   /** The prompt, typed out character by character for the `typewriter` entrance. */
   private promptBox(run: QuestionRun, sinceMount: number, CW: number): Box {
     const { md } = this;
     const q = run.question;
     const baseSize = md ? 30 : 20;
     const baseLh = md ? 41.25 : 27.5;
-    const sized = typeof q.promptStyle?.fontSize === "number";
     const size = promptFontSize(q.promptStyle, baseSize);
-    const lh = sized ? size * (baseLh / baseSize) : baseLh;
+    const lh = size * (q.promptStyle?.lineSpacing ?? baseLh / baseSize);
     const align = promptAlign(q.promptStyle);
     const artStyle = wordArtStyleOf(q.promptStyle?.wordArt);
     const art = artStyle ? wordArtInk(this.accent, this.surface, artStyle) : undefined;
+    const paint = this.promptPaint(q.promptStyle?.fillEffect);
     const raw = q.prompt || "";
     const family = q.promptStyle?.font ? fontFamily(q.promptStyle.font, q.promptStyle.customFont, this.assets.fonts) : this.quizFont;
     const face = promptHasEmoji(raw) ? promptFontStack(family) : family;
@@ -818,12 +892,22 @@ export class FrameRenderer {
       weight: q.promptStyle?.bold === false ? 400 : 700,
       italic: q.promptStyle?.italic,
       underline: q.promptStyle?.underline,
-      color: q.prompt ? this.promptColor : this.ink[500],
+      color: q.prompt ? paint : this.ink[500],
       family: face,
       align,
       balance: true as const,
-      wordArt: art,
+      spacing: q.promptStyle?.letterSpacing ?? 0,
+      wordArt: art && q.promptStyle?.fillEffect && q.promptStyle.fillEffect !== "solid" ? { ...art, fill: paint } : art,
     };
+    if (q.promptStyle?.textShape && q.promptStyle.textShape !== "straight" && raw) {
+      return this.curvedPromptBox(run, sinceMount, CW, size, face, paint, opts.wordArt);
+    }
+    if (q.promptStyle?.paragraphShape && q.promptStyle.paragraphShape !== "normal" && raw) {
+      return this.paragraphPromptBox(run, sinceMount, CW, size, lh, face, paint, opts.wordArt);
+    }
+    if (q.promptStyle?.textAnimation && raw) {
+      return this.animatedPromptBox(run, sinceMount, CW, size, lh, face, paint, opts.wordArt);
+    }
     const preserve = promptPreservesBreaks(raw);
     if (!preserve) {
       const full = this.textBox(q.prompt || "Untitled question", CW, opts);
@@ -835,7 +919,7 @@ export class FrameRenderer {
       // Same lines as the full prompt; the untyped rest keeps its space, like the
       // stage's invisible remainder, so nothing reflows while it types.
       const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
-      const lines = this.balance(q.prompt, font, CW);
+      const lines = this.balance(q.prompt, font, CW, opts.spacing);
       return {
         w: CW,
         h: lines.length * opts.lh,
@@ -845,9 +929,9 @@ export class FrameRenderer {
             if (left <= 0) return;
             const chars = promptGraphemes(line);
             const shown = chars.slice(0, left).join("");
-            const lineW = this.measure(line, font);
+            const lineW = this.measure(line, font, opts.spacing);
             const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
-            this.drawLine(shown, origin, y + i * opts.lh, opts.lh, font, opts.color, "left", 0, opts.underline, art);
+            this.drawLine(shown, origin, y + i * opts.lh, opts.lh, font, opts.color, "left", opts.spacing, opts.underline, opts.wordArt);
             left -= chars.length + 1; // the space the line broke on
           });
         },
@@ -855,7 +939,7 @@ export class FrameRenderer {
     }
 
     const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
-    const lines = layoutPrompt(raw, (sample) => this.measure(sample, font), CW);
+    const lines = layoutPrompt(raw, (sample) => this.measure(sample, font, opts.spacing), CW);
     const motion = run.motion.question;
     const typing = motion.enter === "typewriter";
     const typed = typing ? typewriterChars(raw, motion, sinceMount) : Number.POSITIVE_INFINITY;
@@ -867,12 +951,122 @@ export class FrameRenderer {
           const glyphs = promptGraphemes(line.text);
           const visible = typed >= line.end ? line.text : typed <= line.start ? "" : glyphs.slice(0, Math.max(0, typed - line.start)).join("");
           if (!visible) return;
-          const lineW = this.measure(line.text, font);
+          const lineW = this.measure(line.text, font, opts.spacing);
           const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
-          this.drawLine(visible, origin, y + i * lh, lh, font, opts.color, "left", 0, opts.underline, art);
+          this.drawLine(visible, origin, y + i * lh, lh, font, opts.color, "left", opts.spacing, opts.underline, opts.wordArt);
         });
       },
     };
+  }
+
+  private animatedPromptBox(run: QuestionRun, sinceMount: number, width: number, size: number, lh: number, face: string, paint: string | CanvasGradient,
+    art?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number }): Box {
+    const q = run.question;
+    const animation = q.promptStyle!.textAnimation!;
+    const phase = promptAnimationElapsed(q.prompt, animation, sinceMount);
+    const font = `${q.promptStyle?.italic ? "italic " : ""}${this.font(q.promptStyle?.bold === false ? 400 : 700, size, face)}`;
+    const spacing = q.promptStyle?.letterSpacing ?? 0;
+    const lines = layoutPrompt(q.prompt, (sample) => this.measure(sample, font, spacing), width);
+    const segments = promptSegments(q.prompt, animation.unit);
+    const align = promptAlign(q.promptStyle);
+    return { w: width, h: Math.max(lh, lines.length * lh), draw: (x, y) => {
+      lines.forEach((line, lineIndex) => {
+        const glyphs = promptGraphemes(line.text);
+        const lineWidth = this.measure(line.text, font, spacing);
+        const left = align === "left" ? x : align === "right" ? x + width - lineWidth : x + (width - lineWidth) / 2;
+        segments.forEach((segment, index) => {
+          const from = Math.max(line.start, segment.start);
+          const to = Math.min(line.end, segment.end);
+          if (to <= from) return;
+          const prefix = glyphs.slice(0, from - line.start).join("");
+          const shown = glyphs.slice(from - line.start, to - line.start).join("");
+          if (!shown.trim()) return;
+          const sx = left + this.measure(prefix, font, spacing);
+          const sw = this.measure(shown, font, spacing);
+          const pose = promptSegmentPose(animation.effect, promptSegmentProgress(animation, index, phase), size);
+          this.withPose({ opacity: pose.opacity, x: pose.x, y: pose.y, scale: pose.scale, rotateX: pose.rotateX }, sx + sw / 2, y + lineIndex * lh + lh / 2, 1,
+            () => this.drawLine(shown, sx, y + lineIndex * lh, lh, font, paint, "left", spacing, !!q.promptStyle?.underline, art));
+        });
+      });
+    } };
+  }
+
+  private paragraphPromptBox(run: QuestionRun, sinceMount: number, width: number, size: number, lh: number, face: string, paint: string | CanvasGradient,
+    art?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number }): Box {
+    const q = run.question;
+    const shape = q.promptStyle!.paragraphShape!;
+    const lines = promptParagraphLines(q.prompt, shape, width / Math.max(1, size * 0.6));
+    const animation = q.promptStyle?.textAnimation;
+    const phase = animation ? promptAnimationElapsed(q.prompt, animation, sinceMount) : Infinity;
+    const segments = animation ? promptSegments(q.prompt, animation.unit) : [];
+    const font = `${q.promptStyle?.italic ? "italic " : ""}${this.font(q.promptStyle?.bold === false ? 400 : 700, size, face)}`;
+    const spacing = q.promptStyle?.letterSpacing ?? 0;
+    return { w: width, h: Math.max(lh, lines.length * lh), draw: (x, y) => {
+      lines.forEach((line, lineIndex) => {
+        const glyphs = promptGraphemes(line.text);
+        const lineWidth = this.measure(line.text, font, spacing);
+        const left = x + (width - lineWidth) / 2;
+        if (!animation) {
+          this.drawLine(line.text, left, y + lineIndex * lh, lh, font, paint, "left", spacing, !!q.promptStyle?.underline, art);
+          return;
+        }
+        segments.forEach((segment, index) => {
+          const from = Math.max(line.start, segment.start);
+          const to = Math.min(line.end, segment.end);
+          if (to <= from) return;
+          const prefix = glyphs.slice(0, from - line.start).join("");
+          const shown = glyphs.slice(from - line.start, to - line.start).join("");
+          if (!shown.trim()) return;
+          const sx = left + this.measure(prefix, font, spacing);
+          const pose = promptSegmentPose(animation.effect, promptSegmentProgress(animation, index, phase), size);
+          this.withPose({ opacity: pose.opacity, x: pose.x, y: pose.y, scale: pose.scale, rotateX: pose.rotateX }, sx + this.measure(shown, font, spacing) / 2, y + lineIndex * lh + lh / 2, 1,
+            () => this.drawLine(shown, sx, y + lineIndex * lh, lh, font, paint, "left", spacing, !!q.promptStyle?.underline, art));
+        });
+      });
+    } };
+  }
+
+  private curvedPromptBox(run: QuestionRun, sinceMount: number, width: number, size: number, face: string, paint: string | CanvasGradient,
+    art?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number }): Box {
+    const q = run.question;
+    const shape = q.promptStyle!.textShape!;
+    const glyphs = promptGraphemes(q.prompt.replaceAll("\n", " "));
+    const logicalWidth = Math.max(size * 3, glyphs.length * size * 0.7);
+    const radius = Math.max(size, logicalWidth / (2 * Math.PI));
+    const logicalHeight = shape === "circle" ? 2 * radius + size : size * 4;
+    const scale = Math.min(1, width / logicalWidth);
+    const animation = q.promptStyle?.textAnimation;
+    const phase = animation ? promptAnimationElapsed(q.prompt, animation, sinceMount) : Infinity;
+    const segments = animation ? promptSegments(q.prompt, animation.unit) : [];
+    const font = `${q.promptStyle?.italic ? "italic " : ""}${this.font(q.promptStyle?.bold === false ? 400 : 700, size, face)}`;
+    const advances = glyphs.map((glyph) => this.measure(glyph, font) + (q.promptStyle?.letterSpacing ?? 0));
+    const totalAdvance = advances.reduce((sum, advance) => sum + advance, 0);
+    return { w: width, h: logicalHeight * scale, draw: (x, y) => {
+      const { ctx } = this;
+      ctx.save();
+      ctx.translate(x + (width - logicalWidth * scale) / 2, y);
+      ctx.scale(scale, scale);
+      let advanceBefore = 0;
+      glyphs.forEach((glyph, index) => {
+        const position = 0.5 + (advanceBefore + advances[index] / 2 - totalAdvance / 2) / (logicalWidth - size);
+        advanceBefore += advances[index];
+        const path = promptPathPose(shape, position, logicalWidth - size, size, q.promptStyle?.curve ?? 50);
+        const segmentIndex = segments.findIndex((segment) => index >= segment.start && index < segment.end);
+        const pose = animation && segmentIndex >= 0
+          ? promptSegmentPose(animation.effect, promptSegmentProgress(animation, segmentIndex, phase), size)
+          : { opacity: 1, x: 0, y: 0, scale: 1, rotateX: 0 };
+        const gx = path.x + size / 2;
+        const gy = path.y + (shape === "circle" ? size / 2 : logicalHeight / 2);
+        ctx.save();
+        ctx.globalAlpha *= pose.opacity;
+        ctx.translate(gx + pose.x, gy + pose.y);
+        ctx.rotate(path.angle);
+        ctx.scale(pose.scale, pose.scale * Math.max(0.01, Math.cos(pose.rotateX * Math.PI / 180)));
+        this.drawLine(glyph, 0, -size / 2, size, font, paint, "center", 0, false, art);
+        ctx.restore();
+      });
+      ctx.restore();
+    } };
   }
 
   /** "Question 1 of 8" on the left; streak, score and the timer on the right. */
@@ -2280,17 +2474,17 @@ export class FrameRenderer {
   }
 
   /** `text-wrap: balance`: the narrowest width that keeps the same number of lines. */
-  private balance(text: string, font: string, maxWidth: number): string[] {
-    const lines = this.wrap(text, font, maxWidth);
+  private balance(text: string, font: string, maxWidth: number, spacing = 0): string[] {
+    const lines = this.wrap(text, font, maxWidth, spacing);
     if (lines.length < 2) return lines;
     let lo = maxWidth / 2;
     let hi = maxWidth;
     for (let i = 0; i < 12; i++) {
       const mid = (lo + hi) / 2;
-      if (this.wrap(text, font, mid).length === lines.length) hi = mid;
+      if (this.wrap(text, font, mid, spacing).length === lines.length) hi = mid;
       else lo = mid;
     }
-    return this.wrap(text, font, hi);
+    return this.wrap(text, font, hi, spacing);
   }
 
   private textBox(
@@ -2300,19 +2494,19 @@ export class FrameRenderer {
       size: number;
       lh: number;
       weight: number;
-      color: string;
+      color: string | CanvasGradient;
       family?: string;
       align?: Align;
       spacing?: number;
       balance?: boolean;
       italic?: boolean;
       underline?: boolean;
-      wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number };
+      wordArt?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number };
     },
   ): Box {
     const font = `${o.italic ? "italic " : ""}${this.font(o.weight, o.size, o.family)}`;
     const spacing = o.spacing ?? 0;
-    const lines = o.balance ? this.balance(text, font, maxWidth) : this.wrap(text, font, maxWidth, spacing);
+    const lines = o.balance ? this.balance(text, font, maxWidth, spacing) : this.wrap(text, font, maxWidth, spacing);
     const align = o.align ?? "left";
     return {
       w: maxWidth,
@@ -2331,11 +2525,11 @@ export class FrameRenderer {
     top: number,
     lineHeight: number,
     font: string,
-    color: string,
+    color: string | CanvasGradient,
     align: Align,
     spacing = 0,
     underline = false,
-    wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number },
+    wordArt?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number },
   ) {
     if (!text) return;
     const { ctx } = this;

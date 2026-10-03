@@ -28,6 +28,7 @@ export function imageRefs(quiz: Quiz): MediaRef[] {
   refs.push(...cueImages(quiz.settings?.cues));
   for (const q of quiz.questions) {
     if (q.media) refs.push(q.media);
+    if (q.promptStyle?.box?.image) refs.push(q.promptStyle.box.image);
     if (q.background?.enabled && q.background.image) refs.push(q.background.image);
     for (const o of q.options) if (o.media) refs.push(o.media);
     if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
@@ -54,6 +55,7 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
   if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
   for (const q of quiz.questions) {
+    if (q.promptStyle?.box?.image) refs.push(q.promptStyle.box.image);
     if (q.background?.image) refs.push(q.background.image);
     if (q.media) refs.push(q.media);
     for (const o of q.options) if (o.media) refs.push(o.media);
@@ -72,6 +74,7 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
 export function questionMediaRefs(question: Question): MediaRef[] {
   return [
     question.background?.image,
+    question.promptStyle?.box?.image,
     question.media,
     ...question.options.map((option) => option.media),
     question.reveal?.cover,
@@ -90,6 +93,7 @@ export function remapQuestionMedia(question: Question, remap: Map<string, string
   return {
     ...question,
     media: swap(question.media),
+    ...(question.promptStyle?.box ? { promptStyle: { ...question.promptStyle, box: { ...question.promptStyle.box, image: swap(question.promptStyle.box.image) } } } : {}),
     ...(question.background ? { background: { ...question.background, image: swap(question.background.image) } } : {}),
     options: question.options.map((option) => ({ ...option, media: swap(option.media) })),
     cues: mapCueSet(question.cues, swap),
@@ -117,6 +121,7 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
     questions: quiz.questions.map((q) => ({
       ...q,
       media: swap(q.media),
+      ...(q.promptStyle?.box ? { promptStyle: { ...q.promptStyle, box: { ...q.promptStyle.box, image: swap(q.promptStyle.box.image) } } } : {}),
       ...(q.background ? { background: { ...q.background, image: swap(q.background.image) } } : {}),
       options: q.options.map((o) => ({ ...o, media: swap(o.media) })),
       cues: mapCueSet(q.cues, swap),

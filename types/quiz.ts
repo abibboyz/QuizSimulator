@@ -1,6 +1,7 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 5 adds prompt frames, curved text, paragraph layouts, and text sequencing.
  * 4 adds an optional per-question celebration card. Absent, or switched off,
  * the reveal looks exactly as it did before.
  * 3 adds local backgrounds and prompt placement.
@@ -9,7 +10,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -19,6 +20,7 @@ export const SCHEMA_VERSION = 4;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.questions.some((q) => q.promptStyle && (q.promptStyle.box || q.promptStyle.textShape || q.promptStyle.paragraphShape || q.promptStyle.fillEffect || q.promptStyle.textAnimation || q.promptStyle.letterSpacing !== undefined || q.promptStyle.lineSpacing !== undefined))) return 5;
   if (quiz.questions.some((q) => q.celebration?.enabled)) return 4;
   if (quiz.theme?.font && !["sans", "display", "mono"].includes(quiz.theme.font)) return 3;
   if (quiz.settings.loopMotion || quiz.questions.some((q) => q.background || q.promptPlacement || q.promptStyle || q.loopMotion || q.options.some((o) => o.loopMotion))) return 3;
@@ -295,6 +297,38 @@ export interface Question {
      * picks one of the varieties. Unset is ordinary prompt text.
      */
     wordArt?: boolean | "classic" | "outline" | "retro" | "glow" | "bubble" | "comic" | "echo" | "spark";
+    /** Optional frame around the prompt. */
+    box?: {
+      shape: "none" | "rectangle" | "card" | "pill" | "speech" | "banner" | "circle";
+      fill?: string;
+      gradientTo?: string;
+      gradientAngle?: number;
+      image?: MediaRef;
+      backgroundStyle?: "solid" | "gradient" | "texture" | "image";
+      border?: string;
+      borderWidth?: number;
+      borderStyle?: "solid" | "dashed" | "dotted";
+      opacity?: number;
+      padding?: number;
+      shadow?: boolean;
+    };
+    /** Path followed by prompt letters. */
+    textShape?: "straight" | "arc-up" | "arc-down" | "circle" | "wave" | "s-curve" | "zigzag" | "spiral";
+    paragraphShape?: "normal" | "narrow" | "wide" | "diamond" | "oval";
+    curve?: number;
+    letterSpacing?: number;
+    lineSpacing?: number;
+    fillEffect?: "solid" | "gradient" | "metallic" | "chalk";
+    /** Animates the text inside the prompt frame, separately from question movement. */
+    textAnimation?: {
+      unit: "all" | "word" | "sentence" | "paragraph";
+      effect: "appear" | "fade" | "rise" | "drop" | "pop" | "flip" | "bounce" | "float" | "pulse" | "zoom" | "slide-left" | "slide-right";
+      durationMs: number;
+      delayMs: number;
+      staggerMs: number;
+      /** null repeats until the question ends; absent plays once. */
+      repeat?: number | null;
+    };
   };
   /** Local background wins only while enabled; disabling preserves the upload. */
   background?: { enabled: boolean; image?: MediaRef; fit: BgImageFit; dim: number };

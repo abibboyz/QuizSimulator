@@ -133,3 +133,15 @@ test("schemaVersionFor: files that use nothing new stay version 1 so older build
   assert.deepEqual(copy.questions[0].promptPlacement, quiz.questions[0].promptPlacement);
   assert.equal(schemaVersionFor(quiz), 3);
 });
+
+test("prompt box images stay available for play, export, and question copies", () => {
+  const question: Question = { ...oldQuestion, promptStyle: { box: { shape: "speech", backgroundStyle: "image", image: ref("prompt-box") } } };
+  const quiz = { ...oldQuiz(), questions: [question] };
+  for (const refs of [collectRefs(quiz), imageRefs(quiz), questionMediaRefs(question)]) {
+    assert.ok(refs.some((media) => media.kind === "stored" && media.id === "prompt-box"));
+  }
+  const remap = new Map([["prompt-box", "prompt-box-copy"]]);
+  assert.deepEqual(remapQuestionMedia(question, remap).promptStyle?.box?.image, ref("prompt-box-copy"));
+  assert.deepEqual(remapMedia(quiz, remap).questions[0].promptStyle?.box?.image, ref("prompt-box-copy"));
+  assert.equal(schemaVersionFor(quiz), 5);
+});
