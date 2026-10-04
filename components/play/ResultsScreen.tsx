@@ -44,10 +44,11 @@ export function ResultsScreen({
   const reduced = useReducedMotion();
   const shownScore = useAnimatedNumber(score, 1100);
 
-  const correctCount = answers.filter((a) => a.correct).length;
-  const accuracy = answers.length ? correctCount / answers.length : 0;
-  const verdict = accuracyLabel(accuracy);
-  const missedIds = answers.filter((a) => !a.correct).map((a) => a.questionId);
+  const scoredAnswers = answers.filter((a) => !a.unscored);
+  const correctCount = scoredAnswers.filter((a) => a.correct).length;
+  const accuracy = scoredAnswers.length ? correctCount / scoredAnswers.length : 0;
+  const verdict = scoredAnswers.length ? accuracyLabel(accuracy) : { title: "All done", blurb: "You’ve seen every image. Which did you like best?", celebrate: false };
+  const missedIds = scoredAnswers.filter((a) => !a.correct).map((a) => a.questionId);
 
   useEffect(() => {
     // An authored outro owns the ending — firing both would stack two
@@ -76,8 +77,8 @@ export function ResultsScreen({
 
       <div className={`grid grid-cols-2 gap-3 ${narrow ? "" : "sm:grid-cols-4"}`}>
         <Stat label="Score" value={shownScore.toLocaleString()} highlight />
-        <Stat label="Correct" value={`${correctCount}/${answers.length}`} />
-        <Stat label="Accuracy" value={`${Math.round(accuracy * 100)}%`} />
+        <Stat label="Correct" value={`${correctCount}/${scoredAnswers.length}`} />
+        <Stat label="Accuracy" value={scoredAnswers.length ? `${Math.round(accuracy * 100)}%` : "—"} />
         <Stat label="Best streak" value={String(bestStreak)} />
       </div>
 
@@ -98,17 +99,18 @@ export function ResultsScreen({
                 <span
                   aria-hidden
                   className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-bold ${
-                    answer?.correct ? "bg-good/20 text-good" : "bg-bad/20 text-bad"
+                    answer?.unscored ? "bg-ink-700 text-ink-300" : answer?.correct ? "bg-good/20 text-good" : "bg-bad/20 text-bad"
                   }`}
                 >
-                  {answer?.correct ? "✓" : "✕"}
+                  {answer?.unscored ? "—" : answer?.correct ? "✓" : "✕"}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-ink-100">
                     <span className="text-ink-400">{i + 1}. </span>
                     {question.prompt || "Untitled question"}
                   </p>
-                  {!answer?.correct && (
+                  {answer?.unscored && <p className="mt-1 text-sm text-ink-400">Image slide · not scored</p>}
+                  {!answer?.unscored && !answer?.correct && (
                     <p className="mt-1 text-sm text-ink-300">
                       Correct answer: <span className="font-semibold text-good">{correctText}</span>
                       {answer?.timedOut && <span className="ml-2 text-ink-500">· ran out of time</span>}

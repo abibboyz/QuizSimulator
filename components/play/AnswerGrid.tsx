@@ -1,5 +1,7 @@
 "use client";
 
+import { answerTextStyle, isUnscoredImage } from "@/lib/answerPresentation";
+import { fontFamily } from "@/lib/themes";
 import type { ElementMotion, LoopMotionSet, Question, Theme } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
@@ -69,7 +71,7 @@ function tileMotion(
 }
 
 const TEXT: Record<StageMode, string> = {
-  host: "text-2xl md:text-3xl",
+  host: "text-base md:text-lg",
   solo: "text-base md:text-lg",
   preview: "text-[10px]",
 };
@@ -99,6 +101,17 @@ export function AnswerGrid({
   const ageBand = themeAgeBand(theme);
   const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
   const wrongColor = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
+  const unscored = isUnscoredImage(question);
+  const typography = answerTextStyle(theme, question);
+  const textStyle = {
+    fontFamily: fontFamily(typography.font ?? theme.font, typography.font ? typography.customFont : theme.customFont),
+    fontSize: `${(typography.fontSize ?? 18) / 728 * 100}cqw`,
+    fontWeight: typography.bold === undefined ? 600 : typography.bold ? 700 : 400,
+    fontStyle: typography.italic ? "italic" : "normal",
+    textDecoration: typography.underline ? "underline" : "none",
+    lineHeight: 1.5,
+  };
+  const captionStyle = { ...textStyle, fontSize: `${(typography.fontSize ?? 14) / 728 * 100}cqw`, color: typography.color ?? "var(--prompt-color, #e9ebf4)" };
 
   // Reveal uses the same picture grid as image answers. Every tile shows one
   // shared cover (or "?") until the answer is out, and only the correct
@@ -107,22 +120,20 @@ export function AnswerGrid({
     const count = question.options.length;
     const gapPx = question.optionGap ?? DEFAULT_IMAGE_GAP;
     const gap = mode === "preview" ? Math.max(2, Math.round(gapPx / 2)) : gapPx;
-    const numberText =
-      mode === "host" ? "text-xl md:text-2xl" : mode === "solo" ? "text-sm md:text-base" : "text-[8px]";
     const captionText =
-      mode === "host" ? "text-sm md:text-base" : mode === "solo" ? "text-xs md:text-sm" : "text-[8px]";
+      mode === "preview" ? "text-[8px]" : "text-xs md:text-sm";
     const markText = mode === "host" ? "text-5xl" : mode === "solo" ? "text-3xl" : "text-sm";
     const settings = resolveReveal(question);
     const cover = settings.cover;
 
     return (
       <div className="w-full">
-        <div role="group" aria-label="Covered images" className="w-full" style={imageChoiceGridStyle(count, gap)}>
+        <div role="group" aria-label="Covered images" className="w-full" style={{ ...imageChoiceGridStyle(count, gap), containerType: "inline-size" }}>
           {question.options.map((option, index) => {
             const isPicked = selected.includes(option.id);
             const showCorrect = revealed && option.correct;
-            const showWrong = revealed && isPicked && !option.correct;
-            const faded = revealed && !option.correct && !isPicked;
+            const showWrong = !unscored && revealed && isPicked && !option.correct;
+            const faded = !unscored && revealed && !option.correct && !isPicked;
             const anim = tileMotion(motion, index, sinceMount, sinceExit, faded);
             const tileIn = mode !== "preview" && anim.cssTileIn;
             const answerMedia = revealAnswerMedia(question, option);
@@ -132,7 +143,7 @@ export function AnswerGrid({
               <button
                 key={option.id}
                 type="button"
-                disabled={!interactive}
+                disabled={!interactive || unscored}
                 onClick={() => onPick(option.id)}
                 aria-pressed={isPicked}
                 className={`w-full h-full focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
@@ -175,7 +186,7 @@ export function AnswerGrid({
                       fit={REVEAL_TILE}
                     />
                   )}
-                  {revealed && (option.correct || isPicked) && (
+                  {!unscored && revealed && (option.correct || isPicked) && (
                     <span
                       aria-hidden
                       className={`absolute right-1 top-1 rounded-full bg-black/50 px-1.5 leading-none text-white ${
@@ -186,11 +197,8 @@ export function AnswerGrid({
                     </span>
                   )}
                 </span>
-                <span className={`mt-1 ${numberText}`} style={{ color: "var(--prompt-color, #e9ebf4)" }}>
-                  {index + 1}
-                </span>
                 {option.text.trim() && (
-                  <span className={`min-w-0 break-words ${captionText}`} style={{ color: "var(--prompt-color, #e9ebf4)" }}>
+                  <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
                     {option.text}
                   </span>
                 )}
@@ -215,18 +223,16 @@ export function AnswerGrid({
     const count = question.options.length;
     const gapPx = question.optionGap ?? DEFAULT_IMAGE_GAP;
     const gap = mode === "preview" ? Math.max(2, Math.round(gapPx / 2)) : gapPx;
-    const numberText =
-      mode === "host" ? "text-xl md:text-2xl" : mode === "solo" ? "text-sm md:text-base" : "text-[8px]";
     const captionText =
-      mode === "host" ? "text-sm md:text-base" : mode === "solo" ? "text-xs md:text-sm" : "text-[8px]";
+      mode === "preview" ? "text-[8px]" : "text-xs md:text-sm";
 
     return (
-      <div role="group" aria-label="Images" className="w-full" style={imageChoiceGridStyle(count, gap)}>
+      <div role="group" aria-label="Images" className="w-full" style={{ ...imageChoiceGridStyle(count, gap), containerType: "inline-size" }}>
         {question.options.map((option, index) => {
           const isPicked = selected.includes(option.id);
           const showCorrect = revealed && option.correct;
-          const showWrong = revealed && isPicked && !option.correct;
-          const faded = revealed && !option.correct && !isPicked;
+          const showWrong = !unscored && revealed && isPicked && !option.correct;
+          const faded = !unscored && revealed && !option.correct && !isPicked;
           const anim = tileMotion(motion, index, sinceMount, sinceExit, faded);
           const tileIn = mode !== "preview" && anim.cssTileIn;
 
@@ -235,7 +241,7 @@ export function AnswerGrid({
             <button
               key={option.id}
               type="button"
-              disabled={!interactive}
+              disabled={!interactive || unscored}
               onClick={() => onPick(option.id)}
               aria-pressed={isPicked}
               className={`w-full h-full focus-ring flex flex-col items-center bg-transparent text-center font-semibold transition-all duration-200 ${
@@ -262,7 +268,7 @@ export function AnswerGrid({
                 ) : (
                   <span className="grid h-full w-full place-items-center text-ink-500">?</span>
                 )}
-                {revealed && (option.correct || isPicked) && (
+                {!unscored && revealed && (option.correct || isPicked) && (
                   <span
                     aria-hidden
                     className={`absolute right-1 top-1 rounded-full bg-black/50 px-1.5 leading-none text-white ${
@@ -273,11 +279,8 @@ export function AnswerGrid({
                   </span>
                 )}
               </span>
-              <span className={`mt-1 ${numberText}`} style={{ color: "var(--prompt-color, #e9ebf4)" }}>
-                {index + 1}
-              </span>
               {option.text.trim() && (
-                <span className={`min-w-0 break-words ${captionText}`} style={{ color: "var(--prompt-color, #e9ebf4)" }}>
+                <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
                   {option.text}
                 </span>
               )}
@@ -294,7 +297,7 @@ export function AnswerGrid({
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";
 
   return (
-    <div className={`grid w-full ${columns} ${gap}`} role={question.kind === "multi-select" ? "group" : undefined}>
+    <div className={`grid w-full ${columns} ${gap}`} style={{ containerType: "inline-size" }} role={question.kind === "multi-select" ? "group" : undefined}>
       {question.options.map((option, index) => {
         const bg = optionColor(index, { band: ageBand, colors: theme.optionColors, override: option.color });
         const marker = optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
@@ -303,8 +306,8 @@ export function AnswerGrid({
         // Once revealed, the correct answer always lights up — including when
         // nobody picked it, which is the moment the room actually learns something.
         const showCorrect = revealed && option.correct;
-        const showWrong = revealed && isPicked && !option.correct;
-        const faded = revealed && !option.correct && !isPicked;
+        const showWrong = !unscored && revealed && isPicked && !option.correct;
+        const faded = !unscored && revealed && !option.correct && !isPicked;
         const anim = tileMotion(motion, index, sinceMount, sinceExit, faded);
         const tileIn = mode !== "preview" && anim.cssTileIn;
 
@@ -313,7 +316,7 @@ export function AnswerGrid({
           <button
             key={option.id}
             type="button"
-            disabled={!interactive}
+            disabled={!interactive || unscored}
             onClick={() => onPick(option.id)}
             aria-pressed={isPicked}
             className={`w-full h-full focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
@@ -341,7 +344,8 @@ export function AnswerGrid({
                 ? readableTextOn(correctColor)
                 : showWrong
                   ? readableTextOn(wrongColor)
-                  : (theme.optionTextColor ?? readableTextOn(bg)),
+                  : (typography.color ?? readableTextOn(bg)),
+              ...textStyle,
               ...anim.style,
             }}
           >
@@ -362,7 +366,7 @@ export function AnswerGrid({
 
             <span className="min-w-0 flex-1 break-words">{option.text}</span>
 
-            {revealed && (option.correct || isPicked) && (
+            {!unscored && revealed && (option.correct || isPicked) && (
               <span aria-hidden className={mode === "preview" ? "text-xs" : "text-2xl"}>
                 {option.correct ? "✓" : "✕"}
               </span>

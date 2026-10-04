@@ -1,5 +1,6 @@
 "use client";
 
+import { isUnscoredImage, unscoredResult } from "@/lib/answerPresentation";
 import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
@@ -15,6 +16,7 @@ export interface AnswerRecord {
   questionId: string;
   selectedIds: string[];
   correct: boolean;
+  unscored?: boolean;
   points: number;
   msTaken: number;
   timedOut: boolean;
@@ -117,7 +119,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     if (phase !== "asking") return;
 
     const question = order[index];
-    if (!question) return;
+    if (!question || isUnscoredImage(question)) return;
 
     if (question.kind === "multi-select") {
       set({
@@ -142,7 +144,8 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     const limit = timerFor(quiz, question);
     const timeLeftFraction = limit ? Math.max(0, 1 - msTaken / (limit * 1000)) : null;
 
-    const result = scoreQuestion({
+    const unscored = isUnscoredImage(question);
+    const result = unscored ? unscoredResult(state.streak) : scoreQuestion({
       correct,
       base: basePointsFor(quiz, question),
       timeLeftFraction,
@@ -159,7 +162,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       lastResult: result,
       answers: [
         ...state.answers,
-        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut },
+        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut, ...(unscored ? { unscored: true } : {}) },
       ],
     });
   },

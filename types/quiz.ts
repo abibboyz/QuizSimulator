@@ -1,6 +1,7 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 6 adds answer typography, custom Word Art colours, letter contours, and unscored images.
  * 5 adds prompt frames, curved text, paragraph layouts, and text sequencing.
  * 4 adds an optional per-question celebration card. Absent, or switched off,
  * the reveal looks exactly as it did before.
@@ -10,7 +11,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -20,6 +21,7 @@ export const SCHEMA_VERSION = 5;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.theme?.answerStyle || quiz.questions.some((q) => q.answerStyle || q.promptStyle?.wordArtColors || q.promptStyle?.letterShape || q.promptStyle?.textAnimation?.unit === "letter" || (q.kind === "image-choice" && !q.options.some((o) => o.correct)))) return 6;
   if (quiz.questions.some((q) => q.promptStyle && (q.promptStyle.box || q.promptStyle.textShape || q.promptStyle.paragraphShape || q.promptStyle.fillEffect || q.promptStyle.textAnimation || q.promptStyle.letterSpacing !== undefined || q.promptStyle.lineSpacing !== undefined))) return 5;
   if (quiz.questions.some((q) => q.celebration?.enabled)) return 4;
   if (quiz.theme?.font && !["sans", "display", "mono"].includes(quiz.theme.font)) return 3;
@@ -276,7 +278,19 @@ export interface Option {
 /** What to draw in the little badge on each answer tile. */
 export type OptionMarker = "shapes" | "letters" | "numbers" | "bullets" | "none";
 
+export interface AnswerTextStyle {
+  font?: FontChoice;
+  customFont?: string;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  color?: string;
+}
+
 export interface Question {
+  /** Overrides quiz answer typography for this question, including image captions. */
+  answerStyle?: AnswerTextStyle;
   loopMotion?: LoopMotionSet;
   id: string;
   kind: QuestionKind;
@@ -297,6 +311,9 @@ export interface Question {
      * picks one of the varieties. Unset is ordinary prompt text.
      */
     wordArt?: boolean | "classic" | "outline" | "retro" | "glow" | "bubble" | "comic" | "echo" | "spark";
+    wordArtColors?: { fill?: string; stroke?: string; shadow?: string };
+    /** Changes letter sizes along a line independently of its path. */
+    letterShape?: "uniform" | "pinch" | "bulge" | "grow" | "shrink" | "wave";
     /** Optional frame around the prompt. */
     box?: {
       shape: "none" | "rectangle" | "card" | "pill" | "speech" | "banner" | "circle";
@@ -321,7 +338,7 @@ export interface Question {
     fillEffect?: "solid" | "gradient" | "metallic" | "chalk";
     /** Animates the text inside the prompt frame, separately from question movement. */
     textAnimation?: {
-      unit: "all" | "word" | "sentence" | "paragraph";
+      unit: "all" | "letter" | "word" | "sentence" | "paragraph";
       effect: "appear" | "fade" | "rise" | "drop" | "pop" | "flip" | "bounce" | "float" | "pulse" | "zoom" | "slide-left" | "slide-right";
       durationMs: number;
       delayMs: number;
@@ -399,6 +416,8 @@ export type FontChoice = "sans" | "display" | "mono" | "georgia" | "arial" | "ve
 export type BgImageFit = "cover" | "contain" | "tile";
 
 export interface Theme {
+  /** Quiz-wide answer typography; questions can override individual fields. */
+  answerStyle?: AnswerTextStyle;
   preset: ThemePreset;
   bgAnimation: BgAnimation;
   accent: string;
@@ -555,7 +574,7 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
         });
       }
       const correctCount = q.options.filter((o) => o.correct).length;
-      if (correctCount !== 1) {
+      if (correctCount > 1) {
         issues.push({
           questionId: q.id,
           severity: "error",

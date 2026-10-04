@@ -1,5 +1,6 @@
 "use client";
 
+import { isUnscoredImage } from "@/lib/answerPresentation";
 import { questionTheme } from "@/lib/questionPresentation";
 import { useState } from "react";
 import type { Question, Quiz } from "@/types/quiz";
@@ -33,7 +34,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
         <div className="flex items-center gap-2">
         {question.promptStyle?.textAnimation && <button type="button" onClick={() => setPromptReplay((value) => value + 1)}
           className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800">Replay prompt</button>}
-        <button
+        {!isUnscoredImage(question) && <button
           type="button"
           onClick={() => {
             setCompletedRevealQuestion(null);
@@ -42,7 +43,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
           className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
         >
           {revealed ? "Hide answer" : "Show answer"}
-        </button>
+        </button>}
         </div>
       </div>
 
@@ -77,7 +78,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
           />
         </div>
-        {revealed && (question.kind !== "reveal" || completedRevealQuestion === question.id) && (
+        {revealed && !isUnscoredImage(question) && (question.kind !== "reveal" || completedRevealQuestion === question.id) && (
           <CelebrationCard question={question} mode="preview" />
         )}
       </div>

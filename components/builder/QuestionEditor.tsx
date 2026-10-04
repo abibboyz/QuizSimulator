@@ -1,5 +1,6 @@
 "use client";
 
+import { AnswerTypography } from "@/components/builder/AnswerTypography";
 import { themeInk } from "@/lib/themeInk";
 
 import { useEffect, useRef, useState } from "react";
@@ -7,8 +8,7 @@ import type { CelebrationAnimation, Cue, CueSlot, FontChoice, Question, Question
 import { CELEBRATION_ANIMATIONS } from "@/lib/celebration";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
-import { FONT_GROUPS, fontFamily, optionPalette } from "@/lib/themes";
-import { themeAgeBand } from "@/lib/ageBands";
+import { FONT_GROUPS, fontFamily } from "@/lib/themes";
 import { Field, Input, Select, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
@@ -88,8 +88,6 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
     return () => window.removeEventListener("pointerdown", close);
   }, [emojiOpen]);
   const setTheme = (patch: Partial<Theme>) => onChangeTheme({ ...theme, ...patch });
-  const ageBand = themeAgeBand(theme);
-  const tileColors = optionPalette(ageBand).map((style) => style.bg);
 
   const setCue = (slot: CueSlot, cue: Cue | null | undefined) => {
     const cues = { ...question.cues };
@@ -269,19 +267,13 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         <MediaDropZone media={question.media} onChange={(media) => onChange({ ...question, media })} />
       </Field>
 
+      <AnswerTypography key={`answers-${question.id}`} value={question.answerStyle} theme={theme} onChange={(answerStyle) => onChange({ ...question, answerStyle })} />
+
       <OptionList
         question={question}
         onChange={onChange}
         theme={theme}
-        action={
-          <ColorSwatch
-            label="Answer text colour"
-            value={theme.optionTextColor}
-            fallback="#ffffff"
-            onChange={(optionTextColor) => setTheme({ optionTextColor })}
-            contrastAgainst={tileColors}
-          />
-        }
+
       />
 
       {(question.kind === "image-choice" || question.kind === "reveal") && (

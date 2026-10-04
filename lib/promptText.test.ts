@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { WORD_ART_STYLES, layoutPrompt, promptAlign, promptCharCount, promptFontSize, promptHasEmoji, promptPreservesBreaks, splitEmojiRuns, wordArtCss, wordArtInk, wordArtReadable, wordArtStyleOf } from "./promptText.ts";
+import { WORD_ART_STYLES, layoutPrompt, promptAlign, promptCharCount, promptFontSize, promptHasEmoji, promptLetterSpacing, promptPreservesBreaks, splitEmojiRuns, wordArtCss, wordArtInk, wordArtReadable, wordArtStyleOf } from "./promptText.ts";
 import { stageEdge, stageVignette } from "./themeInk.ts";
 
 const width = (sample: string) => [...sample].length;
@@ -58,6 +58,13 @@ test("an unset prompt uses 24px on web play and keeps centered alignment", () =>
   assert.equal(promptFontSize({ fontSize: 150 }, 30), 150);
   assert.equal(promptAlign(undefined), "center");
   assert.equal(promptAlign({ align: "left" }), "left");
+});
+
+test("letter spacing keeps the same proportion in preview, play and export", () => {
+  const style = { letterSpacing: 5 };
+  assert.equal(promptLetterSpacing(style, 11), 5);
+  assert.equal(promptLetterSpacing(style, 30), 150 / 11);
+  assert.equal(promptLetterSpacing(style, 60), 300 / 11);
 });
 
 test("word art keeps a contrasting outline, and light stages do not fade to black", () => {

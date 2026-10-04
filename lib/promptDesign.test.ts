@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { promptAnimationActiveSpan, promptAnimationElapsed, promptAnimationSpan, promptParagraphLines, promptPathPose, promptSegmentPose, promptSegments } from "./promptDesign.ts";
+import { promptAnimationActiveSpan, promptAnimationElapsed, promptAnimationSpan, promptParagraphLines, promptPathPose, promptSegmentPose, promptSegmentProgress, promptSegments } from "./promptDesign.ts";
 
 test("prompt reveal units preserve the original text and its indices", () => {
   const text = "First sentence. Second one!\n\nNext paragraph with 😀 words.";
@@ -47,4 +47,25 @@ test("path and paragraph layouts remain finite across all shapes", () => {
     assert.ok(Number.isFinite(pose.x) && Number.isFinite(pose.y) && Number.isFinite(pose.scale));
     assert.ok(Math.abs(promptSegmentPose(effect, 1, 24).y) < 1e-9);
   }
+});
+
+test("pinch grows both ends, bulge grows the middle, and tapers are directional", async () => {
+  const { promptLetterScale } = await import("./promptDesign.ts");
+  assert.ok(promptLetterScale("pinch", 0) > promptLetterScale("pinch", 0.5));
+  assert.equal(promptLetterScale("pinch", 0), promptLetterScale("pinch", 1));
+  assert.ok(promptLetterScale("bulge", 0.5) > promptLetterScale("bulge", 0));
+  assert.ok(promptLetterScale("grow", 1) > promptLetterScale("grow", 0));
+  assert.ok(promptLetterScale("shrink", 0) > promptLetterScale("shrink", 1));
+  assert.equal(promptLetterScale(undefined, 0.4), 1);
+});
+
+test("by-letter animation keeps emoji and combined characters whole with staggered timing", () => {
+  const text = "A👨‍👩‍👧‍👦e\u0301 B\nC";
+  const segments = promptSegments(text, "letter");
+  assert.deepEqual(segments.map((s) => s.text), ["A", "👨‍👩‍👧‍👦", "e\u0301", " ", "B", "\n", "C"]);
+  assert.deepEqual(segments.map((s) => [s.start, s.end]), [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7]]);
+  const animation = { unit: "letter" as const, effect: "fade" as const, durationMs: 200, delayMs: 100, staggerMs: 80 };
+  assert.equal(promptSegmentProgress(animation, 0, 150), 0.25);
+  assert.equal(promptSegmentProgress(animation, 1, 150), 0);
+  assert.equal(promptSegmentProgress(animation, 6, 780), 1);
 });

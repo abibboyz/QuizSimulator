@@ -64,7 +64,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
   );
 
   const commit = (options: Option[]) => {
-    const withCorrect = options.some((option) => option.correct)
+    const withCorrect = latest.current.question.kind === "image-choice" || options.some((option) => option.correct)
       ? options
       : options.map((option, index) => ({ ...option, correct: index === 0 }));
     const current = latest.current;
@@ -133,7 +133,9 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
   };
 
   const markCorrect = (id: string) => {
-    commit(latest.current.question.options.map((option) => ({ ...option, correct: option.id === id })));
+    const current = latest.current.question;
+    const clear = current.kind === "image-choice" && current.options.find((option) => option.id === id)?.correct;
+    commit(current.options.map((option) => ({ ...option, correct: !clear && option.id === id })));
   };
 
   const remove = (id: string) => {
@@ -195,7 +197,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · one correct</span>
+          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · {question.options.some((option) => option.correct) ? "one correct" : "no correct answer"}</span>
         </span>
         <span className="flex items-center gap-1">
           {action}
@@ -221,8 +223,12 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
           </button>
         </span>
       </div>
+      {question.kind === "image-choice" && <button type="button" aria-pressed={!question.options.some((option) => option.correct)}
+        className="focus-ring rounded-lg border border-ink-700 px-3 py-1.5 text-xs text-ink-300" disabled={busy}
+        onClick={() => commit(latest.current.question.options.map((option) => ({ ...option, correct: false })))}>No correct answer · timed image slide</button>}
       <p className="text-[11px] text-ink-500">
         Click an empty picture to upload it. + Add image adds one more answer. Bulk images adds several at once. Text under a picture is optional and only shows in play when you fill it in.
+        {question.kind === "image-choice" && " Click the correct image again to clear its tick. With no correct answer, images stay visible for the timer without scoring."}
         {question.kind === "reveal" &&
           " In play, every answer wears the same cover — the picture you set, or “?” — until the correct one is revealed."}
       </p>
@@ -249,7 +255,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
           modifiers={[restrictToParentElement]}
         >
           <SortableContext items={question.options.map((option) => option.id)} strategy={rectSortingStrategy}>
-            <div role="radiogroup" aria-label="Image answers" className="w-full" style={imageChoiceGridStyle(count, gap)}>
+            <div role="group" aria-label="Image answers" className="w-full" style={imageChoiceGridStyle(count, gap)}>
               {question.options.map((option, index) => (
                 <ImageTile
                   key={option.id}
@@ -336,8 +342,7 @@ function ImageTile({
         type="button"
         {...attributes}
         {...listeners}
-        role="radio"
-        aria-checked={option.correct}
+        aria-pressed={option.correct}
         aria-label={`Image ${index + 1}${option.correct ? ", correct answer" : ""}`}
         disabled={disabled}
         onClick={onSelect}
@@ -358,7 +363,6 @@ function ImageTile({
             </span>
           )}
         </span>
-        <span className="mt-1 text-xs font-semibold text-ink-200">{index + 1}</span>
       </button>
       <input
         value={option.text}

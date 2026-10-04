@@ -1,5 +1,6 @@
 "use client";
 
+import { isUnscoredImage } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -207,6 +208,7 @@ function PlayView() {
     if (revealFiredRef.current === answerCount) return;
     revealFiredRef.current = answerCount;
 
+    if (answers[answerCount - 1].unscored) return;
     const correct = answers[answerCount - 1].correct;
     // A Reveal question's picture uncovers now; its sound rides alongside the
     // usual feedback. Same gate as the answer showing at all.
@@ -294,16 +296,16 @@ function PlayView() {
 
   // With instant reveal switched off, roll straight into the next question.
   useEffect(() => {
-    if (phase !== "revealed" || !quiz || quiz.settings.revealAfterEach) return;
+    if (phase !== "revealed" || !quiz || (quiz.settings.revealAfterEach && !isUnscoredImage(question))) return;
     const id = window.setTimeout(() => goNextRef.current(false), REVEAL_OFF_HOLD_MS);
     return () => window.clearTimeout(id);
-  }, [phase, quiz]);
+  }, [phase, quiz, question]);
 
   // A question that ran out of time leaves the player nothing to decide, so the
   // answer is shown for a beat and the quiz keeps going on its own — through to
   // the results screen if that was the last question.
   const advancingAfterTimeout = quiz
-    ? shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
+    ? !isUnscoredImage(question) && shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
     : false;
   const autoAdvanceReady = advancingAfterTimeout && (!question?.celebration?.enabled || celebrationReady);
   const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
@@ -322,7 +324,7 @@ function PlayView() {
   const handlePick = useCallback(
     (optionId: string) => {
       const state = usePlaySession.getState();
-      if (state.phase !== "asking" || pendingRef.current) return;
+      if (state.phase !== "asking" || pendingRef.current || isUnscoredImage(state.order[state.index])) return;
 
       state.toggle(optionId);
       if (soundOn) playSelect();
@@ -350,7 +352,7 @@ function PlayView() {
           event.preventDefault();
           handlePick(current.options[n - 1].id);
         }
-        if ((event.key === "Enter" || event.key === " ") && current.kind === "multi-select" && state.selected.length) {
+        if ((event.key === "Enter" || event.key === " ") && (isUnscoredImage(current) && limit === null || current.kind === "multi-select" && state.selected.length)) {
           event.preventDefault();
           submitAnswer();
         }
@@ -364,7 +366,7 @@ function PlayView() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handlePick, submitAnswer, advance]);
+  }, [handlePick, submitAnswer, advance, limit]);
 
   // Quiz-wide animation settings with this question's overrides on top.
   const stageMotion = resolveMotion(quiz?.settings, question);
@@ -396,9 +398,8 @@ function PlayView() {
 
   return (
     <ThemeShell narrow={mobile} theme={questionTheme(quiz.theme, phase === "asking" || phase === "revealed" ? question : undefined)}>
-      {/* The intro stays put behind a start cue, so the screen is never blank
-          while one plays. */}
-      {(phase === "intro" || phase === "countdown") && (
+      {phase === "countdown" && <div className="min-h-dvh" aria-label="Quiz starting" />}
+      {phase === "intro" && (
         <div
           className={`mx-auto flex min-h-dvh flex-col items-center justify-center gap-6 px-6 text-center ${
             mobile ? "max-w-[26rem]" : "max-w-2xl"
@@ -430,7 +431,6 @@ function PlayView() {
             variant="primary"
             size="lg"
             className="px-10"
-            disabled={phase === "countdown"}
             onClick={() => session.begin(!!introCue)}
           >
             Start quiz
@@ -454,7 +454,7 @@ function PlayView() {
           <QuizProgress
             index={index}
             total={order.length}
-            outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.correct) : undefined}
+            outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.unscored ? null : a.correct) : undefined}
             style={quiz.settings.quizProgressStyle}
             mascot={quiz.settings.progressMascot}
             mascotMedia={quiz.settings.progressMascotMedia}
@@ -491,7 +491,7 @@ function PlayView() {
                 total={order.length}
                 selected={selected}
                 revealed={phase === "revealed"}
-                interactive={stageLive}
+                interactive={stageLive && !isUnscoredImage(question)}
                 onPick={handlePick}
                 mode="solo"
                 narrow={mobile}
@@ -522,6 +522,7 @@ function PlayView() {
           </AnimatePresence>
 
           <div className="mt-8 flex justify-center gap-3">
+            {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
             {phase === "asking" && question.kind === "multi-select" && (
               <Button variant="primary" size="lg" disabled={!selected.length} onClick={submitAnswer}>
                 Submit answer
@@ -543,7 +544,7 @@ function PlayView() {
           ) : (
             // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
             <p className="mt-4 text-center text-xs text-ink-500">
-              {mobile
+              {isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile
                 ? phase === "asking"
                   ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Tap an image"
@@ -560,7 +561,7 @@ function PlayView() {
           {/* Mobile celebration stays centred in the visible phone frame;
               web view uses the viewport. Keep it outside the sliding question
               frame so that transform cannot move its fixed position. */}
-          {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && (
+          {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && !isUnscoredImage(question) && (
             <CelebrationCard question={question} mode="solo" contained={mobile} />
           )}
         </div>

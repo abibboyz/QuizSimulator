@@ -3,7 +3,8 @@
 import type { Question, Theme } from "@/types/quiz";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
-import { WORD_ART_STYLES, wordArtStyleOf } from "@/lib/promptText";
+import { LETTER_SHAPES } from "@/lib/promptDesign";
+import { WORD_ART_STYLES, wordArtInk, wordArtStyleOf } from "@/lib/promptText";
 
 type Style = NonNullable<Question["promptStyle"]>;
 
@@ -11,21 +12,22 @@ const BOX_SHAPES = ["none", "rectangle", "card", "pill", "speech", "banner", "ci
 const TEXT_SHAPES = ["straight", "arc-up", "arc-down", "circle", "wave"] as const;
 const PARAGRAPH_SHAPES = ["normal", "narrow", "wide", "diamond", "oval"] as const;
 const FILL_EFFECTS = ["solid", "gradient", "metallic", "chalk"] as const;
-const UNITS = ["all", "word", "sentence", "paragraph"] as const;
+const UNITS = ["all", "letter", "word", "sentence", "paragraph"] as const;
 const EFFECTS = ["appear", "fade", "rise", "drop", "slide-left", "slide-right", "zoom", "pop", "flip", "bounce", "float", "pulse"] as const;
 
 export function PromptDesignPanel({ question, theme, onChange }: { question: Question; theme: Theme; onChange: (question: Question) => void }) {
   const style = question.promptStyle ?? {};
   const box = style.box ?? { shape: "none" as const };
   const animation = style.textAnimation;
+  const art = wordArtInk(theme.accent, theme.surface, wordArtStyleOf(style.wordArt) ?? "classic");
   const patch = (change: Partial<Style>) => onChange({ ...question, promptStyle: { ...style, ...change } });
   const patchBox = (change: Partial<NonNullable<Style["box"]>>) => patch({ box: { ...box, ...change } });
   const patchAnimation = (change: Partial<NonNullable<Style["textAnimation"]>>) => patch({ textAnimation: { unit: "all", effect: "fade", durationMs: 450, delayMs: 0, staggerMs: 180, ...animation, ...change } });
 
-  return <div className="max-h-[62vh] space-y-2 overflow-y-auto rounded-xl border border-ink-700 bg-ink-900/40 p-2">
-    <p className="px-1 text-[11px] text-ink-400">Format the prompt like a slide title. Changes appear in the live preview.</p>
+  return <div className="space-y-3 rounded-xl border border-ink-700 bg-ink-900/40 p-2">
+    <p className="px-1 text-[11px] text-ink-400">Design once. Preview, play, host and video use the same typography and proportions.</p>
     <details className="rounded-lg border border-ink-700 p-2" open>
-      <summary className="cursor-pointer text-xs font-semibold text-ink-200">Text format &amp; effects</summary>
+      <summary className="cursor-pointer text-xs font-semibold text-ink-200">Word Art &amp; text finish</summary>
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       <label className="text-xs text-ink-300">Text fill
         <select className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 p-2 text-sm" value={style.fillEffect ?? "solid"} onChange={(event) => patch({ fillEffect: event.target.value as Style["fillEffect"] })}>
@@ -37,6 +39,10 @@ export function PromptDesignPanel({ question, theme, onChange }: { question: Que
           <option value="none">None</option>{WORD_ART_STYLES.map((effect) => <option key={effect.id} value={effect.id}>{effect.label}</option>)}
         </select>
       </label>
+      {wordArtStyleOf(style.wordArt) && <div className="flex flex-wrap items-center gap-3 rounded-lg bg-ink-800/40 p-2 sm:col-span-2">
+        {([['fill', 'Text'], ['stroke', 'Outline'], ['shadow', 'Shadow']] as const).map(([key, label]) => <span key={key} className="flex items-center gap-2 text-xs text-ink-300">{label}<ColorSwatch label={`Word Art ${label.toLowerCase()} colour`} value={style.wordArtColors?.[key]} fallback={art[key]} onChange={(value) => patch({ wordArtColors: { ...style.wordArtColors, [key]: value } })} /></span>)}
+        <button type="button" className="focus-ring rounded px-2 py-1 text-xs text-ink-400 underline" onClick={() => patch({ wordArtColors: undefined })}>Default colours</button>
+      </div>}
       <label className="text-xs text-ink-300">Character spacing · {style.letterSpacing ?? 0}px
         <input className="mt-2 w-full accent-[var(--accent)]" type="range" min="-2" max="8" step="0.5" value={style.letterSpacing ?? 0} onChange={(event) => patch({ letterSpacing: Number(event.target.value) })} />
       </label>
@@ -103,8 +109,14 @@ export function PromptDesignPanel({ question, theme, onChange }: { question: Que
     </details>
 
     <details className="rounded-lg border border-ink-700 p-2">
-      <summary className="cursor-pointer text-xs font-semibold text-ink-200">Text transform</summary>
+      <summary className="cursor-pointer text-xs font-semibold text-ink-200">Letter shapes &amp; paths</summary>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <label className="text-xs text-ink-300 sm:col-span-2">Letter sizes
+          <select aria-label="Letter size shape" className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 p-2 text-sm" value={style.letterShape ?? "uniform"} onChange={(event) => patch({ letterShape: event.target.value as Style["letterShape"] })}>
+            {LETTER_SHAPES.map((shape) => <option key={shape.id} value={shape.id}>{shape.label}</option>)}
+          </select>
+          <span className="mt-1 block text-[11px] text-ink-400">Combine with a path below. Pinch makes both ends big and the middle small.</span>
+        </label>
         <label className="text-xs text-ink-300">Path
           <select className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 p-2 text-sm" value={style.textShape ?? "straight"} onChange={(event) => patch({ textShape: event.target.value as Style["textShape"], paragraphShape: "normal" })}>
             {TEXT_SHAPES.map((shape) => <option key={shape} value={shape}>{shape.replaceAll("-", " ")}</option>)}

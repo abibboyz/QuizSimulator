@@ -35,7 +35,8 @@ export function promptParagraphLines(text: string, shape: NonNullable<PromptStyl
 }
 
 export function promptSegments(text: string, unit: PromptTextAnimation["unit"]): { text: string; start: number; end: number }[] {
-  const pieces = unit === "sentence" && typeof Intl.Segmenter === "function"
+  const pieces = unit === "letter" ? promptGraphemes(text)
+    : unit === "sentence" && typeof Intl.Segmenter === "function"
     ? [...new Intl.Segmenter(undefined, { granularity: "sentence" }).segment(text)].map((segment) => segment.segment)
     : unit === "word" ? text.match(/\S+\s*|\s+/gu) ?? []
       : unit === "paragraph" ? text.match(/[^\n]+(?:\n+|$)|\n+/gu) ?? []
@@ -123,4 +124,23 @@ export function promptPathPose(shape: NonNullable<PromptStyle["textShape"]>, at:
     return { x: width / 2 + radius * Math.cos(angle), y: radius + radius * Math.sin(angle), angle: angle + Math.PI / 2 };
   }
   return { x, y: 0, angle: 0 };
+}
+
+export const LETTER_SHAPES = [
+  { id: "uniform", label: "Even" },
+  { id: "pinch", label: "Pinch · big ends, small middle" },
+  { id: "bulge", label: "Bulge · bigger middle" },
+  { id: "grow", label: "Grow · small to big" },
+  { id: "shrink", label: "Shrink · big to small" },
+  { id: "wave", label: "Size wave" },
+] as const;
+
+export function promptLetterScale(shape: PromptStyle["letterShape"], position: number): number {
+  const p = Math.max(0, Math.min(1, position));
+  if (shape === "pinch") return 0.55 + 0.65 * Math.abs(2 * p - 1);
+  if (shape === "bulge") return 0.65 + 0.65 * Math.sin(Math.PI * p);
+  if (shape === "grow") return 0.6 + 0.7 * p;
+  if (shape === "shrink") return 1.3 - 0.7 * p;
+  if (shape === "wave") return 0.9 + 0.3 * Math.cos(p * Math.PI * 4);
+  return 1;
 }

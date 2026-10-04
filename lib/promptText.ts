@@ -4,6 +4,17 @@ import { contrastRatio, readableTextOn } from "./color.ts";
 
 export type PromptAlign = "left" | "center" | "right";
 
+/** Solo play and video export use the same CSS pixel size at every viewport width. */
+export const SOLO_PROMPT_BASE_SIZE = 30;
+
+/** Keep layered Word Art legible when a prompt is enlarged for play or export. */
+export const MAX_PROMPT_DECORATION_SIZE = 48;
+
+/** Prompt Design spacing is authored at the compact preview's 11px base. */
+export function promptLetterSpacing(style: { letterSpacing?: number } | undefined, base: number): number {
+  return (style?.letterSpacing ?? 0) * base / 11;
+}
+
 const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"';
 
 let segmenter: Intl.Segmenter | null | undefined;

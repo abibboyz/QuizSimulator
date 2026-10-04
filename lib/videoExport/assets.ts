@@ -47,7 +47,7 @@ function decodeImageUrl(url: string, cors: boolean): Promise<LoadedImage> {
   });
 }
 
-async function loadImage(ref: MediaRef, signal?: AbortSignal): Promise<LoadedImage | null> {
+export async function loadImage(ref: MediaRef, signal?: AbortSignal): Promise<LoadedImage | null> {
   try {
     if (ref.kind === "stored") {
       const record = await getMedia(ref.id);
