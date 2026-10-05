@@ -1,3 +1,5 @@
+import { createPromptDrawing, PROMPT_DESIGN_WIDTH } from "../promptRenderer.ts";
+import { answerTextStyle, isUnscoredImage } from "../answerPresentation.ts";
 /**
  * Draws one frame of a solo run onto a canvas, from nothing but a timestamp.
  *
@@ -18,18 +20,7 @@
 
 import { mediaKey } from "@/lib/mediaRefs";
 import { stageEdge, stageVignette, themeInk } from "@/lib/themeInk";
-import {
-  layoutPrompt,
-  promptAlign,
-  promptFontSize,
-  promptFontStack,
-  promptGraphemes,
-  promptHasEmoji,
-  promptPreservesBreaks,
-  splitEmojiRuns,
-  wordArtInk,
-  wordArtStyleOf,
-} from "@/lib/promptText";
+import { promptAlign, promptFontStack, promptGraphemes, promptHasEmoji, splitEmojiRuns } from "@/lib/promptText";
 
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
@@ -448,6 +439,7 @@ export class FrameRenderer {
 
   /** The play screen's intro card: what sits behind the start cue. */
   private drawIntro() {
+    if (this.timeline.intro.cue) return;
     const { W, H, md } = this;
     const quiz = this.quiz;
     const maxW = this.narrow ? 416 : 672;
@@ -639,7 +631,7 @@ export class FrameRenderer {
     if (style === "none" || total <= 0) return null;
 
     const outcomes = settings.revealAfterEach
-      ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => r.correct)
+      ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isUnscoredImage(r.question) ? null : r.correct)
       : [];
     const answered = outcomes.length;
     const { value: reached, shown } = this.reachedAt(t);
@@ -677,7 +669,7 @@ export class FrameRenderer {
         h,
         draw: (x, y) => {
           for (let i = 0; i < total; i++) {
-            const known = i < answered;
+            const known = i < answered && outcomes[i] !== null;
             const current = i === index;
             const color = known
               ? outcomes[i]
@@ -747,7 +739,7 @@ export class FrameRenderer {
 
     const placement = q.promptPlacement;
     const normalPrompt = placement?.mode !== "bottom" && !overlay;
-    const promptBox = this.promptBox(run, sinceMount, CW);
+    const promptBox = this.styledPromptBox(run, sinceMount, CW);
     if (!overlay && !imageLeads && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
       parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW)));
@@ -757,7 +749,7 @@ export class FrameRenderer {
 
     if (overlay && placement) {
       const bg = q.media ? this.image(q.media) : null;
-      const text = posed(this.promptBox(run, sinceMount, CW * 0.8));
+      const text = posed(this.styledPromptBox(run, sinceMount, CW * 0.8));
       const height = CW * 9 / 16;
       parts.push({ w: CW, h: height, draw: (x, y) => {
         this.ctx.save();
@@ -783,7 +775,7 @@ export class FrameRenderer {
       q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW),
     );
 
-    if (revealed && q.explanation) {
+    if (revealed && !isUnscoredImage(q) && q.explanation) {
       // The explanation takes the question's exit but not its entrance (it arrives with the answer).
       const ePose = questionPoseAt({ ...run.motion.question, enter: "none" }, sinceMount, sinceExit);
       const card = this.explanationBox(q.explanation, run.revealAt, t, CW);
@@ -797,82 +789,25 @@ export class FrameRenderer {
     return this.stack(parts, gap, CW);
   }
 
-  /** The prompt, typed out character by character for the `typewriter` entrance. */
-  private promptBox(run: QuestionRun, sinceMount: number, CW: number): Box {
-    const { md } = this;
+  private readonly promptDrawings = new Map<string, ReturnType<typeof createPromptDrawing>>();
+
+  private styledPromptBox(run: QuestionRun, sinceMount: number, width: number): Box {
     const q = run.question;
-    const baseSize = md ? 30 : 20;
-    const baseLh = md ? 41.25 : 27.5;
-    const sized = typeof q.promptStyle?.fontSize === "number";
-    const size = promptFontSize(q.promptStyle, baseSize);
-    const lh = sized ? size * (baseLh / baseSize) : baseLh;
-    const align = promptAlign(q.promptStyle);
-    const artStyle = wordArtStyleOf(q.promptStyle?.wordArt);
-    const art = artStyle ? wordArtInk(this.accent, this.surface, artStyle) : undefined;
-    const raw = q.prompt || "";
-    const family = q.promptStyle?.font ? fontFamily(q.promptStyle.font, q.promptStyle.customFont, this.assets.fonts) : this.quizFont;
-    const face = promptHasEmoji(raw) ? promptFontStack(family) : family;
-    const opts = {
-      size,
-      lh,
-      weight: q.promptStyle?.bold === false ? 400 : 700,
-      italic: q.promptStyle?.italic,
-      underline: q.promptStyle?.underline,
-      color: q.prompt ? this.promptColor : this.ink[500],
-      family: face,
-      align,
-      balance: true as const,
-      wordArt: art,
-    };
-    const preserve = promptPreservesBreaks(raw);
-    if (!preserve) {
-      const full = this.textBox(q.prompt || "Untitled question", CW, opts);
-      const m = run.motion.question;
-      if (m.enter !== "typewriter" || !q.prompt) return full;
-      const typed = typewriterChars(q.prompt, m, sinceMount);
-      if (typed >= promptGraphemes(q.prompt).length) return full;
-
-      // Same lines as the full prompt; the untyped rest keeps its space, like the
-      // stage's invisible remainder, so nothing reflows while it types.
-      const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
-      const lines = this.balance(q.prompt, font, CW);
-      return {
-        w: CW,
-        h: lines.length * opts.lh,
-        draw: (x, y) => {
-          let left = typed;
-          lines.forEach((line, i) => {
-            if (left <= 0) return;
-            const chars = promptGraphemes(line);
-            const shown = chars.slice(0, left).join("");
-            const lineW = this.measure(line, font);
-            const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
-            this.drawLine(shown, origin, y + i * opts.lh, opts.lh, font, opts.color, "left", 0, opts.underline, art);
-            left -= chars.length + 1; // the space the line broke on
-          });
-        },
-      };
+    let drawing = this.promptDrawings.get(q.id);
+    if (!drawing) {
+      const family = fontFamily(q.promptStyle?.font ?? this.quiz.theme.font, q.promptStyle?.font ? q.promptStyle.customFont : this.quiz.theme.customFont, this.assets.fonts);
+      drawing = createPromptDrawing(this.ctx, q, this.quiz.theme, promptFontStack(family));
+      this.promptDrawings.set(q.id, drawing);
     }
-
-    const font = `${opts.italic ? "italic " : ""}${this.font(opts.weight, opts.size, opts.family)}`;
-    const lines = layoutPrompt(raw, (sample) => this.measure(sample, font), CW);
-    const motion = run.motion.question;
-    const typing = motion.enter === "typewriter";
-    const typed = typing ? typewriterChars(raw, motion, sinceMount) : Number.POSITIVE_INFINITY;
-    return {
-      w: CW,
-      h: Math.max(lh, lines.length * lh),
-      draw: (x, y) => {
-        lines.forEach((line, i) => {
-          const glyphs = promptGraphemes(line.text);
-          const visible = typed >= line.end ? line.text : typed <= line.start ? "" : glyphs.slice(0, Math.max(0, typed - line.start)).join("");
-          if (!visible) return;
-          const lineW = this.measure(line.text, font);
-          const origin = align === "left" ? x : align === "right" ? x + CW - lineW : x + (CW - lineW) / 2;
-          this.drawLine(visible, origin, y + i * lh, lh, font, opts.color, "left", 0, opts.underline, art);
-        });
-      },
-    };
+    const shared = drawing;
+    const scale = width / PROMPT_DESIGN_WIDTH;
+    const typed = run.motion.question.enter === "typewriter" && !q.promptStyle?.textAnimation ? typewriterChars(q.prompt, run.motion.question, sinceMount) : Infinity;
+    return { w: width, h: shared.height * scale, draw: (x, y) => {
+      this.ctx.save(); this.ctx.translate(x, y); this.ctx.scale(scale, scale);
+      const picture = q.promptStyle?.box?.image ? this.image(q.promptStyle.box.image) : null;
+      shared.draw(sinceMount, typed, picture ? { ...picture, source: frameSource(picture, this.t) } : undefined);
+      this.ctx.restore();
+    } };
   }
 
   /** "Question 1 of 8" on the left; streak, score and the timer on the right. */
@@ -906,7 +841,7 @@ export class FrameRenderer {
       q.kind === "multi-select"
         ? "· PICK ALL THAT APPLY"
         : q.kind === "image-choice"
-          ? "· PICK AN IMAGE"
+          ? isUnscoredImage(q) ? "· LOOK AND DECIDE" : "· PICK AN IMAGE"
           : q.kind === "reveal"
             ? "· PICK A COVER"
             : "";
@@ -1204,8 +1139,11 @@ export class FrameRenderer {
     const cols = this.narrow || q.layout === "list" ? 1 : this.sm ? 2 : 1;
     const gap = this.md ? 16 : 12;
     const colW = (CW - gap * (cols - 1)) / cols;
-    const font = this.font(600, this.md ? 18 : 16);
-    const lh = this.md ? 28 : 24;
+    const typography = answerTextStyle(theme, q);
+    const size = (typography.fontSize ?? 18) * CW / PROMPT_DESIGN_WIDTH;
+    const family = fontFamily(typography.font ?? theme.font, typography.font ? typography.customFont : theme.customFont, this.assets.fonts);
+    const font = `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    const lh = size * 1.5;
     const markerFont = this.font(600, 24);
 
     const tiles: TextTile[] = q.options.map((option, i) => {
@@ -1278,7 +1216,8 @@ export class FrameRenderer {
 
     // `transition-all duration-200`: background, text colour, rings and opacity all ease together.
     const fill = mixColor(bg, showCorrect ? this.good : showWrong ? this.bad : bg, rp);
-    const restText = theme.optionTextColor ?? readableTextOn(bg);
+    const typography = answerTextStyle(theme, run.question);
+    const restText = typography.color ?? readableTextOn(bg);
     const targetText = showCorrect ? readableTextOn(this.good) : showWrong ? readableTextOn(this.bad) : restText;
     const textColor = mixColor(restText, targetText, rp);
 
@@ -1321,7 +1260,7 @@ export class FrameRenderer {
         cx += 68;
       }
       const textTop = cy - (tile.lines.length * lh) / 2;
-      tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, textColor, "left"));
+      tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, textColor, "left", 0, !!typography.underline));
       if (tile.showMark) {
         this.drawLine(option.correct ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, textColor, "right");
       }
@@ -1335,10 +1274,13 @@ export class FrameRenderer {
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
     const colW = (CW - gap * (cols - 1)) / cols;
     const boxH = (colW * 2) / 3; // aspect-[3/2]
-    const numLh = this.md ? 24 : 20;
-    const capLh = this.md ? 20 : 16;
-    const numFont = this.font(600, this.md ? 16 : 14);
-    const capFont = this.font(600, this.md ? 14 : 12);
+    const typography = answerTextStyle(this.quiz.theme, q);
+    const size = (typography.fontSize ?? 14) * CW / PROMPT_DESIGN_WIDTH;
+    const capLh = size * 1.5;
+    const numFont = this.font(600, 14);
+    const family = fontFamily(typography.font ?? this.quiz.theme.font, typography.font ? typography.customFont : this.quiz.theme.customFont, this.assets.fonts);
+    const capFont = `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    const unscored = isUnscoredImage(q);
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
     const revealSettings = q.kind === "reveal" ? resolveReveal(q) : null;
@@ -1348,7 +1290,7 @@ export class FrameRenderer {
 
     const tiles = q.options.map((option, i) => {
       const caption = option.text.trim() ? this.wrap(option.text, capFont, colW) : [];
-      return { option, i, caption, h: boxH + 4 + numLh + caption.length * capLh };
+      return { option, i, caption, h: boxH + (caption.length ? 4 + caption.length * capLh : 0) };
     });
     const rows: (typeof tiles)[] = [];
     for (let i = 0; i < tiles.length; i += cols) rows.push(tiles.slice(i, i + cols));
@@ -1376,8 +1318,8 @@ export class FrameRenderer {
             const pickAt = this.pickedAt(run, option.id);
             const isPicked = pickAt !== null && t >= pickAt;
             const showCorrect = revealed && option.correct;
-            const showWrong = revealed && isPicked && !option.correct;
-            const faded = revealed && !option.correct && !isPicked;
+            const showWrong = !unscored && revealed && isPicked && !option.correct;
+            const faded = !unscored && revealed && !option.correct && !isPicked;
             const pickP = pickAt !== null && t >= pickAt ? tailwindEase(clamp01((t - pickAt) / TILE_STATE_MS)) : 0;
             const tin = this.tilePose(run, i, t);
             const opacity = faded ? lerp(1, 0.35, rp) : 1;
@@ -1444,7 +1386,7 @@ export class FrameRenderer {
               }
               ctx.restore();
 
-              if (revealed && (option.correct || isPicked)) {
+              if (!unscored && revealed && (option.correct || isPicked)) {
                 const markFont = this.font(600, 14);
                 const mark = option.correct ? "✓" : "✕";
                 const mw = this.measure(mark, markFont) + 12;
@@ -1452,16 +1394,17 @@ export class FrameRenderer {
                 this.drawLine(mark, tx + colW - 4 - mw / 2, ry + 4, 14, markFont, "#ffffff", "center");
               }
 
-              this.drawLine(String(i + 1), tx + colW / 2, ry + boxH + 4, numLh, numFont, this.promptColor, "center");
               caption.forEach((line, li) =>
                 this.drawLine(
                   line,
                   tx + colW / 2,
-                  ry + boxH + 4 + numLh + li * capLh,
+                  ry + boxH + 4 + li * capLh,
                   capLh,
                   capFont,
-                  this.promptColor,
+                  typography.color ?? this.promptColor,
                   "center",
+                  0,
+                  !!typography.underline,
                 ),
               );
             }), i);
@@ -1515,7 +1458,7 @@ export class FrameRenderer {
     const CW = Math.min(W, maxW) - 40;
     const x0 = (W - CW) / 2;
     const accuracy = results.total ? results.correctCount / results.total : 0;
-    const verdict = accuracyLabel(accuracy);
+    const verdict = results.total ? accuracyLabel(accuracy) : { title: "All done", blurb: "You’ve seen every image. Which did you like best?", celebrate: false };
 
     const header = this.stack(
       [
@@ -1545,7 +1488,7 @@ export class FrameRenderer {
     const stats: [string, string, boolean][] = [
       ["Score", results.score.toLocaleString(), true],
       ["Correct", `${results.correctCount}/${results.total}`, false],
-      ["Accuracy", `${Math.round(accuracy * 100)}%`, false],
+      ["Accuracy", results.total ? `${Math.round(accuracy * 100)}%` : "—", false],
       ["Best streak", String(results.bestStreak), false],
     ];
     const cols = this.narrow ? 2 : this.sm ? 4 : 2;
@@ -1610,7 +1553,7 @@ export class FrameRenderer {
         .filter((o) => o.correct)
         .map((o) => o.text || "(image)")
         .join(", ");
-      const extra = run.correct
+      const extra = isUnscoredImage(q) ? ["Image slide · not scored"] : run.correct
         ? []
         : this.wrap(`${label}${correctText}${run.timedOut ? " · ran out of time" : ""}`, smallFont, textW);
       const h = 32 + Math.max(28, lines.length * 24 + (extra.length ? 4 + extra.length * 20 : 0));
@@ -1639,12 +1582,13 @@ export class FrameRenderer {
             iy += 1;
           }
           const ok = item.run.correct;
-          const color = ok ? this.good : this.bad;
+          const unscored = isUnscoredImage(item.run.question);
+          const color = unscored ? this.ink[400] : ok ? this.good : this.bad;
           ctx.beginPath();
           ctx.arc(x + 34, iy + 32, 14, 0, Math.PI * 2);
           ctx.fillStyle = withAlpha(color, 0.2);
           ctx.fill();
-          this.drawLine(ok ? "✓" : "✕", x + 34, iy + 22, 20, this.font(700, 14), color, "center");
+          this.drawLine(unscored ? "—" : ok ? "✓" : "✕", x + 34, iy + 22, 20, this.font(700, 14), color, "center");
 
           const tx = x + 20 + 28 + 16;
           item.lines.forEach((line, li) => {
@@ -1686,6 +1630,7 @@ export class FrameRenderer {
     if (scene.kind !== "stage") return;
     const run = this.timeline.questions[scene.index];
     if (!run || t < run.revealAt || t >= run.exitAt) return;
+    if (isUnscoredImage(run.question)) return;
     const view = celebrationView(run.question);
     if (!view) return;
 
@@ -2280,17 +2225,17 @@ export class FrameRenderer {
   }
 
   /** `text-wrap: balance`: the narrowest width that keeps the same number of lines. */
-  private balance(text: string, font: string, maxWidth: number): string[] {
-    const lines = this.wrap(text, font, maxWidth);
+  private balance(text: string, font: string, maxWidth: number, spacing = 0): string[] {
+    const lines = this.wrap(text, font, maxWidth, spacing);
     if (lines.length < 2) return lines;
     let lo = maxWidth / 2;
     let hi = maxWidth;
     for (let i = 0; i < 12; i++) {
       const mid = (lo + hi) / 2;
-      if (this.wrap(text, font, mid).length === lines.length) hi = mid;
+      if (this.wrap(text, font, mid, spacing).length === lines.length) hi = mid;
       else lo = mid;
     }
-    return this.wrap(text, font, hi);
+    return this.wrap(text, font, hi, spacing);
   }
 
   private textBox(
@@ -2300,19 +2245,19 @@ export class FrameRenderer {
       size: number;
       lh: number;
       weight: number;
-      color: string;
+      color: string | CanvasGradient;
       family?: string;
       align?: Align;
       spacing?: number;
       balance?: boolean;
       italic?: boolean;
       underline?: boolean;
-      wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number };
+      wordArt?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number };
     },
   ): Box {
     const font = `${o.italic ? "italic " : ""}${this.font(o.weight, o.size, o.family)}`;
     const spacing = o.spacing ?? 0;
-    const lines = o.balance ? this.balance(text, font, maxWidth) : this.wrap(text, font, maxWidth, spacing);
+    const lines = o.balance ? this.balance(text, font, maxWidth, spacing) : this.wrap(text, font, maxWidth, spacing);
     const align = o.align ?? "left";
     return {
       w: maxWidth,
@@ -2331,11 +2276,11 @@ export class FrameRenderer {
     top: number,
     lineHeight: number,
     font: string,
-    color: string,
+    color: string | CanvasGradient,
     align: Align,
     spacing = 0,
     underline = false,
-    wordArt?: { fill: string; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number },
+    wordArt?: { fill: string | CanvasGradient; stroke: string; shadow: string; strokeWidth?: number; blur?: number; drop?: number; layers?: number; decorationSize?: number },
   ) {
     if (!text) return;
     const { ctx } = this;
@@ -2369,10 +2314,11 @@ export class FrameRenderer {
       const strokeWidth = wordArt.strokeWidth ?? 1;
       const layers = wordArt.layers ?? 1;
       const drop = wordArt.drop ?? 1;
-      const blur = lineHeight * (wordArt.blur ?? 0);
+      const decorationSize = wordArt.decorationSize ?? lineHeight;
+      const blur = decorationSize * (wordArt.blur ?? 0);
       for (const piece of pieces) {
         if (!classic) {
-          const step = lineHeight * 0.04 * drop;
+          const step = decorationSize * 0.12 * drop;
           for (let i = layers; i >= 1; i--) {
             ctx.save();
             ctx.shadowColor = blur ? wordArt.shadow : "transparent";
@@ -2387,13 +2333,13 @@ export class FrameRenderer {
         ctx.save();
         if (classic) {
           ctx.shadowColor = wordArt.shadow;
-          ctx.shadowOffsetX = lineHeight * 0.03;
-          ctx.shadowOffsetY = lineHeight * 0.03;
+          ctx.shadowOffsetX = decorationSize * 0.12;
+          ctx.shadowOffsetY = decorationSize * 0.12;
           ctx.shadowBlur = 0;
         } else {
           ctx.shadowColor = "transparent";
         }
-        ctx.lineWidth = Math.max(1, lineHeight * 0.045 * (classic ? 1 : Math.max(strokeWidth, 0.35)));
+        ctx.lineWidth = Math.max(1, decorationSize * 0.12 * (classic ? 1 : Math.max(strokeWidth, 0.35)));
         if (!piece.emoji && strokeWidth > 0) {
           ctx.strokeStyle = wordArt.stroke;
           ctx.strokeText(piece.text, cx, baseline);

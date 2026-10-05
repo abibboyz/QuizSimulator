@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { WORD_ART_STYLES, layoutPrompt, promptAlign, promptCharCount, promptFontSize, promptHasEmoji, promptPreservesBreaks, splitEmojiRuns, wordArtCss, wordArtInk, wordArtReadable, wordArtStyleOf } from "./promptText.ts";
+import { WORD_ART_STYLES, layoutPrompt, promptAlign, promptCharCount, promptFontSize, promptHasEmoji, promptLetterSpacing, promptPreservesBreaks, splitEmojiRuns, wordArtCss, wordArtInk, wordArtReadable, wordArtStyleOf } from "./promptText.ts";
 import { stageEdge, stageVignette } from "./themeInk.ts";
 
 const width = (sample: string) => [...sample].length;
@@ -48,13 +48,23 @@ test("prompt lines keep spaces and treat Enter as its own character", () => {
   assert.deepEqual(emoji.map((line) => line.text), ["a", "😀"]);
 });
 
-test("an unset prompt size and alignment stay on today's values", () => {
-  assert.equal(promptFontSize(undefined, 30), 30);
+test("an unset prompt uses 24px on web play and keeps centered alignment", () => {
+  assert.equal(promptFontSize(undefined, 30), 24);
   assert.equal(promptFontSize({ fontSize: 30 }, 20), 20);
   assert.equal(promptFontSize({ fontSize: 60 }, 30), 60);
   assert.equal(promptFontSize({ fontSize: 60 }, 11), 22);
+  assert.equal(promptFontSize({ fontSize: 120 }, 30), 120);
+  assert.equal(promptFontSize({ fontSize: 144 }, 20), 96);
+  assert.equal(promptFontSize({ fontSize: 150 }, 30), 150);
   assert.equal(promptAlign(undefined), "center");
   assert.equal(promptAlign({ align: "left" }), "left");
+});
+
+test("letter spacing keeps the same proportion in preview, play and export", () => {
+  const style = { letterSpacing: 5 };
+  assert.equal(promptLetterSpacing(style, 11), 5);
+  assert.equal(promptLetterSpacing(style, 30), 150 / 11);
+  assert.equal(promptLetterSpacing(style, 60), 300 / 11);
 });
 
 test("word art keeps a contrasting outline, and light stages do not fade to black", () => {

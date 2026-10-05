@@ -1,5 +1,8 @@
 "use client";
 
+import { activeCue } from "@/lib/cues";
+import { CuePlayer } from "@/components/play/CuePlayer";
+import { isUnscoredImage } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -44,6 +47,7 @@ function HostView() {
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
+  const [introFinishedFor, setIntroFinishedFor] = useState<string | null>(null);
   const [showTeams, setShowTeams] = useState(true);
 
   useEffect(() => {
@@ -108,6 +112,12 @@ function HostView() {
       </Splash>
     );
   }
+
+  const intro = activeCue(quiz, undefined, "intro");
+  if (intro && introFinishedFor !== quiz.id) return <ThemeShell theme={quiz.theme}>
+    <div className="min-h-dvh" aria-label="Quiz starting" />
+    <CuePlayer cue={intro} soundOn={quiz.settings.sound} onDone={() => setIntroFinishedFor(quiz.id)} />
+  </ThemeShell>;
 
   const question = questions[index];
   const limit = question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
@@ -212,6 +222,7 @@ function HostQuestion({
   motion,
   loopSettings,
 }: HostQuestionProps) {
+  const unscored = isUnscoredImage(question);
   const [revealed, setRevealed] = useState(false);
   const [revealComplete, setRevealComplete] = useState(false);
   const celebrationReady = question.kind !== "reveal" || revealComplete;
@@ -236,22 +247,27 @@ function HostQuestion({
   const reveal = useCallback(() => {
     setRevealed(true);
     setRunning(false);
-    if (soundOn) playCorrect();
+    if (soundOn && !unscored) playCorrect();
     if (soundOn && question.kind === "reveal") playCue(resolveReveal(question).sound);
-  }, [soundOn, question]);
+  }, [soundOn, question, unscored]);
 
   const advance = useCallback(() => {
     if (soundOn) playWhoosh();
     onNext();
   }, [onNext, soundOn]);
 
+  useEffect(() => {
+    if (!unscored || !expired || isLast) return;
+    onNext();
+  }, [unscored, expired, isLast, onNext]);
+
   // Time's up: show the answer on its own. The short beat lets the room register
   // that the clock ran out before the answer lands.
   useEffect(() => {
-    if (!autoReveal || !expired || revealed) return;
+    if (unscored || !autoReveal || !expired || revealed) return;
     const id = window.setTimeout(reveal, 600);
     return () => window.clearTimeout(id);
-  }, [autoReveal, expired, revealed, reveal]);
+  }, [unscored, autoReveal, expired, revealed, reveal]);
 
   // Hands-free run: roll on to the next question by itself.
   useEffect(() => {
@@ -268,7 +284,7 @@ function HostQuestion({
 
       if (event.key === " ") {
         event.preventDefault();
-        if (revealed) advance();
+        if (revealed || unscored) advance();
         else reveal();
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
@@ -281,11 +297,11 @@ function HostQuestion({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [revealed, reveal, advance, onBack]);
+  }, [revealed, reveal, advance, onBack, unscored]);
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto py-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2" style={{ justifyContent: "safe center" }}>
         {/* Host mode doesn't score, so there are no per-question outcomes to
             colour in — the meter shows position only. */}
         <QuizProgress
@@ -318,7 +334,7 @@ function HostQuestion({
                 pulse={meter.progressPulse}
                 mascot={meter.progressMascot}
                 mascotMedia={meter.progressMascotMedia}
-                celebrate={revealed}
+                celebrate={revealed && !unscored}
                 size={96}
               />
             ) : null
@@ -348,7 +364,7 @@ function HostQuestion({
           </>
         )}
 
-        {!revealed ? (
+        {!revealed && !unscored ? (
           <Button variant="primary" size="lg" onClick={reveal}>
             Reveal answer
           </Button>
@@ -359,15 +375,15 @@ function HostQuestion({
         )}
       </div>
 
-      {revealed && celebrationReady && <CelebrationCard question={question} mode="host" />}
+      {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" />}
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
         {revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
           <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
         ) : (
           <>
-            Space {revealed ? "advances" : "reveals"} · ← → to move · F for fullscreen
-            {autoReveal && !revealed && " · answer shows itself at zero"}
+            Space {revealed || unscored ? "advances" : "reveals"} · ← → to move · F for fullscreen
+            {!unscored && autoReveal && !revealed && " · answer shows itself at zero"}
           </>
         )}
       </p>

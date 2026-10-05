@@ -1,5 +1,6 @@
 "use client";
 
+import { AnswerTypography } from "@/components/builder/AnswerTypography";
 import { themeInk } from "@/lib/themeInk";
 
 import type { ReactNode } from "react";
@@ -203,6 +204,8 @@ export function ThemePanel({ theme, onChange }: Props) {
           </>
         )}
       </Section>
+
+      <AnswerTypography global value={theme.answerStyle} theme={theme} onChange={(answerStyle) => onChange({ ...theme, answerStyle })} />
 
       <Section
         title="Answers"

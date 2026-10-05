@@ -12,7 +12,7 @@ interface Props {
    * How each answered question went, in running order. Shorter than `total`
    * mid-run; empty in host mode, which doesn't score.
    */
-  outcomes?: boolean[];
+  outcomes?: (boolean | null)[];
   style: QuizProgressStyle;
   mascot?: string;
   mascotMedia?: MediaRef;
@@ -74,7 +74,7 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
         {Array.from({ length: total }, (_, i) => {
           // Three tiers: how it went (when that's known and allowed to show),
           // then merely been-there, then still to come.
-          const known = i < answered;
+          const known = i < answered && outcomes[i] !== null;
           const current = i === index;
           const background = known
             ? outcomes[i]

@@ -1,3 +1,4 @@
+import { isUnscoredImage, unscoredResult } from "../answerPresentation.ts";
 /**
  * The whole solo run, laid out on a clock before a single frame is drawn.
  *
@@ -236,6 +237,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
   let liveAt = clock;
 
   questions.forEach((question, index) => {
+    const unscored = isUnscoredImage(question);
     const limitSeconds = timerFor(quiz, question);
     const thinkMs = limitSeconds !== null ? limitSeconds * 1000 : UNTIMED_THINK_MS;
 
@@ -278,7 +280,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
 
     const selectedIds = picks.map((p) => p.optionId);
     const correct = !timedOut && isCorrect(question, selectedIds);
-    const result = scoreQuestion({
+    const result = unscored ? unscoredResult(streak) : scoreQuestion({
       correct,
       base: basePointsFor(quiz, question),
       timeLeftFraction: limitSeconds ? Math.max(0, 1 - msTaken / (limitSeconds * 1000)) : null,
@@ -294,9 +296,9 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (correct) correctCount += 1;
 
     // Reveal feedback: an authored cue replaces the stock chime entirely.
-    const feedback = settings.revealAfterEach ? activeCue(quiz, question, correct ? "correct" : "wrong") : null;
+    const feedback = !unscored && settings.revealAfterEach ? activeCue(quiz, question, correct ? "correct" : "wrong") : null;
     if (feedback) showCue(feedback, correct ? "correct" : "wrong", revealAt);
-    else audio.push({ at: revealAt, recipe: correct ? "correct" : "wrong" });
+    else if (!unscored) audio.push({ at: revealAt, recipe: correct ? "correct" : "wrong" });
 
     // A Reveal question's picture uncovers with the answer, with its own sound (play page's reveal effect).
     if (question.kind === "reveal" && settings.revealAfterEach) {
@@ -307,7 +309,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     // The card pops in, then confetti. Other celebration motions are drawn from
     // the clock in the renderer. Reveal-off never shows the card, so it stays quiet.
     if (
-      settings.revealAfterEach &&
+      !unscored && settings.revealAfterEach &&
       celebrationEnabled(question) &&
       celebrationAnimation(question) === "confetti"
     ) {
@@ -315,7 +317,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     }
 
     const holdSeconds = revealHoldSeconds(settings);
-    const timeoutBar = shouldAutoAdvanceAfterTimeout(settings, "revealed", {
+    const timeoutBar = !unscored && shouldAutoAdvanceAfterTimeout(settings, "revealed", {
       questionId: question.id,
       selectedIds,
       correct,
@@ -325,7 +327,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     });
     // A player who answered would be left to click on; the video carries on
     // after the same hold the timeout path uses.
-    const advanceAt = settings.revealAfterEach
+    const advanceAt = !unscored && settings.revealAfterEach
       ? revealAt + celebrationDelayMs(question) + holdSeconds * 1000
       : revealAt + REVEAL_OFF_HOLD_MS;
 
@@ -391,7 +393,8 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
   /* ---- results */
   const resultsStart = clock;
   const outroCue = activeCue(quiz, undefined, "outro");
-  const verdict = accuracyLabel(questions.length ? correctCount / questions.length : 0);
+  const scoredCount = questions.filter((q) => !isUnscoredImage(q)).length;
+  const verdict = accuracyLabel(scoredCount ? correctCount / scoredCount : 0);
   let resultsEnd = resultsStart + RESULTS_HOLD_MS;
   if (outroCue) {
     const hold = cueHoldMs(outroCue);
@@ -425,7 +428,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       start: resultsStart,
       end: resultsEnd,
       correctCount,
-      total: questions.length,
+      total: scoredCount,
       score,
       bestStreak,
     },

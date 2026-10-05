@@ -5,18 +5,11 @@ import { usePresence } from "motion/react";
 import type { Question, QuizSettings, Theme } from "@/types/quiz";
 import { LoopMotion } from "@/components/play/LoopMotion";
 import { resolveLoops } from "@/lib/loopMotion";
-import { fontFamily } from "@/lib/themes";
+import { PromptCanvas } from "@/components/play/PromptCanvas";
+import { isUnscoredImage } from "@/lib/answerPresentation";
+import { promptAnimationSpan } from "@/lib/promptDesign";
 import { promptPosition } from "@/lib/questionPresentation";
-import {
-  promptAlign,
-  promptFontSize,
-  promptFontStack,
-  promptGraphemes,
-  promptPreservesBreaks,
-  wordArtCss,
-  wordArtInk,
-  wordArtStyleOf,
-} from "@/lib/promptText";
+import { promptAlign } from "@/lib/promptText";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
@@ -54,13 +47,8 @@ interface Props {
   motion?: ResolvedMotion;
   onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
   onRevealComplete?: () => void;
+  promptReplay?: number;
 }
-
-const PROMPT_TEXT: Record<StageMode, string> = {
-  host: "text-4xl md:text-6xl leading-tight",
-  solo: "text-lg md:text-2xl leading-snug",
-  preview: "text-[11px] leading-snug",
-};
 
 const META_TEXT: Record<StageMode, string> = {
   host: "text-base",
@@ -89,6 +77,7 @@ export function QuestionStage({
   motion,
   onPositionChange,
   onRevealComplete,
+  promptReplay = 0,
 }: Props) {
   const loops = resolveLoops(loopSettings, question);
   const placement = question.promptPlacement;
@@ -125,54 +114,21 @@ export function QuestionStage({
       : undefined;
 
   const prompt = question.prompt;
-  const typing = animated && motion.question.enter === "typewriter" && !!prompt;
-  const typed = typing ? typewriterChars(prompt, motion.question, sinceMount) : 0;
-  const promptChars = typing ? promptGraphemes(prompt) : [];
+  const textAnimation = question.promptStyle?.textAnimation;
+  const typing = animated && motion.question.enter === "typewriter" && !textAnimation && !!prompt;
+  const typed = typing ? typewriterChars(prompt, motion.question, sinceMount) : Infinity;
+  const textElapsed = useElapsedSince(textAnimation ? `${question.id}-${promptReplay}-${prompt}-${JSON.stringify(textAnimation)}` : null,
+    textAnimation ? promptAnimationSpan(prompt, textAnimation) * (textAnimation.repeat === null ? Infinity : Math.max(1, textAnimation.repeat ?? 1)) : 0, reduced) ?? Infinity;
   const align = promptAlign(question.promptStyle);
   const aligned = align !== "center";
-  const sized = typeof question.promptStyle?.fontSize === "number" && Number.isFinite(question.promptStyle.fontSize);
-  const sizeBase = overlay && mode === "host" ? 24 : mode === "host" ? 60 : mode === "preview" ? 11 : 30;
-  const promptPx = promptFontSize(question.promptStyle, sizeBase);
-  const artStyle = wordArtStyleOf(question.promptStyle?.wordArt);
-  const art = artStyle ? wordArtInk(theme.accent, theme.surface, artStyle) : null;
-  const chosenFont = question.promptStyle?.font
-    ? fontFamily(question.promptStyle.font, question.promptStyle.customFont)
-    : undefined;
   // Host mode packs tighter: everything has to clear a 720p projector without
   // pushing the answer tiles under the control bar.
   const gap = mode === "preview" ? "gap-1.5" : mode === "host" ? "gap-3 md:gap-5" : "gap-6 md:gap-8";
 
   const promptNode = (
-    <LoopMotion value={loops.question} preview={mode === "preview"}>
-  <h2
-    className={`stage-prompt font-bold ${aligned ? "w-full" : "text-center"} ${overlay && mode === "host" ? "text-lg md:text-2xl leading-snug" : PROMPT_TEXT[mode]}`}
-    style={{
-      color: art ? art.fill : "var(--prompt-color)",
-      fontWeight: question.promptStyle?.bold === false ? 400 : 700,
-      fontStyle: question.promptStyle?.italic ? "italic" : "normal",
-      textDecoration: question.promptStyle?.underline ? "underline" : "none",
-      fontFamily: promptFontStack(chosenFont ?? "var(--quiz-font)"),
-      textAlign: aligned ? align : undefined,
-      whiteSpace: promptPreservesBreaks(prompt) ? "pre-wrap" : undefined,
-      fontSize: sized ? promptPx : undefined,
-      lineHeight: sized ? 1.375 : undefined,
-      textShadow: art ? wordArtCss(art, sized ? promptPx : sizeBase) : undefined,
-    }}
-    aria-label={typing ? prompt : undefined}
-  >
-    {typing ? (
-      <>
-        {promptChars.slice(0, typed).join("")}
-        {/* The untyped rest is laid out but invisible, so lines don't reflow as it types. */}
-        <span aria-hidden style={{ visibility: "hidden" }}>
-          {promptChars.slice(typed).join("")}
-        </span>
-      </>
-    ) : (
-      question.prompt || <span className="text-ink-500">Untitled question</span>
-    )}
-  </h2>
-    </LoopMotion>
+    <div className="w-full"><LoopMotion value={loops.question} preview={mode === "preview"}>
+      <PromptCanvas question={question} theme={theme} elapsed={textElapsed} typed={typed} />
+    </LoopMotion></div>
   );
 
   return (
@@ -181,7 +137,7 @@ export function QuestionStage({
         <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
           Question {index + 1} of {total}
           {question.kind === "multi-select" && <span className="ml-2 text-ink-400">· pick all that apply</span>}
-          {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· pick an image</span>}
+          {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· {isUnscoredImage(question) ? "look and decide" : "pick an image"}</span>}
           {question.kind === "reveal" && <span className="ml-2 text-ink-400">· pick a cover</span>}
         </span>
         {header}
@@ -281,7 +237,7 @@ export function QuestionStage({
         onRevealComplete={onRevealComplete}
       />
 
-      {revealed &&
+      {revealed && !isUnscoredImage(question) &&
         question.explanation &&
         (() => {
           const card = (
