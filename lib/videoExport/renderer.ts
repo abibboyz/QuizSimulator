@@ -29,7 +29,7 @@ import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, imageChoiceColumns } from "@/lib/imageChoice";
-import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
+import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
 import { basePointsFor } from "@/lib/store/playSession";
 import {
@@ -628,7 +628,7 @@ export class FrameRenderer {
     const settings = this.quiz.settings;
     const style = settings.quizProgressStyle;
     const total = this.timeline.questions.length;
-    if (style === "none" || total <= 0) return null;
+    if (style === "none" || total <= 0 || !showsProgressBar(settings)) return null;
 
     const outcomes = settings.revealAfterEach
       ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isUnscoredImage(r.question) ? null : r.correct)
@@ -836,9 +836,12 @@ export class FrameRenderer {
     const groupH = Math.max(badgeH, meter?.h ?? 0);
 
     const metaFont = this.font(600, 12);
+    // The "showProgressBar" setting drops the count and the kind hint; score and timer stay on the right.
+    const showCount = showsProgressBar(this.quiz.settings);
     const main = `QUESTION ${run.index + 1} OF ${this.timeline.questions.length}`;
-    const extra =
-      q.kind === "multi-select"
+    const extra = !showCount
+      ? ""
+      : q.kind === "multi-select"
         ? "· PICK ALL THAT APPLY"
         : q.kind === "image-choice"
           ? isUnscoredImage(q) ? "· LOOK AND DECIDE" : "· PICK AN IMAGE"
@@ -850,13 +853,13 @@ export class FrameRenderer {
     const extraW = extra ? this.measure(extra, metaFont, 1.2) : 0;
     const extraInline = !extra || mainW + 8 + extraW <= metaMax;
     const extraLines = extra && !extraInline ? this.wrap(extra, metaFont, metaMax, 1.2) : [];
-    const metaH = 16 * (1 + extraLines.length);
+    const metaH = showCount ? 16 * (1 + extraLines.length) : 0;
 
     return {
       w: CW,
       h: Math.max(metaH, groupH),
       draw: (x, y) => {
-        this.drawLine(main, x, y, 16, metaFont, this.ink[300], "left", 1.2);
+        if (showCount) this.drawLine(main, x, y, 16, metaFont, this.ink[300], "left", 1.2);
         if (extra && extraInline) this.drawLine(extra, x + mainW + 8, y, 16, metaFont, this.ink[400], "left", 1.2);
         extraLines.forEach((line, i) => this.drawLine(line, x, y + 16 * (i + 1), 16, metaFont, this.ink[400], "left", 1.2));
 

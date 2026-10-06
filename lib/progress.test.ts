@@ -15,7 +15,11 @@ import {
   quizProgressFraction,
   quizProgressReached,
   showsPerQuestion,
+  showsProgressBar,
+  withProgressBarDefault,
 } from "./progress.ts";
+import { DEFAULT_SETTINGS } from "@/lib/factory";
+import type { QuizSettings } from "@/types/quiz";
 
 test("every style and pulse is offered exactly once", () => {
   const styles = PROGRESS_STYLES.map((s) => s.id);
@@ -116,4 +120,27 @@ test("hiding the meter is a real choice, and every style is listed once", () => 
   const ids = QUIZ_PROGRESS_STYLES.map((s) => s.id);
   assert.deepEqual(ids, [...new Set(ids)]);
   assert.ok(ids.includes("none"), "an author must be able to turn it off");
+});
+
+test("the progress header is on by default and only an explicit false hides it", () => {
+  assert.equal(DEFAULT_SETTINGS.showProgressBar, true, "new quizzes show it");
+  assert.equal(showsProgressBar({}), true, "quizzes saved before the setting existed show it");
+  assert.equal(showsProgressBar({ showProgressBar: undefined }), true);
+  assert.equal(showsProgressBar(undefined), true);
+  assert.equal(showsProgressBar({ showProgressBar: true }), true);
+  assert.equal(showsProgressBar({ showProgressBar: false }), false);
+});
+
+test("loading normalizes a missing showProgressBar to true and keeps an explicit choice", () => {
+  const legacy: QuizSettings = { ...DEFAULT_SETTINGS };
+  delete legacy.showProgressBar;
+  assert.equal("showProgressBar" in legacy, false);
+  assert.equal(withProgressBarDefault(legacy).showProgressBar, true);
+  // An explicit `undefined` (e.g. spread over the defaults) still lands on true.
+  const blank: QuizSettings = { ...DEFAULT_SETTINGS, showProgressBar: undefined };
+  assert.equal(withProgressBarDefault(blank).showProgressBar, true);
+  const off: QuizSettings = { ...DEFAULT_SETTINGS, showProgressBar: false };
+  assert.equal(withProgressBarDefault(off).showProgressBar, false);
+  const dots: QuizSettings = { ...legacy, quizProgressStyle: "dots" };
+  assert.equal(withProgressBarDefault(dots).quizProgressStyle, "dots", "other settings pass through untouched");
 });

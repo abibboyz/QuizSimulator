@@ -16,6 +16,7 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
+import { showsProgressBar } from "@/lib/progress";
 import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
@@ -451,7 +452,7 @@ function PlayView() {
         <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
-          <QuizProgress
+          {showsProgressBar(quiz.settings) && <QuizProgress
             index={index}
             total={order.length}
             outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.unscored ? null : a.correct) : undefined}
@@ -459,7 +460,7 @@ function PlayView() {
             mascot={quiz.settings.progressMascot}
             mascotMedia={quiz.settings.progressMascotMedia}
             narrow={mobile}
-          />
+          />}
 
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}
@@ -495,6 +496,7 @@ function PlayView() {
                 onPick={handlePick}
                 mode="solo"
                 narrow={mobile}
+                showCount={showsProgressBar(quiz.settings)}
                 theme={quiz.theme}
                 motion={stageMotion}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}

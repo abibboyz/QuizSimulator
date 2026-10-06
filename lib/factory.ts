@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   progressPulse: "none",
   progressMascot: "\u{1F41B}",
   quizProgressStyle: "bar",
+  showProgressBar: true,
 };
 
 export function createOption(text = "", correct = false): Option {

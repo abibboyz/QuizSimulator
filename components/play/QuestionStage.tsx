@@ -48,6 +48,12 @@ interface Props {
   onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
   onRevealComplete?: () => void;
   promptReplay?: number;
+  /**
+   * The "Question N of X" label and the question-type hint (quiz setting
+   * `showProgressBar`). Off drops both; `header` (timer, score) still shows, and
+   * with no header the whole top row collapses. Defaults to shown.
+   */
+  showCount?: boolean;
 }
 
 const META_TEXT: Record<StageMode, string> = {
@@ -78,6 +84,7 @@ export function QuestionStage({
   onPositionChange,
   onRevealComplete,
   promptReplay = 0,
+  showCount = true,
 }: Props) {
   const loops = resolveLoops(loopSettings, question);
   const placement = question.promptPlacement;
@@ -133,15 +140,15 @@ export function QuestionStage({
 
   return (
     <div className={`flex w-full flex-col ${gap}`}>
-      <div className="flex items-start justify-between gap-4">
-        <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
+      {(showCount || header) && <div className={`flex items-start gap-4 ${showCount ? "justify-between" : "justify-end"}`}>
+        {showCount && <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
           Question {index + 1} of {total}
           {question.kind === "multi-select" && <span className="ml-2 text-ink-400">· pick all that apply</span>}
           {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· {isUnscoredImage(question) ? "look and decide" : "pick an image"}</span>}
           {question.kind === "reveal" && <span className="ml-2 text-ink-400">· pick a cover</span>}
-        </span>
+        </span>}
         {header}
-      </div>
+      </div>}
 
       {imageLeads && !overlay && (
         <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"} style={questionStyle}>

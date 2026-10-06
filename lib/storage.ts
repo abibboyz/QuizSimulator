@@ -19,6 +19,7 @@ import { DEFAULT_THEME } from "@/lib/themes";
 import { collectRefs, questionMediaRefs, remapMedia } from "@/lib/mediaRefs";
 import { readQuestionClipboard } from "@/lib/questionClipboardState";
 import { normalizeRevealQuestion } from "@/lib/reveal";
+import { withProgressBarDefault } from "@/lib/progress";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -68,7 +69,7 @@ function hydrate(quiz: Quiz): Quiz {
   return {
     ...quiz,
     theme: { ...DEFAULT_THEME, ...quiz.theme },
-    settings: { ...DEFAULT_SETTINGS, ...quiz.settings },
+    settings: withProgressBarDefault({ ...DEFAULT_SETTINGS, ...quiz.settings }),
     questions: quiz.questions.map(normalizeKind),
   };
 }

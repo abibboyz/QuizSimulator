@@ -5,6 +5,7 @@ import { questionTheme } from "@/lib/questionPresentation";
 import { useState } from "react";
 import type { Question, Quiz } from "@/types/quiz";
 import { getPreset, themeVars } from "@/lib/themes";
+import { showsProgressBar } from "@/lib/progress";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
@@ -73,6 +74,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
             interactive={false}
             onPick={() => {}}
             mode="preview"
+            showCount={showsProgressBar(quiz.settings)}
             promptReplay={promptReplay}
             theme={theme}
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
