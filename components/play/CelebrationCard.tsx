@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion } from "motion/react";
 import confetti from "canvas-confetti";
 import type { CelebrationAnimation, Question } from "@/types/quiz";
@@ -8,7 +8,9 @@ import { MediaImage } from "@/components/ui/MediaImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   CELEBRATION_FOLLOW_MS,
+  animatesCelebrationFromReveal,
   celebrationAnimation,
+  hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
 } from "@/lib/celebration";
@@ -45,6 +47,7 @@ export function CelebrationCard({
   // A picture card is the picture alone. Words are only for a card with no picture.
   const lines = view.images.length > 0 ? [] : view.lines.filter((line) => line.trim());
   const showCard = view.images.length > 0 || lines.length > 0;
+  const imageOnly = view.images.length > 0 && hidesCelebrationBox(question);
   const frame = contained
     ? "fixed inset-y-0 left-1/2 z-30 w-full max-w-[26rem] -translate-x-1/2 overflow-hidden lg:rounded-[2rem]"
     : mode === "preview"
@@ -62,7 +65,9 @@ export function CelebrationCard({
           : "max-h-[min(20rem,50dvh)] max-w-[24rem]";
   const answer = mode === "preview" ? "text-base" : contained ? "text-2xl" : "text-3xl";
   const shell =
-    mode === "preview"
+    imageOnly
+      ? "p-0"
+      : mode === "preview"
       ? "max-w-[min(19rem,100%)] rounded-xl px-4 py-3"
       : contained
         ? "max-w-[min(22rem,100%)] rounded-2xl px-5 py-4"
@@ -75,12 +80,11 @@ export function CelebrationCard({
       data-celebration={animation}
     >
       {showCard && (
-        <div
-          data-celebration-card
-          className={`relative z-10 w-fit max-w-full ${shell} border border-ink-500 bg-ink-900 text-center ${
-            reduced ? "" : "animate-pop"
-          }`}
-          style={{ boxShadow: "0 0 0 1px var(--accent-line), 0 16px 36px -18px rgb(0 0 0 / 0.55)" }}
+        <RevealTravelCard
+          question={question}
+          reduced={reduced}
+          className={`relative z-10 w-fit max-w-full ${shell} text-center ${imageOnly ? "" : "border border-ink-500 bg-ink-900"}`}
+          style={imageOnly ? undefined : { boxShadow: "0 0 0 1px var(--accent-line), 0 16px 36px -18px rgb(0 0 0 / 0.55)" }}
         >
           {view.images.length > 0 && (
             <div className="flex flex-wrap items-end justify-center gap-3">
@@ -88,7 +92,7 @@ export function CelebrationCard({
                 <MediaImage
                   key={`${item.media.kind}-${index}`}
                   media={item.media}
-                  className={`mx-auto w-auto max-w-full rounded-xl bg-white object-contain ${picture}`}
+                  className={`mx-auto h-auto w-auto max-w-full object-contain ${imageOnly ? "" : "rounded-xl bg-white"} ${picture}`}
                 />
               ))}
             </div>
@@ -103,10 +107,80 @@ export function CelebrationCard({
               ))}
             </div>
           )}
-        </div>
+        </RevealTravelCard>
       )}
       {!reduced && animation !== "none" && <CelebrationMotion animation={animation} contained={contained} />}
     </div>
+  );
+}
+
+interface TravelOrigin {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+function RevealTravelCard({
+  question,
+  reduced,
+  className,
+  style,
+  children,
+}: {
+  question: Question;
+  reduced: boolean;
+  className: string;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const measureRef = useRef<HTMLDivElement>(null);
+  const correct = animatesCelebrationFromReveal(question)
+    ? question.options.find((option) => option.correct)
+    : undefined;
+  const sourceKey = correct ? `${question.id}:${correct.id}` : null;
+  const shouldTravel = !!sourceKey && !reduced;
+  const [origin, setOrigin] = useState<TravelOrigin | false | null>(null);
+
+  useLayoutEffect(() => {
+    if (!sourceKey || reduced) return;
+    const target = measureRef.current?.getBoundingClientRect();
+    const source = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal-source]"))
+      .find((element) => element.dataset.revealSource === sourceKey)
+      ?.getBoundingClientRect();
+    const next = !source || !target || target.width <= 0 || target.height <= 0
+      ? false
+      : {
+          x: source.left + source.width / 2 - (target.left + target.width / 2),
+          y: source.top + source.height / 2 - (target.top + target.height / 2),
+          scaleX: source.width / target.width,
+          scaleY: source.height / target.height,
+        };
+    const frame = requestAnimationFrame(() => setOrigin(next));
+    return () => cancelAnimationFrame(frame);
+  }, [sourceKey, reduced]);
+
+  if (shouldTravel && origin === null) {
+    return <div ref={measureRef} className={className} style={{ ...style, visibility: "hidden" }}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      data-celebration-card
+      className={className}
+      style={style}
+      initial={
+        shouldTravel && origin
+          ? { x: origin.x, y: origin.y, scaleX: origin.scaleX, scaleY: origin.scaleY, opacity: 0.75 }
+          : reduced
+            ? false
+            : { scale: 0.97, opacity: 0 }
+      }
+      animate={{ x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, opacity: 1 }}
+      transition={origin ? { duration: 0.58, ease: [0.22, 1, 0.36, 1] } : { duration: 0.28, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
   );
 }
 

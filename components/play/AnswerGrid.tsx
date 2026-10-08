@@ -154,6 +154,7 @@ export function AnswerGrid({
                 style={{ animationDelay: tileIn ? `${tileDelayMs(index)}ms` : undefined, ...anim.style }}
               >
                 <span
+                  data-reveal-source={option.correct ? `${question.id}:${option.id}` : undefined}
                   className={`relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white ${
                     isPicked && !revealed ? "ring-4 ring-white/80" : ""
                   }`}

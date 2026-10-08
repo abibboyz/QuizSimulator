@@ -28,6 +28,15 @@ export function celebrationEnabled(question: Pick<Question, "celebration"> | und
   return question?.celebration?.enabled === true;
 }
 
+/** Text-only celebrations retain their card so the answer stays readable. */
+export function hidesCelebrationBox(question: Pick<Question, "celebration"> | undefined): boolean {
+  return celebrationEnabled(question) && question?.celebration?.hideBox === true;
+}
+
+export function animatesCelebrationFromReveal(question: Pick<Question, "kind" | "celebration"> | undefined): boolean {
+  return question?.kind === "reveal" && celebrationEnabled(question) && question.celebration?.animateFromReveal === true;
+}
+
 /** Reveal questions finish uncovering before their optional card appears. */
 export function celebrationDelayMs(question: Question): number {
   return celebrationEnabled(question) && question.kind === "reveal" ? resolveReveal(question).durationMs : 0;

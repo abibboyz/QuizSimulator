@@ -4,9 +4,11 @@ import { createQuiz } from "./factory.ts";
 import { buildTimeline } from "./videoExport/timeline.ts";
 import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
 import {
+  animatesCelebrationFromReveal,
   celebrationAnimation,
   celebrationDelayMs,
   celebrationEnabled,
+  hidesCelebrationBox,
   celebrationView,
 } from "./celebration.ts";
 import { schemaVersionFor, type MediaRef, type Question, type Quiz } from "../types/quiz.ts";
@@ -31,6 +33,55 @@ test("a question that doesn't celebrate resolves to nothing", () => {
   assert.equal(celebrationView(question({ celebration: { enabled: false, image: picture("kept") } })), null);
   assert.equal(celebrationAnimation(question()), "confetti");
   assert.equal(celebrationAnimation(question({ celebration: { enabled: true, animation: "nope" as "none" } })), "confetti");
+});
+
+test("the celebration box is hidden only when an enabled question requests it", () => {
+  assert.equal(hidesCelebrationBox(question()), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: false, hideBox: true } })), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: true, hideBox: false } })), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: true, hideBox: true } })), true);
+});
+
+test("moving the celebration from the answer is opt-in and Reveal-only", () => {
+  assert.equal(animatesCelebrationFromReveal(question()), false);
+  assert.equal(animatesCelebrationFromReveal(question({ celebration: { enabled: true, animateFromReveal: true } })), false);
+  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: true } })), false);
+  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: false, animateFromReveal: true } })), false);
+  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: true, animateFromReveal: true } })), true);
+});
+
+test("hiding the box applies to uploaded, answer, image-choice and Reveal pictures", () => {
+  const variants = [
+    question({ celebration: { enabled: true, hideBox: true, image: picture("upload") } }),
+    question({
+      celebration: { enabled: true, hideBox: true, useAnswerImage: true },
+      options: [
+        { id: "a", text: "Paris", correct: true, media: picture("answer") },
+        { id: "b", text: "Lyon", correct: false },
+      ],
+    }),
+    question({
+      kind: "image-choice",
+      celebration: { enabled: true, hideBox: true },
+      options: [
+        { id: "a", text: "Cat", correct: true, media: picture("choice") },
+        { id: "b", text: "Dog", correct: false, media: picture("dog") },
+      ],
+    }),
+    question({
+      kind: "reveal",
+      celebration: { enabled: true, hideBox: true, useAnswerImage: true },
+      options: [
+        { id: "a", text: "Tower", correct: true, media: picture("reveal") },
+        { id: "b", text: "Forest", correct: false },
+      ],
+    }),
+  ];
+
+  for (const item of variants) {
+    assert.ok(celebrationView(item)?.images.length);
+    assert.equal(hidesCelebrationBox(item), true);
+  }
 });
 
 test("an empty correct answer does not get a stand-in label", () => {

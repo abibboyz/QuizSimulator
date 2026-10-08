@@ -241,6 +241,10 @@ export interface Celebration {
   image?: MediaRef;
   /** Use the correct answer's own picture when it has one, ahead of the uploaded card picture. */
   useAnswerImage?: boolean;
+  /** For picture celebrations, show only the image at its natural aspect ratio. */
+  hideBox?: boolean;
+  /** Reveal questions can move the uncovered answer image into the celebration position. */
+  animateFromReveal?: boolean;
   animation?: CelebrationAnimation;
 }
 

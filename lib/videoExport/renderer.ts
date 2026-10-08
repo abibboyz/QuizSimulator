@@ -62,6 +62,8 @@ import {
   CELEBRATION_FOLLOW_MS,
   celebrationAnimation,
   celebrationDelayMs,
+  animatesCelebrationFromReveal,
+  hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
   type CelebrationView,
@@ -1609,7 +1611,27 @@ export class FrameRenderer {
     const p = popEase(clamp01(since / POP_IN.durationMs));
     const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
     if (hasBody) {
-      this.withTransform(W / 2, H / 2, lerp(0.97, 1, p), 0, p, () => this.drawCelebrationCard(view, since));
+      const revealTravel = animatesCelebrationFromReveal(run.question) && view.images.length > 0;
+      if (revealTravel) {
+        const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
+        const columns = Math.max(1, imageChoiceColumns(run.question.options.length));
+        const rows = Math.max(1, Math.ceil(run.question.options.length / columns));
+        const column = correctIndex % columns;
+        const row = Math.floor(correctIndex / columns);
+        const travel = popEase(clamp01(since / 580));
+        const sourceX = ((column + 0.5) / columns - 0.5) * Math.min(W * 0.72, 820);
+        const sourceY = (0.12 + (row + 0.5) / rows * 0.28) * H;
+        ctx.save();
+        ctx.translate(sourceX * (1 - travel), sourceY * (1 - travel));
+        this.withTransform(W / 2, H / 2, lerp(0.35, 1, travel), 0, lerp(0.75, 1, travel), () =>
+          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question)),
+        );
+        ctx.restore();
+      } else {
+        this.withTransform(W / 2, H / 2, lerp(0.97, 1, p), 0, p, () =>
+          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question)),
+        );
+      }
     }
 
     const animation = celebrationAnimation(run.question);
@@ -1625,7 +1647,7 @@ export class FrameRenderer {
     ctx.restore();
   }
 
-  private drawCelebrationCard(view: CelebrationView, at: number) {
+  private drawCelebrationCard(view: CelebrationView, at: number, imageOnly: boolean) {
     const { ctx, W, H } = this;
     // Match the larger live card while keeping the vertical export inside its phone frame.
     const maxW = this.narrow ? Math.min(W * 0.82, 352) : Math.min(W * 0.4, 512);
@@ -1638,6 +1660,22 @@ export class FrameRenderer {
 
     if (pictures.length) {
       const gap = 12;
+      if (imageOnly) {
+        const maxH = Math.min(H * 0.5, this.narrow ? 320 : 480);
+        const natural = pictures.map((item) => ({ ...item, w: item.img.width / item.img.height * maxH, h: maxH }));
+        const naturalW = natural.reduce((sum, item) => sum + item.w, 0) + gap * (natural.length - 1);
+        const scale = Math.min(1, maxW / naturalW);
+        const rowW = naturalW * scale;
+        let cx = (W - rowW) / 2;
+        for (const item of natural) {
+          const w = item.w * scale;
+          const h = item.h * scale;
+          const y = (H - h) / 2;
+          ctx.drawImage(frameSource(item.img, at), cx, y, w, h);
+          cx += w + gap * scale;
+        }
+        return;
+      }
       const cellW = Math.min(this.narrow ? 300 : 384, (maxW - pad * 2 - gap * (pictures.length - 1)) / pictures.length);
       const cellH = Math.min(H * 0.35, this.narrow ? 256 : 288);
       const cardW = Math.min(maxW, pad * 2 + pictures.length * cellW + gap * (pictures.length - 1));

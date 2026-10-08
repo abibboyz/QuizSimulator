@@ -363,6 +363,30 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 </span>
               </label>
             )}
+            <Toggle
+              label="Hide picture box"
+              hint="Shows only the image for uploads, answer pictures, image choices and Reveal"
+              checked={question.celebration.hideBox === true}
+              onChange={(hideBox) =>
+                onChange({
+                  ...question,
+                  celebration: { ...question.celebration!, hideBox },
+                })
+              }
+            />
+            {question.kind === "reveal" && (
+              <Toggle
+                label="Animate image from revealed answer"
+                hint="Moves the uncovered correct image from its tile into the celebration position"
+                checked={question.celebration.animateFromReveal === true}
+                onChange={(animateFromReveal) =>
+                  onChange({
+                    ...question,
+                    celebration: { ...question.celebration!, animateFromReveal },
+                  })
+                }
+              />
+            )}
             <Field label="Animation" hint="Plays once the card has appeared. Card only skips the extra motion.">
               <Select
                 aria-label="Celebration animation"
