@@ -209,6 +209,17 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           </Field>
         )}
       </div>
+
+      <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Auto-advance display</h3>
+
+        <Toggle
+          label="Show auto-advance countdown"
+          hint="Displays the bottom countdown in solo play, host mode and video exports"
+          checked={settings.showAutoAdvanceCountdown === true}
+          onChange={(showAutoAdvanceCountdown) => onChangeSettings({ showAutoAdvanceCountdown })}
+        />
+      </div>
     </div>
   );
 }

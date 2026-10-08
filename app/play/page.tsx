@@ -19,7 +19,7 @@ import { QuizProgress } from "@/components/play/QuizProgress";
 import { showsProgressBar } from "@/lib/progress";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
+import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
@@ -535,13 +535,14 @@ function PlayView() {
             )}
           </div>
 
-          {autoAdvanceReady ? (
+          {autoAdvanceReady && showsAutoAdvanceCountdown(quiz.settings) && (
             <AutoAdvanceBar
               key={`advance-${question.id}`}
               seconds={holdSeconds}
               label={index + 1 >= order.length ? "results" : "next question"}
             />
-          ) : (
+          )}
+          {!autoAdvanceReady && (
             // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
             <p className="mt-4 text-center text-xs text-ink-500">
               {isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile

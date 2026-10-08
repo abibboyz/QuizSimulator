@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   autoAdvanceSeconds: null,
   autoAdvanceOnTimeout: true,
   timeoutRevealSeconds: 5,
+  showAutoAdvanceCountdown: false,
   // Sensible motion + sound out of the box; authors can clear or swap any slot.
   cues: { ...POST_PACK_CUES },
   progressStyle: "ring",

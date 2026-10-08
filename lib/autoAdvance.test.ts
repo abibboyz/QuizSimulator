@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "./autoAdvance.ts";
+import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "./autoAdvance.ts";
 import type { AnswerRecord } from "./store/playSession.ts";
 
 const on = { revealAfterEach: true, autoAdvanceOnTimeout: true };
@@ -52,4 +52,11 @@ test("hold time defaults to 5 seconds and stays in range", () => {
   assert.equal(revealHoldSeconds({ timeoutRevealSeconds: -3 }), 1);
   assert.equal(revealHoldSeconds({ timeoutRevealSeconds: 999 }), 60, "capped so it can't stall");
   assert.equal(revealHoldSeconds({ timeoutRevealSeconds: NaN }), 5, "falls back to the default");
+});
+
+test("the auto-advance countdown is hidden unless explicitly enabled", () => {
+  assert.equal(showsAutoAdvanceCountdown(undefined), false);
+  assert.equal(showsAutoAdvanceCountdown({}), false);
+  assert.equal(showsAutoAdvanceCountdown({ showAutoAdvanceCountdown: false }), false);
+  assert.equal(showsAutoAdvanceCountdown({ showAutoAdvanceCountdown: true }), true);
 });

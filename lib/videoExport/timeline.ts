@@ -20,7 +20,7 @@ import { isUnscoredImage, unscoredResult } from "../answerPresentation.ts";
 
 import type { Cue, CueSlot, MediaRef, Question, Quiz } from "@/types/quiz";
 import { activeCue, cueHoldMs } from "@/lib/cues";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
+import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { accuracyLabel, scoreQuestion } from "@/lib/scoring";
 import { basePointsFor, isCorrect, timerFor } from "@/lib/store/playSession";
 import {
@@ -317,7 +317,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     }
 
     const holdSeconds = revealHoldSeconds(settings);
-    const timeoutBar = !unscored && shouldAutoAdvanceAfterTimeout(settings, "revealed", {
+    const timeoutBar = showsAutoAdvanceCountdown(settings) && !unscored && shouldAutoAdvanceAfterTimeout(settings, "revealed", {
       questionId: question.id,
       selectedIds,
       correct,
