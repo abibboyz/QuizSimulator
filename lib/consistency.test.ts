@@ -91,6 +91,16 @@ test("a quiz with no animation settings exports today's motion on every question
   for (const run of timeline.questions) assert.deepEqual(run.motion, DEFAULT_MOTION);
 });
 
+test("video export shows the auto-advance countdown only when enabled", () => {
+  const quiz = quizWith([mcQuestion("a")]);
+  const hidden = buildTimeline(quiz, { answerMode: "timeout", sound: false });
+  assert.equal(hidden.questions[0].timeoutBar, false);
+
+  quiz.settings.showAutoAdvanceCountdown = true;
+  const shown = buildTimeline(quiz, { answerMode: "timeout", sound: false });
+  assert.equal(shown.questions[0].timeoutBar, true);
+});
+
 test("the export's reveal sound lands on the reveal, and only for Reveal questions", () => {
   const quiz = quizWith([mcQuestion("a"), revealQuestion("b")]);
   const timeline = buildTimeline(quiz, { answerMode: "pick-correct", sound: true });

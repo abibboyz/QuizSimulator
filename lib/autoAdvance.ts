@@ -30,3 +30,10 @@ export function revealHoldSeconds(settings: Pick<QuizSettings, "timeoutRevealSec
   if (!Number.isFinite(seconds)) return 5;
   return Math.min(60, Math.max(1, Math.round(seconds)));
 }
+
+/** Older quizzes and new quizzes keep automatic transitions visually quiet. */
+export function showsAutoAdvanceCountdown(
+  settings: Pick<QuizSettings, "showAutoAdvanceCountdown"> | undefined,
+): boolean {
+  return settings?.showAutoAdvanceCountdown === true;
+}

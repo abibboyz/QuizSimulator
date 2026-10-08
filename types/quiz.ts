@@ -476,6 +476,8 @@ export interface QuizSettings {
   autoAdvanceOnTimeout: boolean;
   /** Seconds the answer stays up before solo play moves on after a timeout. */
   timeoutRevealSeconds: number;
+  /** Shows the visible countdown while play, host mode, or video export advances automatically. */
+  showAutoAdvanceCountdown?: boolean;
   /**
    * Quiz-wide animation and sound cues. New quizzes start with a small post pack
    * (countdown, confetti, etc.); clear a slot to silence it.

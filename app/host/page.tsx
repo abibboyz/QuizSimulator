@@ -19,6 +19,7 @@ import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { showsProgressBar } from "@/lib/progress";
+import { showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
 import { MuteButton } from "@/components/ui/MuteButton";
@@ -162,6 +163,7 @@ function HostView() {
             soundOn={quiz.settings.sound}
             autoReveal={quiz.settings.autoReveal}
             autoAdvanceSeconds={quiz.settings.autoAdvanceSeconds}
+            showAutoAdvanceCountdown={showsAutoAdvanceCountdown(quiz.settings)}
             meter={quiz.settings}
             canBack={index > 0}
             isLast={index + 1 >= questions.length}
@@ -191,6 +193,7 @@ interface HostQuestionProps {
   soundOn: boolean;
   autoReveal: boolean;
   autoAdvanceSeconds: number | null;
+  showAutoAdvanceCountdown: boolean;
   /** Just the meter's slice of settings — the rest already arrives unpacked. */
   meter: Pick<
     QuizSettings,
@@ -214,6 +217,7 @@ function HostQuestion({
   soundOn,
   autoReveal,
   autoAdvanceSeconds,
+  showAutoAdvanceCountdown,
   meter,
   canBack,
   isLast,
@@ -380,7 +384,7 @@ function HostQuestion({
       {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" />}
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
-        {revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
+        {showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
           <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
         ) : (
           <>
