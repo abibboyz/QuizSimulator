@@ -12,16 +12,18 @@ import { POP_IN } from "./playTiming.ts";
 import { resolveReveal, revealAnswerMedia } from "./reveal.ts";
 
 export const CELEBRATION_ANIMATIONS: { id: CelebrationAnimation; label: string }[] = [
-  { id: "confetti", label: "Confetti burst" },
-  { id: "stars", label: "Star shower" },
-  { id: "shooting-star", label: "Shooting star" },
-  { id: "fireworks", label: "Fireworks" },
-  { id: "hearts", label: "Floating hearts" },
-  { id: "bubbles", label: "Bubbles" },
-  { id: "sparkle-wave", label: "Sparkle wave" },
-  { id: "pulse-ring", label: "Pulse ring" },
-  { id: "stamp", label: "Stamp" },
-  { id: "none", label: "Card only" },
+  { id: "confetti", label: "Smooth pop" },
+  { id: "shooting-star", label: "Shooting-star landing" },
+  { id: "bubbles", label: "Bubble assemble" },
+  { id: "butterfly", label: "Butterfly assemble" },
+  { id: "stars", label: "Star assemble" },
+  { id: "glass-assemble", label: "Glass assemble" },
+  { id: "mosaic-assemble", label: "Mosaic assemble" },
+  { id: "spiral-assemble", label: "Spiral assemble" },
+  { id: "curtain-assemble", label: "Curtain strips" },
+  { id: "flip-assemble", label: "Flip tiles" },
+  { id: "zoom-assemble", label: "Zoom fragments" },
+  { id: "none", label: "Smooth fade" },
 ];
 
 /** The card pops in, then the chosen animation starts. */
@@ -58,8 +60,9 @@ export function celebrationAnimation(question: Pick<Question, "celebration">): C
 }
 
 /** How long the follow-on motion runs. Confetti is drawn by its own physics. */
-export function celebrationMotionMs(animation: CelebrationAnimation): number {
+export function celebrationMotionMs(animation: CelebrationAnimation, durationMs?: number): number {
   if (animation === "none") return 0;
+  if (Number.isFinite(durationMs)) return Math.min(4000, Math.max(1000, Math.round(durationMs!)));
   return ANIMATIONS[animation].defaultMs;
 }
 

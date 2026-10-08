@@ -213,7 +213,11 @@ test("Reveal repeats its uncovered picture only when selected, after the uncover
   quiz.questions = [reveal];
   const run = buildTimeline(quiz, { answerMode: "pick-correct", sound: false });
   assert.equal(run.questions[0].advanceAt - run.questions[0].revealAt, 1800 + 5000);
-  assert.ok(run.confetti.some((cue) => cue.at - run.questions[0].revealAt === 1800 + 280));
+  assert.equal(
+    run.confetti.some((cue) => cue.at - run.questions[0].revealAt === 1800 + 280),
+    false,
+    "the photo entrance does not add decorative particles",
+  );
 });
 
 test("Reveal without a card picture falls back to answer words when its checkbox is off", () => {
@@ -297,14 +301,14 @@ test("schema, copy, and media refs stay quiet unless the celebration is in use",
   assert.equal(copied.questions[0].celebration?.useAnswerImage, true);
 });
 
-test("exported video adds confetti only when that question's celebration asks for it", () => {
+test("answer entrance styles animate only the photo and add no export particles", () => {
   const plain = createQuiz("Plain");
   plain.questions = [question()];
   const base = buildTimeline(plain, { answerMode: "pick-correct", sound: false }).confetti.length;
 
   const confetti = createQuiz("Confetti");
   confetti.questions = [question({ celebration: { enabled: true, animation: "confetti" } })];
-  assert.equal(buildTimeline(confetti, { answerMode: "pick-correct", sound: false }).confetti.length, base + 1);
+  assert.equal(buildTimeline(confetti, { answerMode: "pick-correct", sound: false }).confetti.length, base);
 
   const stars = createQuiz("Stars");
   stars.questions = [question({ celebration: { enabled: true, animation: "stars" } })];

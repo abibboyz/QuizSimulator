@@ -27,7 +27,6 @@ import { basePointsFor, isCorrect, timerFor } from "@/lib/store/playSession";
 import {
   COUNTDOWN_BEATS,
   CUE_CONFETTI,
-  POP_IN,
   QUESTION_SWAP,
   RESULTS_CONFETTI,
   REVEAL_OFF_HOLD_MS,
@@ -45,7 +44,7 @@ import {
   type ResolvedMotion,
 } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
-import { celebrationAnimation, celebrationDelayMs, celebrationEnabled } from "@/lib/celebration";
+import { celebrationDelayMs } from "@/lib/celebration";
 
 /* ----------------------------------------------------------------- options */
 
@@ -306,16 +305,6 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (question.kind === "reveal" && settings.revealAfterEach) {
       const sound = resolveReveal(question).sound;
       if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
-    }
-
-    // The card pops in, then confetti. Other celebration motions are drawn from
-    // the clock in the renderer. Reveal-off never shows the card, so it stays quiet.
-    if (
-      !unscored && settings.revealAfterEach &&
-      celebrationEnabled(question) &&
-      celebrationAnimation(question) === "confetti"
-    ) {
-      confetti.push({ at: revealAt + celebrationDelayMs(question) + POP_IN.durationMs, preset: CUE_CONFETTI, seed: seed++ });
     }
 
     const holdSeconds = revealHoldSeconds(settings);

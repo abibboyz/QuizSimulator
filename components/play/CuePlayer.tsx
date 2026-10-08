@@ -100,6 +100,9 @@ export function CuePlayer({ cue, onDone, soundOn, hideImageBox = false, onMidpoi
       {cue.animation === "hearts" && <FloatingGlyphs holdMs={holdMs} glyph="♥" />}
       {cue.animation === "bubbles" && <Bubbles holdMs={holdMs} />}
       {cue.animation === "sparkle-wave" && <SparkleWave holdMs={holdMs} />}
+      {cue.animation === "glass-assemble" && <GlassAssemble holdMs={holdMs} />}
+      {cue.animation === "butterfly" && <FloatingGlyphs holdMs={holdMs} glyph="◆" />}
+      {["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(cue.animation) && <GlassAssemble holdMs={holdMs} />}
       {cue.animation === "pulse-ring" && <PulseRing holdMs={holdMs} />}
       {cue.animation === "shake" && <Shake holdMs={holdMs} />}
       {cue.animation === "stamp" && <Stamp holdMs={holdMs} />}
@@ -196,6 +199,10 @@ function Bubbles({ holdMs }: { holdMs: number }) {
 
 function SparkleWave({ holdMs }: { holdMs: number }) {
   return <div className="absolute inset-0 flex items-center justify-around">{Array.from({ length: 15 }, (_, i) => <motion.span key={i} initial={{ opacity: 0, scale: 0, y: 0 }} animate={{ opacity: [0, 1, 0], scale: [0, 1.5, 0], y: [0, i % 2 ? 45 : -45, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.045, ease: "easeInOut" }} className="text-4xl" style={{ color: "var(--accent)" }}>✦</motion.span>)}</div>;
+}
+
+function GlassAssemble({ holdMs }: { holdMs: number }) {
+  return <div className="absolute inset-0 grid place-items-center">{Array.from({ length: 12 }, (_, i) => <motion.span key={i} initial={{ x: (i % 4 - 1.5) * 180, y: (Math.floor(i / 4) - 1) * 150, rotate: i * 31, opacity: 0 }} animate={{ x: 0, y: 0, rotate: 0, opacity: [0, 0.8, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.025, ease: "easeOut" }} className="absolute h-16 w-16 border-2" style={{ borderColor: "var(--accent)", clipPath: "polygon(50% 0, 100% 100%, 0 72%)" }} />)}</div>;
 }
 
 function PulseRing({ holdMs }: { holdMs: number }) {

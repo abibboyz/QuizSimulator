@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { motion } from "motion/react";
-import confetti from "canvas-confetti";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { motion, type MotionProps } from "motion/react";
 import type { CelebrationAnimation, Question } from "@/types/quiz";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
-  CELEBRATION_FOLLOW_MS,
   animatesCelebrationFromAnswer,
   celebrationAnimation,
   hidesCelebrationBox,
@@ -15,7 +13,6 @@ import {
   celebrationView,
 } from "@/lib/celebration";
 import { promptFontStack } from "@/lib/promptText";
-import { CUE_CONFETTI, STAR_LANES } from "@/lib/playTiming";
 import type { StageMode } from "@/components/play/AnswerGrid";
 import { hidesImageBoxes as resolvesHiddenImageBoxes } from "@/lib/imageChoice";
 
@@ -88,6 +85,9 @@ export function CelebrationCard({
         <RevealTravelCard
           question={question}
           reduced={reduced}
+          animation={animation}
+          durationMs={question.celebration?.durationMs}
+          boxed={!imageOnly}
           className={`relative z-10 w-fit max-w-full ${shell} text-center ${imageOnly ? "" : "border border-ink-500 bg-ink-900"}`}
           style={imageOnly ? undefined : { boxShadow: "0 0 0 1px var(--accent-line), 0 16px 36px -18px rgb(0 0 0 / 0.55)" }}
         >
@@ -114,7 +114,6 @@ export function CelebrationCard({
           )}
         </RevealTravelCard>
       )}
-      {!reduced && animation !== "none" && <CelebrationMotion animation={animation} contained={contained} />}
     </div>
   );
 }
@@ -129,12 +128,18 @@ interface TravelOrigin {
 function RevealTravelCard({
   question,
   reduced,
+  animation,
+  durationMs,
+  boxed,
   className,
   style,
   children,
 }: {
   question: Question;
   reduced: boolean;
+  animation: CelebrationAnimation;
+  durationMs?: number;
+  boxed: boolean;
   className: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -169,118 +174,151 @@ function RevealTravelCard({
     return <div ref={measureRef} className={className} style={{ ...style, visibility: "hidden" }}>{children}</div>;
   }
 
+  const entrance = celebrationEntrance(animation, durationMs, shouldTravel && origin ? origin : null, reduced);
+
   return (
     <motion.div
       data-celebration-card
       className={className}
       style={style}
-      initial={
-        shouldTravel && origin
-          ? { x: origin.x, y: origin.y, scaleX: origin.scaleX, scaleY: origin.scaleY, opacity: 0.75 }
-          : reduced
-            ? false
-            : { scale: 0.97, opacity: 0 }
-      }
-      animate={{ x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, opacity: 1 }}
-      transition={origin ? { duration: 0.58, ease: [0.22, 1, 0.36, 1] } : { duration: 0.28, ease: "easeOut" }}
+      {...entrance}
     >
-      {children}
+      {isPhotoAssembly(animation) ? (
+        <PhotoAssembly animation={animation} durationMs={durationMs} boxed={boxed}>{children}</PhotoAssembly>
+      ) : children}
     </motion.div>
   );
 }
 
-/** Starts after the card's pop, so the answer is on screen before the motion. */
-function CelebrationMotion({ animation, contained }: { animation: CelebrationAnimation; contained: boolean }) {
-  const [go, setGo] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+type PhotoAssemblyAnimation =
+  | "bubbles"
+  | "butterfly"
+  | "stars"
+  | "glass-assemble"
+  | "mosaic-assemble"
+  | "spiral-assemble"
+  | "curtain-assemble"
+  | "flip-assemble"
+  | "zoom-assemble";
 
-  useEffect(() => {
-    const id = window.setTimeout(() => setGo(true), CELEBRATION_FOLLOW_MS);
-    return () => window.clearTimeout(id);
-  }, []);
-
-  useEffect(() => {
-    if (!go || animation !== "confetti") return;
-    const canvas = canvasRef.current;
-    const fire = contained && canvas ? confetti.create(canvas, { resize: true }) : confetti;
-    const { bursts, ...common } = CUE_CONFETTI;
-    for (const { x, y, angle } of bursts) void fire({ ...common, origin: { x, y }, angle });
-    return () => {
-      if (contained && canvas) fire.reset();
-    };
-  }, [go, animation, contained]);
-
-  if (animation === "confetti") {
-    if (!contained) return null;
-    return <canvas ref={canvasRef} className="absolute inset-0 z-20 h-full w-full" aria-hidden />;
-  }
-  if (!go) return null;
-  const holdMs = celebrationMotionMs(animation);
-  if (animation === "stars") return <Stars holdMs={holdMs} />;
-  if (["shooting-star", "fireworks", "hearts", "bubbles", "sparkle-wave"].includes(animation)) {
-    return <ParticleMotion animation={animation} holdMs={holdMs} />;
-  }
-  if (animation === "pulse-ring") return <PulseRing holdMs={holdMs} />;
-  return <Stamp holdMs={holdMs} />;
+function isPhotoAssembly(animation: CelebrationAnimation): animation is PhotoAssemblyAnimation {
+  return ["bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation);
 }
 
-function ParticleMotion({ animation, holdMs }: { animation: CelebrationAnimation; holdMs: number }) {
-  const seconds = holdMs / 1000;
-  if (animation === "shooting-star") return <div className="absolute inset-0 z-20 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <motion.span key={i} initial={{ x: "-20%", y: `${8 + i * 11}%`, opacity: 0 }} animate={{ x: "120%", y: `${48 + i * 11}%`, opacity: [0, 1, 1, 0] }} transition={{ duration: seconds, delay: i * 0.09, ease: "easeIn" }} className="absolute text-4xl" style={{ color: "var(--accent)", textShadow: "-22px -8px 12px var(--accent)" }}>★</motion.span>)}</div>;
-  if (animation === "fireworks") return <div className="absolute inset-0 z-20 overflow-hidden">{[[28, 38], [70, 30], [52, 66]].flatMap(([x, y], burst) => Array.from({ length: 12 }, (_, i) => { const angle = i * Math.PI * 2 / 12; return <motion.span key={`${burst}-${i}`} initial={{ left: `${x}%`, top: `${y}%`, scale: 0, opacity: 0 }} animate={{ x: `${Math.cos(angle) * (10 + burst * 2)}vw`, y: `${Math.sin(angle) * (10 + burst * 2)}vh`, scale: [0, 1, 0.4], opacity: [0, 1, 0] }} transition={{ duration: seconds, delay: burst * 0.16, ease: "easeOut" }} className="absolute h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent)" }} />; }))}</div>;
-  if (animation === "hearts") return <div className="absolute inset-0 z-20 overflow-hidden">{STAR_LANES.map((left, i) => <motion.span key={left} initial={{ y: "110%", opacity: 0 }} animate={{ y: "-15%", x: [0, i % 2 ? 24 : -24, 0], opacity: [0, 1, 1, 0] }} transition={{ duration: seconds, delay: (i % 6) * 0.08, ease: "easeOut" }} className="absolute text-3xl" style={{ left: `${left}%`, color: "var(--accent)" }}>♥</motion.span>)}</div>;
-  if (animation === "bubbles") return <div className="absolute inset-0 z-20 overflow-hidden">{STAR_LANES.map((left, i) => <motion.span key={left} initial={{ y: "108%", opacity: 0, scale: 0.4 }} animate={{ y: "-12%", opacity: [0, 0.75, 0.75, 0], scale: [0.4, 1 + (i % 3) * 0.25] }} transition={{ duration: seconds, delay: (i % 5) * 0.1, ease: "linear" }} className="absolute h-8 w-8 rounded-full border-2" style={{ left: `${left}%`, borderColor: "var(--accent)" }} />)}</div>;
-  return <div className="absolute inset-0 z-20 flex items-center justify-around overflow-hidden">{Array.from({ length: 15 }, (_, i) => <motion.span key={i} initial={{ opacity: 0, scale: 0 }} animate={{ opacity: [0, 1, 0], scale: [0, 1.5, 0], y: [0, i % 2 ? 45 : -45, 0] }} transition={{ duration: seconds, delay: i * 0.045, ease: "easeInOut" }} className="text-4xl" style={{ color: "var(--accent)" }}>✦</motion.span>)}</div>;
-}
-
-function Stars({ holdMs }: { holdMs: number }) {
+function PhotoAssembly({
+  animation,
+  durationMs,
+  boxed,
+  children,
+}: {
+  animation: PhotoAssemblyAnimation;
+  durationMs?: number;
+  boxed: boolean;
+  children: ReactNode;
+}) {
+  const duration = celebrationMotionMs(animation, durationMs) / 1000;
   return (
-    <div className="absolute inset-0 z-20 overflow-hidden" aria-hidden>
-      {STAR_LANES.map((left, i) => (
-        <motion.span
-          key={left}
-          initial={{ y: "-15%", opacity: 0, rotate: 0 }}
-          animate={{ y: "110%", opacity: [0, 1, 1, 0], rotate: 220 }}
-          transition={{ duration: holdMs / 1000, delay: (i % 5) * 0.12, ease: "easeIn" }}
-          className="absolute text-3xl"
-          style={{ left: `${left}%`, color: "var(--accent)" }}
-        >
-          ★
-        </motion.span>
-      ))}
-    </div>
-  );
-}
-
-function PulseRing({ holdMs }: { holdMs: number }) {
-  return (
-    <div className="absolute inset-0 z-20" aria-hidden>
-      {[0, 0.18].map((delay) => (
-        <motion.span
-          key={delay}
-          initial={{ scale: 0.2, opacity: 0.7 }}
-          animate={{ scale: 2.2, opacity: 0 }}
-          transition={{ duration: holdMs / 1000, delay, ease: "easeOut" }}
-          className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border-4"
-          style={{ borderColor: "var(--accent)" }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Stamp({ holdMs }: { holdMs: number }) {
-  return (
-    <div className="absolute inset-0 z-20 grid place-items-center" aria-hidden>
-      <motion.span
-        initial={{ scale: 2.4, opacity: 0, rotate: -18 }}
-        animate={{ scale: [2.4, 0.9, 1], opacity: [0, 1, 1, 0], rotate: -12 }}
-        transition={{ duration: holdMs / 1000, times: [0, 0.25, 0.4, 1], ease: "easeOut" }}
-        className="rounded-3xl border-8 px-10 py-4 text-6xl font-extrabold uppercase tracking-widest"
-        style={{ color: "var(--accent)", borderColor: "var(--accent)" }}
+    <div className="relative">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0, 1] }}
+        transition={{ duration, times: [0, 0.86, 1], ease: "easeOut" }}
       >
-        ★
-      </motion.span>
+        {children}
+      </motion.div>
+      {Array.from({ length: 9 }, (_, index) => {
+        const col = index % 3;
+        const row = Math.floor(index / 3);
+        const clipPath = boxed
+          ? "inset(0% 0% 0% 0%)"
+          : `inset(${row * 33.333}% ${(2 - col) * 33.333}% ${(2 - row) * 33.333}% ${col * 33.333}%)`;
+        const angle = index / 9 * Math.PI * 2;
+        const initial = animation === "bubbles"
+          ? { x: (col - 1) * 42, y: 230 + row * 38, scale: 0.18, rotate: 0, borderRadius: "50%" }
+          : animation === "butterfly"
+            ? { x: (col < 1 ? -1 : 1) * (boxed ? 330 + row * 70 : 210 + row * 45), y: Math.sin(index * 1.7) * (boxed ? 210 : 120), scale: boxed ? 0.12 : 0.45, rotate: (col < 1 ? -1 : 1) * 38, rotateY: (col < 1 ? -1 : 1) * 72, borderRadius: "18%" }
+            : animation === "curtain-assemble"
+              ? { x: 0, y: (col % 2 ? 1 : -1) * (260 + row * 40), scale: 1, rotate: 0, borderRadius: "0%" }
+              : animation === "flip-assemble"
+                ? { x: (col - 1) * 35, y: (row - 1) * 28, scale: 0.8, rotate: 0, rotateY: index % 2 ? 90 : -90, borderRadius: "0%" }
+                : animation === "zoom-assemble"
+                  ? { x: (col - 1) * 55, y: (row - 1) * 42, scale: 2.8, rotate: 0, borderRadius: "0%" }
+                  : animation === "mosaic-assemble"
+                    ? { x: (index % 2 ? 1 : -1) * (90 + col * 35), y: (row - 1) * 120, scale: 0.55, rotate: (index - 4) * 11, borderRadius: "0%" }
+                    : animation === "glass-assemble"
+                      ? { x: Math.cos(angle) * 240, y: Math.sin(angle) * 190, scale: 0.7, rotate: index * 47, borderRadius: "0%" }
+                      : { x: Math.cos(angle) * (animation === "spiral-assemble" ? 330 : 280), y: Math.sin(angle) * (animation === "spiral-assemble" ? 260 : 220), scale: 0.22, rotate: animation === "spiral-assemble" ? index * 95 : index * 34, borderRadius: "0%" };
+        const startX = initial.x;
+        const startY = initial.y;
+        const pieceMotion = animation === "butterfly"
+          ? {
+              x: [startX, startX * 0.78 + (index % 2 ? 70 : -70), startX * 0.4 + (index % 2 ? 65 : -65), 0],
+              y: [startY, startY - (boxed ? 120 : 65), startY * 0.25 + (index % 3 - 1) * (boxed ? 70 : 38), 0],
+              scale: [initial.scale, boxed ? 0.2 : 0.56, boxed ? 0.55 : 0.82, 1],
+              rotate: [initial.rotate, -initial.rotate * 0.45, initial.rotate * 0.2, 0],
+              rotateY: [initial.rotateY ?? 70, -(initial.rotateY ?? 70) * 0.7, (initial.rotateY ?? 70) * 0.4, 0],
+            }
+          : animation === "bubbles"
+            ? { x: [startX, startX + (index % 2 ? 48 : -48), startX * 0.25, 0], y: [startY, 95 - row * 25, -18, 0], scale: [initial.scale, 0.48, 1.06, 1], rotate: [0, index % 2 ? 12 : -12, 0, 0], rotateY: [0, 22, -12, 0] }
+            : animation === "stars"
+              ? { x: [startX, startX * 0.48, startX * 0.14, 0], y: [startY, startY * 0.5 - 45, startY * 0.12, 0], scale: [initial.scale, 0.48, 0.86, 1], rotate: [initial.rotate, initial.rotate * 0.5, -8, 0], rotateY: [55, -35, 16, 0] }
+              : animation === "spiral-assemble"
+                ? { x: [startX, -startY * 0.72, startX * -0.28, 0], y: [startY, startX * 0.55, startY * -0.22, 0], scale: [initial.scale, 0.5, 0.82, 1], rotate: [initial.rotate, initial.rotate * 0.68, 120, 0], rotateY: [65, -45, 22, 0] }
+                : animation === "curtain-assemble"
+                  ? { x: [startX, (col - 1) * 38, 0], y: [startY, startY * 0.35, 0], scale: [1, 0.92, 1], rotate: [0, col % 2 ? 8 : -8, 0], rotateY: [col % 2 ? 68 : -68, col % 2 ? -18 : 18, 0] }
+                  : animation === "flip-assemble"
+                    ? { x: [startX, startX * 0.35, 0], y: [startY, startY - 35, 0], scale: [initial.scale, 0.9, 1], rotate: [0, index % 2 ? 12 : -12, 0], rotateY: [initial.rotateY ?? 90, -(initial.rotateY ?? 90) * 0.45, 0] }
+                    : animation === "zoom-assemble"
+                      ? { x: [startX, startX * 0.3, 0], y: [startY, startY * 0.3, 0], scale: [initial.scale, 1.55, 0.92, 1], rotate: [0, index % 2 ? 7 : -7, 0, 0], rotateY: [35, -18, 0, 0] }
+                      : { x: [startX, startX * 0.42, 0], y: [startY, startY * 0.38, 0], scale: [initial.scale, 0.82, 1], rotate: [initial.rotate, initial.rotate * 0.3, 0], rotateY: [index % 2 ? 58 : -58, index % 2 ? -20 : 20, 0] };
+        return (
+          <motion.div
+            key={index}
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            style={{ clipPath, transformPerspective: 900, transformStyle: "preserve-3d", filter: "drop-shadow(0 8px 10px rgb(0 0 0 / 0.22))" }}
+            initial={{ ...initial, opacity: 0 }}
+            animate={{ ...pieceMotion, borderRadius: "0%", opacity: [0, 1, 1, 0] }}
+            transition={{ duration, delay: index * 0.055, times: [0, 0.1, 0.86, 1], ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
+        );
+      })}
     </div>
   );
+}
+
+function celebrationEntrance(
+  animation: CelebrationAnimation,
+  durationMs: number | undefined,
+  origin: TravelOrigin | null,
+  reduced: boolean,
+): Pick<MotionProps, "initial" | "animate" | "transition"> {
+  if (reduced) return { initial: false };
+  const source = origin
+    ? { x: origin.x, y: origin.y, scaleX: origin.scaleX, scaleY: origin.scaleY, opacity: 0.72 }
+    : { x: 0, y: 0, scale: 0.97, opacity: 0 };
+  const final = { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, rotate: 0, opacity: 1, filter: "blur(0px)", clipPath: "inset(0% 0% 0% 0%)" };
+  const authoredDuration = celebrationMotionMs(animation, durationMs) / 1000;
+  const duration = isPhotoAssembly(animation) ? authoredDuration : Math.min(1.5, authoredDuration);
+  if (animation === "shooting-star") return {
+    initial: { ...source, x: origin?.x ?? -320, y: origin?.y ?? -180, rotate: -20, scale: origin ? undefined : 0.45 },
+    animate: { ...final, x: [origin?.x ?? -320, -80, 0], y: [origin?.y ?? -180, -110, 0], rotate: [-20, -8, 0] },
+    transition: { duration, ease: [0.22, 1, 0.36, 1] },
+  };
+  if (animation === "glass-assemble") return {
+    initial: { ...source, scale: 1.18, opacity: 0, filter: "blur(12px)", clipPath: "polygon(0 0, 18% 8%, 8% 45%, 30% 62%, 12% 100%, 0 100%)" },
+    animate: { ...final, opacity: [0, 0.55, 1], scale: [1.18, 0.96, 1], clipPath: ["polygon(0 0, 18% 8%, 8% 45%, 30% 62%, 12% 100%, 0 100%)", "polygon(0 0, 72% 0, 58% 34%, 100% 45%, 78% 100%, 0 100%)", "inset(0% 0% 0% 0%)"] },
+    transition: { duration, ease: "easeOut" },
+  };
+  if (animation === "fireworks") return { initial: { ...source, scale: 0.15 }, animate: { ...final, scale: [0.15, 1.12, 1] }, transition: { duration, ease: "easeOut" } };
+  if (animation === "hearts") return { initial: { ...source, y: origin?.y ?? 240, scale: 0.65 }, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
+  if (animation === "bubbles") return { initial: { ...source, y: origin?.y ?? 220, scale: 0.35, opacity: 0 }, animate: { ...final, y: [origin?.y ?? 220, -20, 0], scale: [0.35, 1.06, 1] }, transition: { duration, ease: "easeOut" } };
+  if (animation === "butterfly") return { initial: source, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
+  if (["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation)) return { initial: source, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
+  if (animation === "sparkle-wave") return { initial: { ...source, x: origin?.x ?? -220, filter: "blur(8px)" }, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
+  if (animation === "stars") return { initial: { ...source, y: origin?.y ?? -180, rotate: -8 }, animate: final, transition: { duration, ease: "easeOut" } };
+  if (animation === "pulse-ring") return { initial: { ...source, scale: 0.2 }, animate: { ...final, scale: [0.2, 1.08, 1] }, transition: { duration, ease: "easeOut" } };
+  if (animation === "stamp") return { initial: { ...source, scale: 2.3, rotate: -16 }, animate: { ...final, scale: [2.3, 0.9, 1] }, transition: { duration, ease: "easeOut" } };
+  return { initial: source, animate: final, transition: { duration: origin ? 0.58 : 0.28, ease: "easeOut" } };
 }

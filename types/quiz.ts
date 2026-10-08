@@ -56,6 +56,13 @@ export type CueAnimation =
   | "hearts"
   | "bubbles"
   | "sparkle-wave"
+  | "glass-assemble"
+  | "butterfly"
+  | "mosaic-assemble"
+  | "spiral-assemble"
+  | "curtain-assemble"
+  | "flip-assemble"
+  | "zoom-assemble"
   | "pulse-ring"
   | "shake"
   | "stamp"
@@ -241,6 +248,13 @@ export type CelebrationAnimation =
   | "hearts"
   | "bubbles"
   | "sparkle-wave"
+  | "glass-assemble"
+  | "butterfly"
+  | "mosaic-assemble"
+  | "spiral-assemble"
+  | "curtain-assemble"
+  | "flip-assemble"
+  | "zoom-assemble"
   | "pulse-ring"
   | "stamp"
   | "none";
@@ -263,6 +277,8 @@ export interface Celebration {
   /** Legacy name retained for quizzes saved before the animation was generalized. */
   animateFromReveal?: boolean;
   animation?: CelebrationAnimation;
+  /** Actual photo entrance duration, clamped to fit within the reveal hold. */
+  durationMs?: number;
 }
 
 export type LoopStyle = "none" | "hop" | "bounce" | "float" | "sideways" | "rock" | "wiggle" | "pulse" | "jelly" | "seesaw" | "orbit" | "dance" | "butterfly" | "flutter" | "shuffle" | "boomerang" | "figure-eight" | "heartbeat" | "leaf" | "pendulum" | "rubberband" | "shake" | "skipping" | "spiral" | "swing" | "tiptoe" | "wave" | "zigzag";

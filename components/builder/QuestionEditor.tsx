@@ -5,7 +5,7 @@ import { themeInk } from "@/lib/themeInk";
 
 import { useEffect, useRef, useState } from "react";
 import type { CelebrationAnimation, Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
-import { CELEBRATION_ANIMATIONS } from "@/lib/celebration";
+import { CELEBRATION_ANIMATIONS, celebrationMotionMs } from "@/lib/celebration";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { FONT_GROUPS, fontFamily } from "@/lib/themes";
@@ -407,7 +407,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 })
               }
             />
-            <Field label="Animation" hint="Plays once the card has appeared. Card only skips the extra motion.">
+            <Field label="Answer entrance" hint="Carries or assembles the answer into its final centre position. Card only uses a simple fade.">
               <Select
                 aria-label="Celebration animation"
                 value={question.celebration.animation ?? "confetti"}
@@ -427,6 +427,23 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field label="Animation duration" hint="How long the photo cards travel before forming the final image (1–4 seconds).">
+              <Input
+                type="number"
+                min={1}
+                max={4}
+                step={0.25}
+                value={(question.celebration.durationMs ?? celebrationMotionMs(question.celebration.animation ?? "confetti")) / 1000}
+                onChange={(event) => {
+                  const seconds = Number(event.target.value);
+                  if (!Number.isFinite(seconds)) return;
+                  onChange({
+                    ...question,
+                    celebration: { ...question.celebration!, durationMs: Math.round(Math.min(4, Math.max(1, seconds)) * 1000) },
+                  });
+                }}
+              />
             </Field>
           </>
         )}

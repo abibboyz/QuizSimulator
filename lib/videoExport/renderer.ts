@@ -59,7 +59,6 @@ import { sceneAt, type CueInstance, type QuestionRun, type Timeline } from "@/li
 import { answerPoseAt, questionPoseAt, typewriterChars, type Pose } from "@/lib/stageMotion";
 import { captionPose, resolveReveal, revealAnswerMedia, revealFallbackColor, revealProgress } from "@/lib/reveal";
 import {
-  CELEBRATION_FOLLOW_MS,
   celebrationAnimation,
   celebrationDelayMs,
   animatesCelebrationFromAnswer,
@@ -1611,7 +1610,13 @@ export class FrameRenderer {
       ctx.restore();
       return;
     }
-    const p = popEase(clamp01(since / POP_IN.durationMs));
+    const animation = celebrationAnimation(run.question);
+    const photoAssembly = ["bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation);
+    const authoredEntranceMs = celebrationMotionMs(animation, run.question.celebration?.durationMs);
+    const entranceMs = photoAssembly
+      ? Math.max(POP_IN.durationMs, authoredEntranceMs)
+      : Math.min(1500, Math.max(POP_IN.durationMs, authoredEntranceMs));
+    const p = popEase(clamp01(since / entranceMs));
     const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
     if (hasBody) {
       const answerTravel = animatesCelebrationFromAnswer(run.question) && view.images.length > 0;
@@ -1630,30 +1635,31 @@ export class FrameRenderer {
         const sourceX = ((column + 0.5) / columns - 0.5) * Math.min(W * 0.72, 820);
         const sourceY = (0.12 + (row + 0.5) / rows * 0.28) * H;
         ctx.save();
-        ctx.translate(sourceX * (1 - travel), sourceY * (1 - travel));
-        this.withTransform(W / 2, H / 2, lerp(0.35, 1, travel), 0, lerp(0.75, 1, travel), () =>
+        const arc = animation === "shooting-star" ? Math.sin(travel * Math.PI) : 0;
+        ctx.translate(sourceX * (1 - travel) - 80 * arc, sourceY * (1 - travel) - 110 * arc);
+        const scale = animation === "stamp" ? keyframes([2.3, 0.9, 1], travel, easeOut) : animation === "fireworks" ? keyframes([0.15, 1.12, 1], travel, easeOut) : lerp(0.35, 1, travel);
+        const rotate = animation === "shooting-star" ? lerp(-20, 0, travel) : animation === "stamp" ? lerp(-16, 0, travel) : 0;
+        this.withTransform(W / 2, H / 2, scale, rotate, animation === "glass-assemble" ? keyframes([0, 0.55, 1], travel) : lerp(0.72, 1, travel), () =>
           this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question, {
             hideImageBoxes: hidesImageBoxes(this.quiz.settings, run.question),
           })),
         );
         ctx.restore();
       } else {
-        this.withTransform(W / 2, H / 2, lerp(0.97, 1, p), 0, p, () =>
+        const scale = animation === "stamp" ? keyframes([2.3, 0.9, 1], p, easeOut) : animation === "fireworks" ? keyframes([0.15, 1.12, 1], p, easeOut) : animation === "pulse-ring" ? keyframes([0.2, 1.08, 1], p, easeOut) : animation === "glass-assemble" ? keyframes([1.18, 0.96, 1], p, easeOut) : lerp(0.97, 1, p);
+        const x = animation === "shooting-star" ? lerp(-320, 0, p) - Math.sin(p * Math.PI) * 80 : animation === "sparkle-wave" ? lerp(-220, 0, p) : 0;
+        const y = animation === "shooting-star" ? lerp(-180, 0, p) - Math.sin(p * Math.PI) * 110 : animation === "hearts" || animation === "bubbles" ? lerp(220, 0, p) : animation === "stars" ? lerp(-180, 0, p) : 0;
+        ctx.save();
+        ctx.translate(x, y);
+        this.withTransform(W / 2, H / 2, scale, animation === "shooting-star" ? lerp(-20, 0, p) : animation === "stamp" ? lerp(-16, 0, p) : 0, p, () =>
           this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question, {
             hideImageBoxes: hidesImageBoxes(this.quiz.settings, run.question),
           })),
         );
+        ctx.restore();
       }
     }
 
-    const animation = celebrationAnimation(run.question);
-    if (animation !== "confetti" && animation !== "none") {
-      const hold = celebrationMotionMs(animation);
-      const local = since - CELEBRATION_FOLLOW_MS;
-      if (local >= 0 && local < hold) {
-        this.drawDecorativeAnimation(animation, hold, local);
-      }
-    }
     ctx.restore();
   }
 
@@ -1754,6 +1760,13 @@ export class FrameRenderer {
       case "hearts":
       case "bubbles":
       case "sparkle-wave":
+      case "glass-assemble":
+      case "butterfly":
+      case "mosaic-assemble":
+      case "spiral-assemble":
+      case "curtain-assemble":
+      case "flip-assemble":
+      case "zoom-assemble":
         return this.drawDecorativeAnimation(instance.cue.animation, instance.hold, local);
       case "pulse-ring":
         return this.drawPulseRing(instance.hold, local);
@@ -1838,6 +1851,9 @@ export class FrameRenderer {
     if (animation === "hearts") return this.drawFloatingHearts(hold, local);
     if (animation === "bubbles") return this.drawBubbles(hold, local);
     if (animation === "sparkle-wave") return this.drawSparkleWave(hold, local);
+    if (animation === "glass-assemble") return this.drawGlassAssemble(hold, local);
+    if (animation === "butterfly") return this.drawFloatingHearts(hold, local);
+    if (["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation)) return this.drawGlassAssemble(hold, local);
     if (animation === "pulse-ring") return this.drawPulseRing(hold, local);
     if (animation === "stamp") return this.drawStamp(hold, local);
   }
@@ -1928,6 +1944,31 @@ export class FrameRenderer {
       this.drawLine("✦", (i + 0.5) / 15 * W, y - 18, 36, font, this.accent, "center");
       this.ctx.restore();
     }
+  }
+
+  private drawGlassAssemble(hold: number, local: number) {
+    const { ctx, W, H } = this;
+    const p = easeOut(clamp01(local / hold));
+    if (p >= 1) return;
+    ctx.save();
+    ctx.strokeStyle = this.accent;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha *= keyframes([0, 0.8, 0], p, easeOut);
+    for (let i = 0; i < 12; i++) {
+      const sx = (i % 4 - 1.5) * 180 * (1 - p);
+      const sy = (Math.floor(i / 4) - 1) * 150 * (1 - p);
+      ctx.save();
+      ctx.translate(W / 2 + sx, H / 2 + sy);
+      ctx.rotate(i * 31 * (1 - p) * Math.PI / 180);
+      ctx.beginPath();
+      ctx.moveTo(0, -32);
+      ctx.lineTo(32, 32);
+      ctx.lineTo(-32, 14);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   private drawPulseRing(hold: number, local: number) {
