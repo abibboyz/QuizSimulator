@@ -28,7 +28,7 @@ import { questionTheme, promptPosition } from "@/lib/questionPresentation";
 import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { DEFAULT_IMAGE_GAP, imageChoiceColumns } from "@/lib/imageChoice";
+import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns } from "@/lib/imageChoice";
 import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
 import { basePointsFor } from "@/lib/store/playSession";
@@ -62,7 +62,7 @@ import {
   CELEBRATION_FOLLOW_MS,
   celebrationAnimation,
   celebrationDelayMs,
-  animatesCelebrationFromReveal,
+  animatesCelebrationFromAnswer,
   hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
@@ -733,7 +733,7 @@ export class FrameRenderer {
         : { w: CW, h: box.h, draw: (x, y) => box.draw(promptSide === "right" ? x + CW - box.w : x, y) };
 
     if (imageLeads && !overlay) {
-      const media = this.mediaBox(q.media, CW, this.H * 0.26, 16);
+      const media = this.mediaBox(q.media, CW, this.H * 0.26, hidesImageBoxes(this.quiz.settings, q) ? 0 : 16);
       if (media) parts.push(posed(placed(media)));
     }
 
@@ -741,7 +741,7 @@ export class FrameRenderer {
     const normalPrompt = placement?.mode !== "bottom" && !overlay;
     const promptBox = this.styledPromptBox(run, sinceMount, CW);
     if (!overlay && !imageLeads && q.media) {
-      const media = this.mediaBox(q.media, CW, this.H * 0.22, 16);
+      const media = this.mediaBox(q.media, CW, this.H * 0.22, hidesImageBoxes(this.quiz.settings, q) ? 0 : 16);
       parts.push(posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW)));
     } else if (normalPrompt) {
       parts.push(posed(promptBox));
@@ -755,7 +755,7 @@ export class FrameRenderer {
         this.ctx.save();
         this.ctx.beginPath();
         if (this.ctx.roundRect) {
-          this.ctx.roundRect(x, y, CW, height, 12);
+          this.ctx.roundRect(x, y, CW, height, hidesImageBoxes(this.quiz.settings, q) ? 0 : 12);
         } else {
           this.ctx.rect(x, y, CW, height);
         }
@@ -1216,7 +1216,7 @@ export class FrameRenderer {
       if (option.media) {
         const img = this.image(option.media);
         ctx.save();
-        this.rr(cx, cy - 28, 56, 56, 8);
+        this.rr(cx, cy - 28, 56, 56, hidesImageBoxes(this.quiz.settings, run.question) ? 0 : 8);
         ctx.clip();
         if (img) this.drawCover(img, cx, cy - 28, 56, 56);
         else {
@@ -1241,6 +1241,7 @@ export class FrameRenderer {
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
     const colW = (CW - gap * (cols - 1)) / cols;
     const boxH = (colW * 2) / 3; // aspect-[3/2]
+    const hideImageBoxes = hidesImageBoxes(this.quiz.settings, q);
     const typography = answerTextStyle(this.quiz.theme, q);
     const size = (typography.fontSize ?? 14) * CW / PROMPT_DESIGN_WIDTH;
     const capLh = size * 1.5;
@@ -1292,22 +1293,24 @@ export class FrameRenderer {
             const opacity = faded ? lerp(1, 0.35, rp) : 1;
 
             this.withLoop(answerLoop(resolveLoops(this.quiz.settings, q).answers, option), t - run.mountAt, tx, ry, colW, rowH[r], () => this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
-              const rad = 6; // rounded-md
-              if (showCorrect) {
+              const rad = hideImageBoxes ? 0 : 6; // rounded-md
+              if (!hideImageBoxes && showCorrect) {
                 this.glowShadow(tx, ry, colW, boxH, rad, 6, 28, withAlpha(this.good, 0.9 * rp));
                 this.fillRing(tx, ry, colW, boxH, rad, 4, alpha(this.good, rp));
-              } else if (showWrong) {
+              } else if (!hideImageBoxes && showWrong) {
                 this.fillRing(tx, ry, colW, boxH, rad, 4, alpha(this.bad, rp));
               }
               // `ring-4 ring-white/80` while picked and not yet revealed.
               const whiteRing = 0.8 * pickP * (revealed ? 1 - rp : 1);
-              if (whiteRing > 0) this.fillRing(tx, ry, colW, boxH, rad, 4, `rgba(255,255,255,${whiteRing})`);
+              if (!hideImageBoxes && whiteRing > 0) this.fillRing(tx, ry, colW, boxH, rad, 4, `rgba(255,255,255,${whiteRing})`);
 
               ctx.save();
               this.rr(tx, ry, colW, boxH, rad);
               ctx.clip();
-              ctx.fillStyle = "#ffffff";
-              ctx.fillRect(tx, ry, colW, boxH);
+              if (!hideImageBoxes) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(tx, ry, colW, boxH);
+              }
               if (revealSettings) {
                 const answerRef = revealAnswerMedia(q, option);
                 if (revealed && option.correct) {
@@ -1324,7 +1327,7 @@ export class FrameRenderer {
                     answer,
                     coverImage,
                     this.revealEnv,
-                    REVEAL_TILE,
+                    hideImageBoxes ? { ...REVEAL_TILE, backdrop: "transparent", radius: 0 } : REVEAL_TILE,
                   );
                 } else if (coverImage) {
                   if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
@@ -1611,10 +1614,15 @@ export class FrameRenderer {
     const p = popEase(clamp01(since / POP_IN.durationMs));
     const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
     if (hasBody) {
-      const revealTravel = animatesCelebrationFromReveal(run.question) && view.images.length > 0;
-      if (revealTravel) {
+      const answerTravel = animatesCelebrationFromAnswer(run.question) && view.images.length > 0;
+      if (answerTravel) {
         const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
-        const columns = Math.max(1, imageChoiceColumns(run.question.options.length));
+        const imageGrid = run.question.kind === "image-choice" || run.question.kind === "reveal";
+        const columns = imageGrid
+          ? Math.max(1, imageChoiceColumns(run.question.options.length))
+          : this.narrow || run.question.layout === "list"
+            ? 1
+            : Math.min(2, run.question.options.length);
         const rows = Math.max(1, Math.ceil(run.question.options.length / columns));
         const column = correctIndex % columns;
         const row = Math.floor(correctIndex / columns);
@@ -1624,24 +1632,26 @@ export class FrameRenderer {
         ctx.save();
         ctx.translate(sourceX * (1 - travel), sourceY * (1 - travel));
         this.withTransform(W / 2, H / 2, lerp(0.35, 1, travel), 0, lerp(0.75, 1, travel), () =>
-          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question)),
+          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question, {
+            hideImageBoxes: hidesImageBoxes(this.quiz.settings, run.question),
+          })),
         );
         ctx.restore();
       } else {
         this.withTransform(W / 2, H / 2, lerp(0.97, 1, p), 0, p, () =>
-          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question)),
+          this.drawCelebrationCard(view, since, hidesCelebrationBox(run.question, {
+            hideImageBoxes: hidesImageBoxes(this.quiz.settings, run.question),
+          })),
         );
       }
     }
 
     const animation = celebrationAnimation(run.question);
-    if (animation === "stars" || animation === "pulse-ring" || animation === "stamp") {
+    if (animation !== "confetti" && animation !== "none") {
       const hold = celebrationMotionMs(animation);
       const local = since - CELEBRATION_FOLLOW_MS;
       if (local >= 0 && local < hold) {
-        if (animation === "stars") this.drawStars(hold, local);
-        else if (animation === "pulse-ring") this.drawPulseRing(hold, local);
-        else this.drawStamp(hold, local);
+        this.drawDecorativeAnimation(animation, hold, local);
       }
     }
     ctx.restore();
@@ -1739,6 +1749,12 @@ export class FrameRenderer {
         return this.drawCountdown(instance, local);
       case "stars":
         return this.drawStars(instance.hold, local);
+      case "shooting-star":
+      case "fireworks":
+      case "hearts":
+      case "bubbles":
+      case "sparkle-wave":
+        return this.drawDecorativeAnimation(instance.cue.animation, instance.hold, local);
       case "pulse-ring":
         return this.drawPulseRing(instance.hold, local);
       case "shake":
@@ -1746,7 +1762,7 @@ export class FrameRenderer {
       case "stamp":
         return this.drawStamp(instance.hold, local);
       case "image":
-        return this.drawCueImage(instance.cue, instance.hold, local);
+        return this.drawCueImage(instance.cue, instance.hold, local, instance.hideImageBox);
       default:
         // "confetti" draws through drawConfetti; null draws nothing.
         return;
@@ -1815,6 +1831,105 @@ export class FrameRenderer {
     });
   }
 
+  private drawDecorativeAnimation(animation: Exclude<Cue["animation"], null>, hold: number, local: number) {
+    if (animation === "stars") return this.drawStars(hold, local);
+    if (animation === "shooting-star") return this.drawShootingStars(hold, local);
+    if (animation === "fireworks") return this.drawFireworks(hold, local);
+    if (animation === "hearts") return this.drawFloatingHearts(hold, local);
+    if (animation === "bubbles") return this.drawBubbles(hold, local);
+    if (animation === "sparkle-wave") return this.drawSparkleWave(hold, local);
+    if (animation === "pulse-ring") return this.drawPulseRing(hold, local);
+    if (animation === "stamp") return this.drawStamp(hold, local);
+  }
+
+  private drawShootingStars(hold: number, local: number) {
+    const { W, H } = this;
+    const font = this.font(700, 36);
+    for (let i = 0; i < 7; i++) {
+      const p = easeIn(clamp01((local - i * 90) / hold));
+      if (p <= 0 || p >= 1) continue;
+      const x = lerp(-0.2 * W, 1.15 * W, p);
+      const y = lerp((0.08 + i * 0.11) * H, (0.48 + i * 0.11) * H, p);
+      const op = keyframes([0, 1, 1, 0], p, easeIn);
+      this.ctx.save();
+      this.ctx.globalAlpha *= op * 0.35;
+      this.ctx.strokeStyle = this.accent;
+      this.ctx.lineWidth = 5;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x - 55, y - 18);
+      this.ctx.lineTo(x, y);
+      this.ctx.stroke();
+      this.ctx.restore();
+      this.drawLine("★", x, y - 18, 40, font, this.accent, "center");
+    }
+  }
+
+  private drawFireworks(hold: number, local: number) {
+    const { ctx, W, H } = this;
+    const centers = [[0.28, 0.38], [0.7, 0.3], [0.52, 0.66]];
+    centers.forEach(([cx, cy], burst) => {
+      const p = easeOut(clamp01((local - burst * 160) / hold));
+      if (p <= 0 || p >= 1) return;
+      ctx.save();
+      ctx.globalAlpha *= keyframes([0, 1, 0], p, easeOut);
+      ctx.fillStyle = this.accent;
+      for (let i = 0; i < 12; i++) {
+        const angle = i * Math.PI * 2 / 12;
+        const distance = (0.1 + burst * 0.02) * Math.min(W, H) * p;
+        ctx.beginPath();
+        ctx.arc(cx * W + Math.cos(angle) * distance, cy * H + Math.sin(angle) * distance, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+  }
+
+  private drawFloatingHearts(hold: number, local: number) {
+    const { W, H } = this;
+    const font = this.font(700, 30);
+    STAR_LANES.forEach((left, i) => {
+      const p = easeOut(clamp01((local - (i % 6) * 80) / hold));
+      if (p <= 0 || p >= 1) return;
+      const x = left / 100 * W + Math.sin(p * Math.PI * 2) * (i % 2 ? 24 : -24);
+      const y = lerp(1.1 * H, -0.15 * H, p);
+      this.ctx.save();
+      this.ctx.globalAlpha *= keyframes([0, 1, 1, 0], p, easeOut);
+      this.drawLine("♥", x, y, 36, font, this.accent, "center");
+      this.ctx.restore();
+    });
+  }
+
+  private drawBubbles(hold: number, local: number) {
+    const { ctx, W, H } = this;
+    STAR_LANES.forEach((left, i) => {
+      const p = clamp01((local - (i % 5) * 100) / hold);
+      if (p <= 0 || p >= 1) return;
+      ctx.save();
+      ctx.globalAlpha *= keyframes([0, 0.75, 0.75, 0], p);
+      ctx.strokeStyle = this.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(left / 100 * W, lerp(1.08 * H, -0.12 * H, p), 16 + (i % 3) * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  private drawSparkleWave(hold: number, local: number) {
+    const { W, H } = this;
+    const font = this.font(700, 34);
+    for (let i = 0; i < 15; i++) {
+      const p = clamp01((local - i * 45) / hold);
+      if (p <= 0 || p >= 1) continue;
+      const op = keyframes([0, 1, 0], p, easeOut);
+      const y = H / 2 + Math.sin(p * Math.PI * 2 + i * 0.7) * 45;
+      this.ctx.save();
+      this.ctx.globalAlpha *= op;
+      this.drawLine("✦", (i + 0.5) / 15 * W, y - 18, 36, font, this.accent, "center");
+      this.ctx.restore();
+    }
+  }
+
   private drawPulseRing(hold: number, local: number) {
     const { ctx, W, H } = this;
     for (const delay of [0, 180]) {
@@ -1863,7 +1978,7 @@ export class FrameRenderer {
     });
   }
 
-  private drawCueImage(cue: Cue, hold: number, local: number) {
+  private drawCueImage(cue: Cue, hold: number, local: number, hideBox: boolean) {
     const img = cue.media ? this.image(cue.media) : null;
     if (!img) return;
     const { ctx, W, H } = this;
@@ -1877,11 +1992,13 @@ export class FrameRenderer {
     const x = W / 2 - w / 2;
     const y = H / 2 - h / 2;
     this.withTransform(W / 2, H / 2, sc, 0, op, () => {
-      ctx.save();
-      this.rr(x, y, w, h, 24);
-      ctx.clip();
+      if (!hideBox) {
+        ctx.save();
+        this.rr(x, y, w, h, 24);
+        ctx.clip();
+      }
       ctx.drawImage(frameSource(img, local), x, y, w, h);
-      ctx.restore();
+      if (!hideBox) ctx.restore();
     });
   }
 

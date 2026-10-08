@@ -115,6 +115,12 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           onChange={(shuffleOptions) => onChangeSettings({ shuffleOptions })}
         />
         <Toggle
+          label="Hide image boxes"
+          hint="Uses natural image shapes for Image choice, Reveal and celebration pictures"
+          checked={settings.hideImageBoxes === true}
+          onChange={(hideImageBoxes) => onChangeSettings({ hideImageBoxes })}
+        />
+        <Toggle
           label="Sound effects"
           hint="Ticks, stings, and a fanfare at the end"
           checked={settings.sound}
@@ -148,6 +154,7 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
             label={CUE_SLOT_LABELS[slot].label}
             hint={CUE_SLOT_LABELS[slot].hint}
             cue={settings.cues?.[slot]}
+            hideImageBox={settings.hideImageBoxes}
             onChange={(cue) => setCue(slot, cue)}
           />
         ))}

@@ -4,7 +4,7 @@ import { createQuiz } from "./factory.ts";
 import { buildTimeline } from "./videoExport/timeline.ts";
 import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
 import {
-  animatesCelebrationFromReveal,
+  animatesCelebrationFromAnswer,
   celebrationAnimation,
   celebrationDelayMs,
   celebrationEnabled,
@@ -42,12 +42,17 @@ test("the celebration box is hidden only when an enabled question requests it", 
   assert.equal(hidesCelebrationBox(question({ celebration: { enabled: true, hideBox: true } })), true);
 });
 
-test("moving the celebration from the answer is opt-in and Reveal-only", () => {
-  assert.equal(animatesCelebrationFromReveal(question()), false);
-  assert.equal(animatesCelebrationFromReveal(question({ celebration: { enabled: true, animateFromReveal: true } })), false);
-  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: true } })), false);
-  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: false, animateFromReveal: true } })), false);
-  assert.equal(animatesCelebrationFromReveal(question({ kind: "reveal", celebration: { enabled: true, animateFromReveal: true } })), true);
+test("moving the celebration from the answer is opt-in for every question kind", () => {
+  assert.equal(animatesCelebrationFromAnswer(question()), false);
+  assert.equal(animatesCelebrationFromAnswer(question({ celebration: { enabled: false, animateFromAnswer: true } })), false);
+  for (const kind of ["multiple-choice", "true-false", "multi-select", "image-choice", "reveal"] as const) {
+    assert.equal(animatesCelebrationFromAnswer(question({ kind, celebration: { enabled: true, animateFromAnswer: true } })), true);
+  }
+  assert.equal(
+    animatesCelebrationFromAnswer(question({ kind: "reveal", celebration: { enabled: true, animateFromReveal: true } })),
+    true,
+    "the old Reveal-only flag remains compatible",
+  );
 });
 
 test("hiding the box applies to uploaded, answer, image-choice and Reveal pictures", () => {

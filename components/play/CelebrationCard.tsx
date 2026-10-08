@@ -8,7 +8,7 @@ import { MediaImage } from "@/components/ui/MediaImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   CELEBRATION_FOLLOW_MS,
-  animatesCelebrationFromReveal,
+  animatesCelebrationFromAnswer,
   celebrationAnimation,
   hidesCelebrationBox,
   celebrationMotionMs,
@@ -17,6 +17,7 @@ import {
 import { promptFontStack } from "@/lib/promptText";
 import { CUE_CONFETTI, STAR_LANES } from "@/lib/playTiming";
 import type { StageMode } from "@/components/play/AnswerGrid";
+import { hidesImageBoxes as resolvesHiddenImageBoxes } from "@/lib/imageChoice";
 
 /**
  * The correct-answer card, centred on the screen once a question's answer is
@@ -34,10 +35,12 @@ export function CelebrationCard({
   mode,
   /** Stay inside the phone column instead of the whole browser window. */
   contained = false,
+  hideImageBoxes = false,
 }: {
   question: Question;
   mode: StageMode;
   contained?: boolean;
+  hideImageBoxes?: boolean;
 }) {
   const view = celebrationView(question);
   const reduced = useReducedMotion();
@@ -47,7 +50,9 @@ export function CelebrationCard({
   // A picture card is the picture alone. Words are only for a card with no picture.
   const lines = view.images.length > 0 ? [] : view.lines.filter((line) => line.trim());
   const showCard = view.images.length > 0 || lines.length > 0;
-  const imageOnly = view.images.length > 0 && hidesCelebrationBox(question);
+  const imageOnly = view.images.length > 0 && hidesCelebrationBox(question, {
+    hideImageBoxes: resolvesHiddenImageBoxes({ hideImageBoxes }, question),
+  });
   const frame = contained
     ? "fixed inset-y-0 left-1/2 z-30 w-full max-w-[26rem] -translate-x-1/2 overflow-hidden lg:rounded-[2rem]"
     : mode === "preview"
@@ -135,7 +140,7 @@ function RevealTravelCard({
   children: ReactNode;
 }) {
   const measureRef = useRef<HTMLDivElement>(null);
-  const correct = animatesCelebrationFromReveal(question)
+  const correct = animatesCelebrationFromAnswer(question)
     ? question.options.find((option) => option.correct)
     : undefined;
   const sourceKey = correct ? `${question.id}:${correct.id}` : null;
@@ -212,8 +217,20 @@ function CelebrationMotion({ animation, contained }: { animation: CelebrationAni
   if (!go) return null;
   const holdMs = celebrationMotionMs(animation);
   if (animation === "stars") return <Stars holdMs={holdMs} />;
+  if (["shooting-star", "fireworks", "hearts", "bubbles", "sparkle-wave"].includes(animation)) {
+    return <ParticleMotion animation={animation} holdMs={holdMs} />;
+  }
   if (animation === "pulse-ring") return <PulseRing holdMs={holdMs} />;
   return <Stamp holdMs={holdMs} />;
+}
+
+function ParticleMotion({ animation, holdMs }: { animation: CelebrationAnimation; holdMs: number }) {
+  const seconds = holdMs / 1000;
+  if (animation === "shooting-star") return <div className="absolute inset-0 z-20 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <motion.span key={i} initial={{ x: "-20%", y: `${8 + i * 11}%`, opacity: 0 }} animate={{ x: "120%", y: `${48 + i * 11}%`, opacity: [0, 1, 1, 0] }} transition={{ duration: seconds, delay: i * 0.09, ease: "easeIn" }} className="absolute text-4xl" style={{ color: "var(--accent)", textShadow: "-22px -8px 12px var(--accent)" }}>★</motion.span>)}</div>;
+  if (animation === "fireworks") return <div className="absolute inset-0 z-20 overflow-hidden">{[[28, 38], [70, 30], [52, 66]].flatMap(([x, y], burst) => Array.from({ length: 12 }, (_, i) => { const angle = i * Math.PI * 2 / 12; return <motion.span key={`${burst}-${i}`} initial={{ left: `${x}%`, top: `${y}%`, scale: 0, opacity: 0 }} animate={{ x: `${Math.cos(angle) * (10 + burst * 2)}vw`, y: `${Math.sin(angle) * (10 + burst * 2)}vh`, scale: [0, 1, 0.4], opacity: [0, 1, 0] }} transition={{ duration: seconds, delay: burst * 0.16, ease: "easeOut" }} className="absolute h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent)" }} />; }))}</div>;
+  if (animation === "hearts") return <div className="absolute inset-0 z-20 overflow-hidden">{STAR_LANES.map((left, i) => <motion.span key={left} initial={{ y: "110%", opacity: 0 }} animate={{ y: "-15%", x: [0, i % 2 ? 24 : -24, 0], opacity: [0, 1, 1, 0] }} transition={{ duration: seconds, delay: (i % 6) * 0.08, ease: "easeOut" }} className="absolute text-3xl" style={{ left: `${left}%`, color: "var(--accent)" }}>♥</motion.span>)}</div>;
+  if (animation === "bubbles") return <div className="absolute inset-0 z-20 overflow-hidden">{STAR_LANES.map((left, i) => <motion.span key={left} initial={{ y: "108%", opacity: 0, scale: 0.4 }} animate={{ y: "-12%", opacity: [0, 0.75, 0.75, 0], scale: [0.4, 1 + (i % 3) * 0.25] }} transition={{ duration: seconds, delay: (i % 5) * 0.1, ease: "linear" }} className="absolute h-8 w-8 rounded-full border-2" style={{ left: `${left}%`, borderColor: "var(--accent)" }} />)}</div>;
+  return <div className="absolute inset-0 z-20 flex items-center justify-around overflow-hidden">{Array.from({ length: 15 }, (_, i) => <motion.span key={i} initial={{ opacity: 0, scale: 0 }} animate={{ opacity: [0, 1, 0], scale: [0, 1.5, 0], y: [0, i % 2 ? 45 : -45, 0] }} transition={{ duration: seconds, delay: i * 0.045, ease: "easeInOut" }} className="text-4xl" style={{ color: "var(--accent)" }}>✦</motion.span>)}</div>;
 }
 
 function Stars({ holdMs }: { holdMs: number }) {

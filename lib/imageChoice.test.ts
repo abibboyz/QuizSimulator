@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { imageChoiceColumns, MAX_IMAGE_OPTIONS } from "./imageChoice.ts";
+import { hidesImageBoxes, imageChoiceColumns, MAX_IMAGE_OPTIONS } from "./imageChoice.ts";
 
 test("a picture grid matches a flag round and shrinks as it fills", () => {
   assert.equal(imageChoiceColumns(2), 2);
@@ -15,4 +15,11 @@ test("column count never exceeds the number of images", () => {
     const columns = imageChoiceColumns(count);
     assert.ok(columns >= 1 && columns <= count);
   }
+});
+
+test("image boxes inherit globally and keep a per-question override", () => {
+  assert.equal(hidesImageBoxes({ hideImageBoxes: false }, {}), false);
+  assert.equal(hidesImageBoxes({ hideImageBoxes: true }, {}), true);
+  assert.equal(hidesImageBoxes({ hideImageBoxes: true }, { hideImageBoxes: false }), false);
+  assert.equal(hidesImageBoxes({ hideImageBoxes: false }, { hideImageBoxes: true }), true);
 });

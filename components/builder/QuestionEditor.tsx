@@ -18,6 +18,7 @@ import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 import { AnimationSection } from "@/components/builder/AnimationSection";
 import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
 import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 
 const PROMPT_EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -136,6 +137,27 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           ))}
         </Select>
       </header>
+
+      {(question.kind === "image-choice" || question.kind === "reveal") && (
+        <Field label="Image boxes" hint={`Quiz default: ${quiz.settings.hideImageBoxes ? "hidden" : "shown"}. A local choice affects only this question.`}>
+          <Select
+            value={question.hideImageBoxes === undefined ? "global" : question.hideImageBoxes ? "hide" : "show"}
+            onChange={(event) => {
+              if (event.target.value === "global") {
+                const rest = { ...question };
+                delete rest.hideImageBoxes;
+                onChange(rest);
+                return;
+              }
+              onChange({ ...question, hideImageBoxes: event.target.value === "hide" });
+            }}
+          >
+            <option value="global">Use quiz setting</option>
+            <option value="hide">Hide boxes</option>
+            <option value="show">Show boxes</option>
+          </Select>
+        </Field>
+      )}
 
       <Field
         label="Prompt"
@@ -374,19 +396,17 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 })
               }
             />
-            {question.kind === "reveal" && (
-              <Toggle
-                label="Animate image from revealed answer"
-                hint="Moves the uncovered correct image from its tile into the celebration position"
-                checked={question.celebration.animateFromReveal === true}
-                onChange={(animateFromReveal) =>
-                  onChange({
-                    ...question,
-                    celebration: { ...question.celebration!, animateFromReveal },
-                  })
-                }
-              />
-            )}
+            <Toggle
+              label="Animate image from correct answer"
+              hint="Moves a correct answer image from its tile into the celebration position when available"
+              checked={question.celebration.animateFromAnswer === true || question.celebration.animateFromReveal === true}
+              onChange={(animateFromAnswer) =>
+                onChange({
+                  ...question,
+                  celebration: { ...question.celebration!, animateFromAnswer, animateFromReveal: undefined },
+                })
+              }
+            />
             <Field label="Animation" hint="Plays once the card has appeared. Card only skips the extra motion.">
               <Select
                 aria-label="Celebration animation"
@@ -485,6 +505,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             hint={CUE_SLOT_LABELS[slot].hint}
             cue={question.cues?.[slot]}
             inherits={describeCue(quiz.settings.cues?.[slot])}
+            hideImageBox={hidesImageBoxes(quiz.settings, question)}
             onChange={(cue) => setCue(slot, cue)}
           />
         ))}

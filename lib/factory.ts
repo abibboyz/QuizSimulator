@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   pointsBase: 1000,
   speedBonus: true,
   streakBonus: true,
+  hideImageBoxes: false,
   sound: true,
   autoReveal: false,
   autoAdvanceSeconds: null,

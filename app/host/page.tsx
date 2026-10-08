@@ -24,6 +24,7 @@ import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
 import { MuteButton } from "@/components/ui/MuteButton";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 
 function toggleFullscreen() {
   if (document.fullscreenElement) void document.exitFullscreen();
@@ -118,7 +119,7 @@ function HostView() {
   const intro = activeCue(quiz, undefined, "intro");
   if (intro && introFinishedFor !== quiz.id) return <ThemeShell theme={quiz.theme}>
     <div className="min-h-dvh" aria-label="Quiz starting" />
-    <CuePlayer cue={intro} soundOn={quiz.settings.sound} onDone={() => setIntroFinishedFor(quiz.id)} />
+    <CuePlayer cue={intro} soundOn={quiz.settings.sound} hideImageBox={quiz.settings.hideImageBoxes} onDone={() => setIntroFinishedFor(quiz.id)} />
   </ThemeShell>;
 
   const question = questions[index];
@@ -206,7 +207,7 @@ interface HostQuestionProps {
   theme: Theme;
   /** Entrances and the Reveal uncover run here; there are no exits (each question simply remounts). */
   motion: ResolvedMotion;
-  loopSettings: Pick<QuizSettings, "loopMotion">;
+  loopSettings: Pick<QuizSettings, "loopMotion" | "hideImageBoxes">;
 }
 
 function HostQuestion({
@@ -381,7 +382,7 @@ function HostQuestion({
         )}
       </div>
 
-      {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" />}
+      {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" hideImageBoxes={hidesImageBoxes(loopSettings, question)} />}
 
       <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
         {showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (

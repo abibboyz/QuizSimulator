@@ -11,6 +11,7 @@ import { promptAnimationSpan } from "@/lib/promptDesign";
 import { promptPosition } from "@/lib/questionPresentation";
 import { promptAlign } from "@/lib/promptText";
 import { MediaImage } from "@/components/ui/MediaImage";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -25,7 +26,7 @@ import {
 
 interface Props {
   question: Question;
-  loopSettings?: Pick<QuizSettings, "loopMotion">;
+  loopSettings?: Pick<QuizSettings, "loopMotion" | "hideImageBoxes">;
   index: number;
   total: number;
   selected: string[];
@@ -87,6 +88,7 @@ export function QuestionStage({
   showCount = true,
 }: Props) {
   const loops = resolveLoops(loopSettings, question);
+  const hideImageBoxes = hidesImageBoxes(loopSettings, question);
   const placement = question.promptPlacement;
   const overlay = placement?.mode === "overlay" && !!question.media;
   const bottom = placement?.mode === "bottom";
@@ -155,7 +157,7 @@ export function QuestionStage({
           <LoopMotion value={loops.question} preview={mode === "preview"}>
           <MediaImage
             media={question.media}
-            className={`rounded-2xl object-contain transition-[max-height] duration-300 ${
+            className={`${hideImageBoxes ? "" : "rounded-2xl"} object-contain transition-[max-height] duration-300 ${
               mode === "host"
                 ? revealed
                   ? "max-h-[22vh]"
@@ -179,7 +181,7 @@ export function QuestionStage({
           <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"}>
           <MediaImage
             media={question.media}
-            className={`rounded-2xl object-contain transition-[max-height] duration-300 ${
+            className={`${hideImageBoxes ? "" : "rounded-2xl"} object-contain transition-[max-height] duration-300 ${
               mode === "host"
                 ? revealed
                   ? "max-h-[12vh]"
@@ -195,7 +197,7 @@ export function QuestionStage({
       </div>}
 
       {overlay && (
-        <div ref={canvasRef} className="relative mx-auto w-full overflow-hidden rounded-xl" style={{ maxWidth: mode === "host" ? "40vh" : undefined, aspectRatio: "16 / 9" }}>
+        <div ref={canvasRef} className={`relative mx-auto w-full overflow-hidden ${hideImageBoxes ? "" : "rounded-xl"}`} style={{ maxWidth: mode === "host" ? "40vh" : undefined, aspectRatio: "16 / 9" }}>
           <div className="absolute inset-0"><LoopMotion value={loops.question} preview={mode === "preview"}><MediaImage media={question.media} className="h-full w-full object-contain" /></LoopMotion></div>
           <div
             role={onPositionChange ? "button" : undefined}
@@ -230,6 +232,7 @@ export function QuestionStage({
 
       <AnswerGrid
         loops={loops}
+        hideImageBoxes={hideImageBoxes}
         question={question}
         selected={selected}
         revealed={revealed}

@@ -16,11 +16,14 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { tileDelayMs } from "@/lib/playTiming";
 import { answerPoseAt, isRestPose, type Pose } from "@/lib/stageMotion";
 
+const HIDDEN_REVEAL_TILE = Object.freeze({ fit: "contain" as const, backdrop: "transparent" });
+
 export type StageMode = "solo" | "host" | "preview";
 
 interface Props {
   question: Question;
   loops?: Required<LoopMotionSet>;
+  hideImageBoxes?: boolean;
   selected: string[];
   revealed: boolean;
   interactive: boolean;
@@ -85,6 +88,7 @@ const PAD: Record<StageMode, string> = {
 export function AnswerGrid({
   question,
   loops,
+  hideImageBoxes = false,
   selected,
   revealed,
   interactive,
@@ -155,13 +159,13 @@ export function AnswerGrid({
               >
                 <span
                   data-reveal-source={option.correct ? `${question.id}:${option.id}` : undefined}
-                  className={`relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white ${
-                    isPicked && !revealed ? "ring-4 ring-white/80" : ""
+                  className={`relative block aspect-[3/2] w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
+                    !hideImageBoxes && isPicked && !revealed ? "ring-4 ring-white/80" : ""
                   }`}
                   style={{
-                    boxShadow: showCorrect
+                    boxShadow: !hideImageBoxes && showCorrect
                       ? `0 0 0 4px ${correctColor}, 0 0 28px -6px ${withAlpha(correctColor, 0.9)}`
-                      : showWrong
+                      : !hideImageBoxes && showWrong
                         ? `0 0 0 4px ${wrongColor}`
                         : undefined,
                   }}
@@ -183,8 +187,8 @@ export function AnswerGrid({
                       onRevealComplete={onRevealComplete}
                       captionClass={null}
                       fill
-                      radius={REVEAL_TILE.radius}
-                      fit={REVEAL_TILE}
+                      radius={hideImageBoxes ? 0 : REVEAL_TILE.radius}
+                      fit={hideImageBoxes ? HIDDEN_REVEAL_TILE : REVEAL_TILE}
                     />
                   )}
                   {!unscored && revealed && (option.correct || isPicked) && (
@@ -253,13 +257,14 @@ export function AnswerGrid({
               style={{ animationDelay: tileIn ? `${tileDelayMs(index)}ms` : undefined, ...anim.style }}
             >
               <span
-                className={`relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white ${
-                  isPicked && !revealed ? "ring-4 ring-white/80" : ""
+                data-reveal-source={option.correct && option.media ? `${question.id}:${option.id}` : undefined}
+                className={`relative block aspect-[3/2] w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
+                  !hideImageBoxes && isPicked && !revealed ? "ring-4 ring-white/80" : ""
                 }`}
                 style={{
-                  boxShadow: showCorrect
+                  boxShadow: !hideImageBoxes && showCorrect
                     ? `0 0 0 4px ${correctColor}, 0 0 28px -6px ${withAlpha(correctColor, 0.9)}`
-                    : showWrong
+                    : !hideImageBoxes && showWrong
                       ? `0 0 0 4px ${wrongColor}`
                       : undefined,
                 }}
@@ -357,12 +362,17 @@ export function AnswerGrid({
             )}
 
             {option.media && (
-              <MediaImage
-                media={option.media}
-                className={`shrink-0 rounded-lg object-cover ${
-                  mode === "host" ? "h-24 w-24" : mode === "solo" ? "h-14 w-14" : "h-6 w-6"
-                }`}
-              />
+              <span
+                data-reveal-source={option.correct ? `${question.id}:${option.id}` : undefined}
+                className="block shrink-0"
+              >
+                <MediaImage
+                  media={option.media}
+                  className={`${hideImageBoxes ? "" : "rounded-lg"} object-cover ${
+                    mode === "host" ? "h-24 w-24" : mode === "solo" ? "h-14 w-14" : "h-6 w-6"
+                  }`}
+                />
+              </span>
             )}
 
             <span className="min-w-0 flex-1 break-words">{option.text}</span>

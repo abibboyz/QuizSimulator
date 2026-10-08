@@ -51,6 +51,11 @@ export type CueAnimation =
   | "countdown"
   | "confetti"
   | "stars"
+  | "shooting-star"
+  | "fireworks"
+  | "hearts"
+  | "bubbles"
+  | "sparkle-wave"
   | "pulse-ring"
   | "shake"
   | "stamp"
@@ -228,7 +233,17 @@ export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
  * `none` is the card by itself. `confetti` is the default when a question
  * turns the card on and doesn't pick one.
  */
-export type CelebrationAnimation = "confetti" | "stars" | "pulse-ring" | "stamp" | "none";
+export type CelebrationAnimation =
+  | "confetti"
+  | "stars"
+  | "shooting-star"
+  | "fireworks"
+  | "hearts"
+  | "bubbles"
+  | "sparkle-wave"
+  | "pulse-ring"
+  | "stamp"
+  | "none";
 
 /**
  * Optional, per question. `enabled: false` (or a missing object) leaves the
@@ -243,7 +258,9 @@ export interface Celebration {
   useAnswerImage?: boolean;
   /** For picture celebrations, show only the image at its natural aspect ratio. */
   hideBox?: boolean;
-  /** Reveal questions can move the uncovered answer image into the celebration position. */
+  /** Moves a correct answer image from its tile into the celebration position. */
+  animateFromAnswer?: boolean;
+  /** Legacy name retained for quizzes saved before the animation was generalized. */
   animateFromReveal?: boolean;
   animation?: CelebrationAnimation;
 }
@@ -295,6 +312,8 @@ export interface AnswerTextStyle {
 export interface Question {
   /** Overrides quiz answer typography for this question, including image captions. */
   answerStyle?: AnswerTextStyle;
+  /** Overrides the quiz-wide image-box setting for this question. */
+  hideImageBoxes?: boolean;
   loopMotion?: LoopMotionSet;
   id: string;
   kind: QuestionKind;
@@ -467,6 +486,8 @@ export interface QuizSettings {
   pointsBase: number;
   speedBonus: boolean;
   streakBonus: boolean;
+  /** Shows image-choice, Reveal, and celebration pictures without their decorative boxes. */
+  hideImageBoxes?: boolean;
   sound: boolean;
   /** Host mode: show the answer by itself when the timer runs out. */
   autoReveal: boolean;

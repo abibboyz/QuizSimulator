@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Question, Quiz } from "@/types/quiz";
 import { getPreset, themeVars } from "@/lib/themes";
 import { showsProgressBar } from "@/lib/progress";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
@@ -81,7 +82,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
           />
         </div>
         {revealed && !isUnscoredImage(question) && (question.kind !== "reveal" || completedRevealQuestion === question.id) && (
-          <CelebrationCard question={question} mode="preview" />
+          <CelebrationCard question={question} mode="preview" hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
         )}
       </div>
     </div>

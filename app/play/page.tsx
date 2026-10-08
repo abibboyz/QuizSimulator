@@ -32,6 +32,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
 import { clockHoldMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -111,7 +112,7 @@ function PlayView() {
 
   // One cue plays at a time. Its slot is what tells `handleCueDone` whether the
   // run is waiting on it or it was pure decoration over a question.
-  const [pending, setPending] = useState<{ cue: Cue; slot: CueSlot; token: number } | null>(null);
+  const [pending, setPending] = useState<{ cue: Cue; slot: CueSlot; token: number; hideImageBox: boolean } | null>(null);
   const cueTokenRef = useRef(0);
 
   /*
@@ -123,9 +124,9 @@ function PlayView() {
    */
   const pendingRef = useRef(pending);
 
-  const showCue = useCallback((cue: Cue, slot: CueSlot) => {
+  const showCue = useCallback((cue: Cue, slot: CueSlot, hideImageBox: boolean) => {
     cueTokenRef.current += 1;
-    const next = { cue, slot, token: cueTokenRef.current };
+    const next = { cue, slot, token: cueTokenRef.current, hideImageBox };
     pendingRef.current = next;
     setPending(next);
   }, []);
@@ -143,9 +144,9 @@ function PlayView() {
   // on a blank intro screen.
   useEffect(() => {
     if (phase !== "countdown") return;
-    if (introCue) showCue(introCue, "intro");
+    if (introCue) showCue(introCue, "intro", quiz?.settings.hideImageBoxes === true);
     else usePlaySession.getState().ready();
-  }, [phase, introCue, showCue]);
+  }, [phase, introCue, quiz?.settings.hideImageBoxes, showCue]);
 
   const handleExpire = useCallback(() => {
     if (limit === null) return;
@@ -222,7 +223,7 @@ function PlayView() {
     // feedback it is switched off to avoid.
     const cue = quiz.settings.revealAfterEach ? activeCue(quiz, order[index], correct ? "correct" : "wrong") : null;
     if (cue) {
-      showCue(cue, correct ? "correct" : "wrong");
+      showCue(cue, correct ? "correct" : "wrong", hidesImageBoxes(quiz.settings, current));
       return;
     }
 
@@ -249,7 +250,7 @@ function PlayView() {
       const isLast = state.index + 1 >= state.order.length;
       const between = isLast ? null : activeCue(quiz, state.order[state.index], "between");
       if (between) {
-        showCue(between, "between");
+        showCue(between, "between", hidesImageBoxes(quiz.settings, state.order[state.index]));
         return;
       }
 
@@ -563,7 +564,7 @@ function PlayView() {
               web view uses the viewport. Keep it outside the sliding question
               frame so that transform cannot move its fixed position. */}
           {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && !isUnscoredImage(question) && (
-            <CelebrationCard question={question} mode="solo" contained={mobile} />
+            <CelebrationCard question={question} mode="solo" contained={mobile} hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
           )}
         </div>
       )}
@@ -597,6 +598,7 @@ function PlayView() {
           onDone={handleCueDone}
           onMidpoint={handleCueMidpoint}
           soundOn={soundOn}
+          hideImageBox={pending.hideImageBox}
         />
       )}
     </ThemeShell>

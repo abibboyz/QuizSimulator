@@ -14,6 +14,11 @@ import { resolveReveal, revealAnswerMedia } from "./reveal.ts";
 export const CELEBRATION_ANIMATIONS: { id: CelebrationAnimation; label: string }[] = [
   { id: "confetti", label: "Confetti burst" },
   { id: "stars", label: "Star shower" },
+  { id: "shooting-star", label: "Shooting star" },
+  { id: "fireworks", label: "Fireworks" },
+  { id: "hearts", label: "Floating hearts" },
+  { id: "bubbles", label: "Bubbles" },
+  { id: "sparkle-wave", label: "Sparkle wave" },
   { id: "pulse-ring", label: "Pulse ring" },
   { id: "stamp", label: "Stamp" },
   { id: "none", label: "Card only" },
@@ -29,12 +34,16 @@ export function celebrationEnabled(question: Pick<Question, "celebration"> | und
 }
 
 /** Text-only celebrations retain their card so the answer stays readable. */
-export function hidesCelebrationBox(question: Pick<Question, "celebration"> | undefined): boolean {
-  return celebrationEnabled(question) && question?.celebration?.hideBox === true;
+export function hidesCelebrationBox(
+  question: Pick<Question, "celebration"> | undefined,
+  settings?: { hideImageBoxes?: boolean },
+): boolean {
+  return celebrationEnabled(question) && (settings?.hideImageBoxes === true || question?.celebration?.hideBox === true);
 }
 
-export function animatesCelebrationFromReveal(question: Pick<Question, "kind" | "celebration"> | undefined): boolean {
-  return question?.kind === "reveal" && celebrationEnabled(question) && question.celebration?.animateFromReveal === true;
+export function animatesCelebrationFromAnswer(question: Pick<Question, "celebration"> | undefined): boolean {
+  return celebrationEnabled(question) &&
+    (question?.celebration?.animateFromAnswer === true || question?.celebration?.animateFromReveal === true);
 }
 
 /** Reveal questions finish uncovering before their optional card appears. */

@@ -16,6 +16,7 @@ interface Props {
   onDone: () => void;
   /** Whether sound is allowed at all. Motion still plays when this is false. */
   soundOn: boolean;
+  hideImageBox?: boolean;
   /**
    * Fired halfway through, for callers that need to change what sits underneath
    * mid-cue. A transition cue swaps the question here so the cue spans the
@@ -32,7 +33,7 @@ interface Props {
  * decoration. `onDone` always fires, including when motion is suppressed, so a
  * cue can never leave the run stuck waiting on an animation that never ran.
  */
-export function CuePlayer({ cue, onDone, soundOn, onMidpoint }: Props) {
+export function CuePlayer({ cue, onDone, soundOn, hideImageBox = false, onMidpoint }: Props) {
   const reduced = useReducedMotion();
   const holdMs = cueHoldMs(cue);
   const imageUrl = useMediaUrl(cue.animation === "image" ? cue.media : undefined);
@@ -94,10 +95,15 @@ export function CuePlayer({ cue, onDone, soundOn, onMidpoint }: Props) {
     <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden>
       {cue.animation === "countdown" && <Countdown holdMs={holdMs} soundOn={soundOn} />}
       {cue.animation === "stars" && <Stars holdMs={holdMs} />}
+      {cue.animation === "shooting-star" && <ShootingStars holdMs={holdMs} />}
+      {cue.animation === "fireworks" && <Fireworks holdMs={holdMs} />}
+      {cue.animation === "hearts" && <FloatingGlyphs holdMs={holdMs} glyph="♥" />}
+      {cue.animation === "bubbles" && <Bubbles holdMs={holdMs} />}
+      {cue.animation === "sparkle-wave" && <SparkleWave holdMs={holdMs} />}
       {cue.animation === "pulse-ring" && <PulseRing holdMs={holdMs} />}
       {cue.animation === "shake" && <Shake holdMs={holdMs} />}
       {cue.animation === "stamp" && <Stamp holdMs={holdMs} />}
-      {cue.animation === "image" && imageUrl && <CueImage url={imageUrl} alt={cue.media?.alt} holdMs={holdMs} />}
+      {cue.animation === "image" && imageUrl && <CueImage url={imageUrl} alt={cue.media?.alt} holdMs={holdMs} hideBox={hideImageBox} />}
     </div>
   );
 }
@@ -165,6 +171,33 @@ function Stars({ holdMs }: { holdMs: number }) {
   );
 }
 
+function ShootingStars({ holdMs }: { holdMs: number }) {
+  return <>{Array.from({ length: 7 }, (_, i) => (
+    <motion.span key={i} initial={{ x: "-20vw", y: `${8 + i * 11}vh`, opacity: 0 }} animate={{ x: "115vw", y: `${48 + i * 11}vh`, opacity: [0, 1, 1, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.09, ease: "easeIn" }} className="absolute text-4xl" style={{ color: "var(--accent)", textShadow: "-22px -8px 12px var(--accent)" }}>★</motion.span>
+  ))}</>;
+}
+
+function Fireworks({ holdMs }: { holdMs: number }) {
+  const centers = [[28, 38], [70, 30], [52, 66]];
+  return <>{centers.flatMap(([x, y], burst) => Array.from({ length: 12 }, (_, i) => {
+    const angle = i * Math.PI * 2 / 12;
+    const distance = 10 + burst * 2;
+    return <motion.span key={`${burst}-${i}`} initial={{ left: `${x}vw`, top: `${y}vh`, scale: 0, opacity: 0 }} animate={{ x: `${Math.cos(angle) * distance}vw`, y: `${Math.sin(angle) * distance}vh`, scale: [0, 1, 0.4], opacity: [0, 1, 0] }} transition={{ duration: holdMs / 1000, delay: burst * 0.16, ease: "easeOut" }} className="absolute h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent)" }} />;
+  }))}</>;
+}
+
+function FloatingGlyphs({ holdMs, glyph }: { holdMs: number; glyph: string }) {
+  return <>{STAR_LANES.map((left, i) => <motion.span key={`${glyph}-${left}`} initial={{ y: "110vh", opacity: 0, scale: 0.5 }} animate={{ y: "-15vh", x: [0, i % 2 ? 24 : -24, 0], opacity: [0, 1, 1, 0], scale: [0.5, 1, 0.8] }} transition={{ duration: holdMs / 1000, delay: (i % 6) * 0.08, ease: "easeOut" }} className="absolute text-3xl" style={{ left: `${left}%`, color: "var(--accent)" }}>{glyph}</motion.span>)}</>;
+}
+
+function Bubbles({ holdMs }: { holdMs: number }) {
+  return <>{STAR_LANES.map((left, i) => <motion.span key={left} initial={{ y: "108vh", opacity: 0, scale: 0.4 }} animate={{ y: "-12vh", opacity: [0, 0.75, 0.75, 0], scale: [0.4, 1 + (i % 3) * 0.25] }} transition={{ duration: holdMs / 1000, delay: (i % 5) * 0.1, ease: "linear" }} className="absolute h-8 w-8 rounded-full border-2" style={{ left: `${left}%`, borderColor: "var(--accent)" }} />)}</>;
+}
+
+function SparkleWave({ holdMs }: { holdMs: number }) {
+  return <div className="absolute inset-0 flex items-center justify-around">{Array.from({ length: 15 }, (_, i) => <motion.span key={i} initial={{ opacity: 0, scale: 0, y: 0 }} animate={{ opacity: [0, 1, 0], scale: [0, 1.5, 0], y: [0, i % 2 ? 45 : -45, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.045, ease: "easeInOut" }} className="text-4xl" style={{ color: "var(--accent)" }}>✦</motion.span>)}</div>;
+}
+
 function PulseRing({ holdMs }: { holdMs: number }) {
   return (
     <div className="absolute inset-0 grid place-items-center">
@@ -212,7 +245,7 @@ function Stamp({ holdMs }: { holdMs: number }) {
   );
 }
 
-function CueImage({ url, alt, holdMs }: { url: string; alt?: string; holdMs: number }) {
+function CueImage({ url, alt, holdMs, hideBox }: { url: string; alt?: string; holdMs: number; hideBox: boolean }) {
   const seconds = holdMs / 1000;
   return (
     <div className="absolute inset-0 grid place-items-center">
@@ -224,7 +257,7 @@ function CueImage({ url, alt, holdMs }: { url: string; alt?: string; holdMs: num
         // Snaps in, holds for most of the duration, then fades — so a short GIF
         // isn't over before it's readable and a long one doesn't outstay.
         transition={{ duration: seconds, times: [0, 0.15, 0.8, 1], ease: "easeOut" }}
-        className="max-h-[60vh] max-w-[70vw] rounded-3xl object-contain drop-shadow-2xl"
+        className={`max-h-[60vh] max-w-[70vw] object-contain ${hideBox ? "" : "rounded-3xl drop-shadow-2xl"}`}
       />
     </div>
   );

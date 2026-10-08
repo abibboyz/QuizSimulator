@@ -1,8 +1,17 @@
+import type { Question, QuizSettings } from "@/types/quiz";
+
 /** Image questions. One correct picture, up to 100, shown as a numbered
  *  picture grid — the same idea as a flag round — with no answer bullets. */
 
 export const MAX_IMAGE_OPTIONS = 100;
 export const DEFAULT_IMAGE_GAP = 12;
+
+export function hidesImageBoxes(
+  settings: Pick<QuizSettings, "hideImageBoxes"> | undefined,
+  question?: Pick<Question, "hideImageBoxes">,
+): boolean {
+  return question?.hideImageBoxes ?? settings?.hideImageBoxes === true;
+}
 
 /**
  * Columns for the picture grid. A pair sits side by side, a round of 12 lands
