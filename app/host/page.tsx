@@ -18,6 +18,7 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
+import { showsProgressBar } from "@/lib/progress";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
 import { MuteButton } from "@/components/ui/MuteButton";
@@ -193,7 +194,7 @@ interface HostQuestionProps {
   /** Just the meter's slice of settings — the rest already arrives unpacked. */
   meter: Pick<
     QuizSettings,
-    "progressStyle" | "progressPulse" | "progressMascot" | "progressMascotMedia" | "quizProgressStyle"
+    "progressStyle" | "progressPulse" | "progressMascot" | "progressMascotMedia" | "quizProgressStyle" | "showProgressBar"
   >;
   canBack: boolean;
   isLast: boolean;
@@ -304,13 +305,13 @@ function HostQuestion({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2" style={{ justifyContent: "safe center" }}>
         {/* Host mode doesn't score, so there are no per-question outcomes to
             colour in — the meter shows position only. */}
-        <QuizProgress
+        {showsProgressBar(meter) && <QuizProgress
           index={index}
           total={total}
           style={meter.quizProgressStyle}
           mascot={meter.progressMascot}
           mascotMedia={meter.progressMascotMedia}
-        />
+        />}
         <QuestionStage
           loopSettings={loopSettings}
           question={question}
@@ -322,6 +323,7 @@ function HostQuestion({
           interactive={false}
           onPick={() => {}}
           mode="host"
+          showCount={showsProgressBar(meter)}
           theme={theme}
           motion={motion}
           header={

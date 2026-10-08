@@ -98,6 +98,20 @@ export function quizProgressReached(index: number, answered: number, total: numb
   return Math.min(total, Math.max(0, Math.max(Math.floor(answered), Math.floor(index) + 1)));
 }
 
+/**
+ * Whether the progress header shows: the quiz progress meter, the "Question N
+ * of X" label and the question-type hint. Only an explicit `false` hides it, so
+ * quizzes saved before the setting existed keep showing it.
+ */
+export function showsProgressBar(settings: { showProgressBar?: boolean } | undefined): boolean {
+  return settings?.showProgressBar !== false;
+}
+
+/** Fills in `showProgressBar` on load: unset (older quizzes) becomes `true`. */
+export function withProgressBarDefault<T extends { showProgressBar?: boolean }>(settings: T): T & { showProgressBar: boolean } {
+  return { ...settings, showProgressBar: showsProgressBar(settings) };
+}
+
 /** Whether a per-question meter is still legible, or should degrade to a bar. */
 export function showsPerQuestion(style: QuizProgressStyle, total: number): boolean {
   return (style === "segments" || style === "dots") && total > 0 && total <= MAX_PROGRESS_SEGMENTS;

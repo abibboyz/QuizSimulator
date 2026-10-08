@@ -495,6 +495,13 @@ export interface QuizSettings {
   progressMascotMedia?: MediaRef;
   /** The quiz-wide progress meter. Shares the mascot with the timer. */
   quizProgressStyle: QuizProgressStyle;
+  /**
+   * Shows the progress header: the quiz progress meter, the "Question N of X"
+   * label and the question-type hint. Off hides all three everywhere (builder
+   * preview, play, host, video export); the timer and score stay. Unset — any
+   * quiz saved before this existed — means shown.
+   */
+  showProgressBar?: boolean;
   /** Quiz-wide question/answer animations. Absent = today's motion. */
   motion?: MotionOverrides;
 }

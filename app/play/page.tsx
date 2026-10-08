@@ -16,7 +16,7 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
-import { ScoreBadge } from "@/components/play/ScoreBadge";
+import { showsProgressBar } from "@/lib/progress";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
@@ -66,7 +66,7 @@ function PlayView() {
   const [missing, setMissing] = useState(false);
 
   const session = usePlaySession();
-  const { quiz, order, index, phase, score, streak, bestStreak, answers, selected } = session;
+  const { quiz, order, index, phase, score, bestStreak, answers, selected } = session;
   const question = order[index];
 
   const startedAtRef = useRef(0);
@@ -451,7 +451,7 @@ function PlayView() {
         <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
-          <QuizProgress
+          {showsProgressBar(quiz.settings) && <QuizProgress
             index={index}
             total={order.length}
             outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.unscored ? null : a.correct) : undefined}
@@ -459,7 +459,7 @@ function PlayView() {
             mascot={quiz.settings.progressMascot}
             mascotMedia={quiz.settings.progressMascotMedia}
             narrow={mobile}
-          />
+          />}
 
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}
@@ -495,12 +495,12 @@ function PlayView() {
                 onPick={handlePick}
                 mode="solo"
                 narrow={mobile}
+                showCount={showsProgressBar(quiz.settings)}
                 theme={quiz.theme}
                 motion={stageMotion}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
                 header={
                   <div className="flex items-center gap-4">
-                    <ScoreBadge score={score} streak={streak} compact />
                     <MuteButton />
                     {limit !== null && (
                       <ProgressMeter

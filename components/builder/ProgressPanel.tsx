@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { QuizSettings } from "@/types/quiz";
-import { MASCOTS, PROGRESS_PULSES, PROGRESS_STYLES, QUIZ_PROGRESS_STYLES } from "@/lib/progress";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { MASCOTS, PROGRESS_PULSES, PROGRESS_STYLES, QUIZ_PROGRESS_STYLES, showsProgressBar } from "@/lib/progress";
+import { Field, Input, Select, Toggle } from "@/components/ui/Field";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
@@ -39,6 +39,7 @@ export function ProgressPanel({ settings, onChange }: Props) {
   const sample = [true, false, true, true];
 
   const usesMascot = settings.progressStyle === "mascot" || settings.quizProgressStyle === "mascot";
+  const showBar = showsProgressBar(settings);
 
   return (
     <div className="space-y-3 rounded-2xl border border-ink-700 p-3">
@@ -89,18 +90,28 @@ export function ProgressPanel({ settings, onChange }: Props) {
         <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-400">Quiz progress</h3>
 
         <div className="flex min-h-14 items-center rounded-xl border border-ink-800 bg-ink-950/50 px-4 py-3">
-          <QuizProgress
+          {showBar && <QuizProgress
             index={4}
             total={8}
             outcomes={sample}
             style={settings.quizProgressStyle}
             mascot={settings.progressMascot}
             mascotMedia={settings.progressMascotMedia}
-          />
-          {settings.quizProgressStyle === "none" && (
+          />}
+          {showBar && settings.quizProgressStyle === "none" && (
             <p className="w-full text-center text-xs text-ink-500">No progress meter</p>
           )}
+          {!showBar && (
+            <p className="w-full text-center text-xs text-ink-500">Progress header hidden</p>
+          )}
         </div>
+
+        <Toggle
+          label="Show progress header (progress bar, question number, question type)"
+          hint="Off hides all three in preview, play, host and video export. The timer stays."
+          checked={showBar}
+          onChange={(showProgressBar) => onChange({ showProgressBar })}
+        />
 
         <Field label="Shape" hint={runStyle?.hint}>
           <Select
