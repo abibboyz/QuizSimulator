@@ -17,7 +17,6 @@ import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { showsProgressBar } from "@/lib/progress";
-import { ScoreBadge } from "@/components/play/ScoreBadge";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout } from "@/lib/autoAdvance";
@@ -67,7 +66,7 @@ function PlayView() {
   const [missing, setMissing] = useState(false);
 
   const session = usePlaySession();
-  const { quiz, order, index, phase, score, streak, bestStreak, answers, selected } = session;
+  const { quiz, order, index, phase, score, bestStreak, answers, selected } = session;
   const question = order[index];
 
   const startedAtRef = useRef(0);
@@ -502,7 +501,6 @@ function PlayView() {
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
                 header={
                   <div className="flex items-center gap-4">
-                    <ScoreBadge score={score} streak={streak} compact />
                     <MuteButton />
                     {limit !== null && (
                       <ProgressMeter

@@ -36,7 +36,6 @@ import {
   COUNTDOWN_BEATS,
   POP_IN,
   QUESTION_SWAP,
-  SCORE_TWEEN_MS,
   STAR_LANES,
   TILE_STATE_MS,
   countdownBeatTransitionS,
@@ -48,7 +47,6 @@ import {
   easeIn,
   easeInOut,
   easeOut,
-  easeOutCubic,
   keyframes,
   lerp,
   mixColor,
@@ -810,36 +808,18 @@ export class FrameRenderer {
     } };
   }
 
-  /** "Question 1 of 8" on the left; streak, score and the timer on the right. */
+  /** "Question 1 of 8" on the left; the timer on the right. */
   private stageHeaderBox(run: QuestionRun, t: number, CW: number): Box {
     const q = run.question;
-    const revealed = t >= run.revealAt;
-
-    // ScoreBadge (compact). It remounts with each question, so the score only
-    // tweens when it changes mid-question — at the reveal.
-    const scoreValue =
-      t < run.revealAt
-        ? run.scoreBefore
-        : Math.round(lerp(run.scoreBefore, run.scoreAfter, easeOutCubic((t - run.revealAt) / SCORE_TWEEN_MS)));
-    const streak = revealed ? run.streakAfter : run.streakBefore;
-    const scoreFont = this.font(700, 20);
-    const scoreText = scoreValue.toLocaleString();
-    const scoreW = this.measure(scoreText, scoreFont);
-    const pillFont = this.font(700, 14);
-    const pillText = `🔥 ${streak}`;
-    const pillW = streak >= 2 ? this.measure(pillText, pillFont) + 24 + 2 : 0;
-    const badgeW = pillW ? pillW + 12 + scoreW : scoreW;
-    const badgeH = pillW ? 30 : 28;
+    const showProgressHeader = showsProgressBar(this.quiz.settings);
 
     const meter = run.limitSeconds !== null ? this.meterBox(run, t) : null;
-    const groupW = badgeW + (meter ? 16 + meter.w : 0);
-    const groupH = Math.max(badgeH, meter?.h ?? 0);
+    const groupW = meter?.w ?? 0;
+    const groupH = meter?.h ?? 0;
 
     const metaFont = this.font(600, 12);
-    // The "showProgressBar" setting drops the count and the kind hint; score and timer stay on the right.
-    const showCount = showsProgressBar(this.quiz.settings);
     const main = `QUESTION ${run.index + 1} OF ${this.timeline.questions.length}`;
-    const extra = !showCount
+    const extra = !showProgressHeader
       ? ""
       : q.kind === "multi-select"
         ? "· PICK ALL THAT APPLY"
@@ -853,37 +833,19 @@ export class FrameRenderer {
     const extraW = extra ? this.measure(extra, metaFont, 1.2) : 0;
     const extraInline = !extra || mainW + 8 + extraW <= metaMax;
     const extraLines = extra && !extraInline ? this.wrap(extra, metaFont, metaMax, 1.2) : [];
-    const metaH = showCount ? 16 * (1 + extraLines.length) : 0;
+    const metaH = showProgressHeader ? 16 * (1 + extraLines.length) : 0;
 
     return {
       w: CW,
       h: Math.max(metaH, groupH),
       draw: (x, y) => {
-        if (showCount) this.drawLine(main, x, y, 16, metaFont, this.ink[300], "left", 1.2);
+        if (showProgressHeader) this.drawLine(main, x, y, 16, metaFont, this.ink[300], "left", 1.2);
         if (extra && extraInline) this.drawLine(extra, x + mainW + 8, y, 16, metaFont, this.ink[400], "left", 1.2);
         extraLines.forEach((line, i) => this.drawLine(line, x, y + 16 * (i + 1), 16, metaFont, this.ink[400], "left", 1.2));
 
-        let gx = x + CW - groupW;
+        const gx = x + CW - groupW;
         const cy = y + groupH / 2;
-        if (pillW) {
-          // `.animate-streak`, keyed by the streak: plays on mount and whenever it grows.
-          const grew = revealed && run.streakAfter !== run.streakBefore;
-          const flareStart = grew ? Math.max(run.mountAt, run.revealAt) : run.mountAt;
-          const fp = clamp01((t - flareStart) / 450);
-          const sc = keyframes([0.85, 1.15, 1], fp, easeOut, [0, 0.6, 1]);
-          const op = keyframes([0.6, 1, 1], fp, easeOut, [0, 0.6, 1]);
-          const px = gx;
-          this.withTransform(px + pillW / 2, cy, sc, 0, op, () => {
-            const py = cy - 15;
-            this.fillRR(px, py, pillW, 30, 15, withAlpha("#fbbf24", 0.15));
-            this.strokeRR(px + 0.5, py + 0.5, pillW - 1, 29, 14.5, withAlpha("#fbbf24", 0.4), 1);
-            this.drawLine(pillText, px + pillW / 2, py + 5, 20, pillFont, "#fcd34d", "center");
-          });
-          gx += pillW + 12;
-        }
-        this.drawLine(scoreText, gx + scoreW, cy - 14, 28, scoreFont, this.ink[100], "right");
-        gx += scoreW;
-        if (meter) meter.draw(gx + 16, cy - meter.h / 2);
+        if (meter) meter.draw(gx, cy - meter.h / 2);
       },
     };
   }
