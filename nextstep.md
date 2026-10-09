@@ -1,0 +1,1 @@
+each small broken peice should be like flying butterfly and then combine like each broken piece seems like small butterflies may be add another box to say how many pieces or butterfly where it applies
