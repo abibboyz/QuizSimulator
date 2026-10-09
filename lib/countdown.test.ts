@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { countdownView, elapsedFor } from "./countdown.ts";
+import { createQuestion, createQuiz } from "./factory.ts";
+import { timerFor } from "./store/playSession.ts";
 
 test("regression: a new question never shows the previous question's time", () => {
   // Question 1 froze at 3.3s of a 10s timer ("7" on the ring).
@@ -20,4 +22,28 @@ test("countdownView matches the old maths for timed and untimed questions", () =
   assert.deepEqual(countdownView(20, 15_000), { elapsedMs: 15_000, remainingMs: 5000, fraction: 0.25, urgent: true });
   assert.equal(countdownView(20, 25_000).remainingMs, 0);
   assert.equal(countdownView(0, 0).fraction, 0);
+});
+
+test("every question kind resolves the same quiz timer unless explicitly overridden", () => {
+  const quiz = createQuiz();
+  quiz.settings.timerSeconds = 12;
+  for (const kind of ["multiple-choice", "true-false", "multi-select", "image-choice", "reveal"] as const) {
+    const question = createQuestion(kind);
+    assert.equal(timerFor(quiz, question), 12, `${kind} inherits the shared timer`);
+    question.timerSeconds = 7;
+    assert.equal(timerFor(quiz, question), 7, `${kind} honours a positive override`);
+  }
+});
+
+test("explicit zero/null question timers remain untimed while blank inherits", () => {
+  const quiz = createQuiz();
+  quiz.settings.timerSeconds = 12;
+  const question = createQuestion();
+  assert.equal(timerFor(quiz, question), 12);
+  question.timerSeconds = 0;
+  assert.equal(timerFor(quiz, question), null);
+  question.timerSeconds = null;
+  assert.equal(timerFor(quiz, question), null);
+  question.timerSeconds = Number.NaN;
+  assert.equal(timerFor(quiz, question), null);
 });

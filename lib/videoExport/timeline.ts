@@ -20,13 +20,13 @@ import { isUnscoredImage, unscoredResult } from "../answerPresentation.ts";
 
 import type { Cue, CueSlot, MediaRef, Question, Quiz } from "@/types/quiz";
 import { activeCue, cueHoldMs } from "@/lib/cues";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { accuracyLabel, scoreQuestion } from "@/lib/scoring";
 import { basePointsFor, isCorrect, timerFor } from "@/lib/store/playSession";
 import {
   COUNTDOWN_BEATS,
   CUE_CONFETTI,
-  POP_IN,
   QUESTION_SWAP,
   RESULTS_CONFETTI,
   REVEAL_OFF_HOLD_MS,
@@ -44,7 +44,7 @@ import {
   type ResolvedMotion,
 } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
-import { celebrationAnimation, celebrationDelayMs, celebrationEnabled } from "@/lib/celebration";
+import { celebrationDelayMs } from "@/lib/celebration";
 
 /* ----------------------------------------------------------------- options */
 
@@ -93,6 +93,7 @@ export type AudioEvent = { at: number; recipe: RecipeId } | { at: number; sample
 export interface CueInstance {
   cue: Cue;
   slot: CueSlot;
+  hideImageBox: boolean;
   start: number;
   /** Nominal hold, as CuePlayer computes it. */
   hold: number;
@@ -192,10 +193,10 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (pending && pending.end > at) pending.end = at;
     pending = null;
   };
-  const showCue = (cue: Cue, slot: CueSlot, at: number) => {
+  const showCue = (cue: Cue, slot: CueSlot, at: number, question?: Question) => {
     endPending(at);
     const hold = cueHoldMs(cue);
-    const instance: CueInstance = { cue, slot, start: at, hold, end: at + hold };
+    const instance: CueInstance = { cue, slot, hideImageBox: hidesImageBoxes(settings, question), start: at, hold, end: at + hold };
     cues.push(instance);
     pending = instance;
     fireCueEffects(instance);
@@ -297,23 +298,13 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
 
     // Reveal feedback: an authored cue replaces the stock chime entirely.
     const feedback = !unscored && settings.revealAfterEach ? activeCue(quiz, question, correct ? "correct" : "wrong") : null;
-    if (feedback) showCue(feedback, correct ? "correct" : "wrong", revealAt);
+    if (feedback) showCue(feedback, correct ? "correct" : "wrong", revealAt, question);
     else if (!unscored) audio.push({ at: revealAt, recipe: correct ? "correct" : "wrong" });
 
     // A Reveal question's picture uncovers with the answer, with its own sound (play page's reveal effect).
     if (question.kind === "reveal" && settings.revealAfterEach) {
       const sound = resolveReveal(question).sound;
       if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
-    }
-
-    // The card pops in, then confetti. Other celebration motions are drawn from
-    // the clock in the renderer. Reveal-off never shows the card, so it stays quiet.
-    if (
-      !unscored && settings.revealAfterEach &&
-      celebrationEnabled(question) &&
-      celebrationAnimation(question) === "confetti"
-    ) {
-      confetti.push({ at: revealAt + celebrationDelayMs(question) + POP_IN.durationMs, preset: CUE_CONFETTI, seed: seed++ });
     }
 
     const holdSeconds = revealHoldSeconds(settings);
@@ -337,7 +328,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     let swapAt: number;
     let nextLiveAt: number;
     if (between) {
-      const instance = showCue(between, "between", advanceAt);
+      const instance = showCue(between, "between", advanceAt, question);
       // The transition swaps the question at its midpoint; the clock waits for the end.
       swapAt = advanceAt + instance.hold / 2;
       nextLiveAt = advanceAt + instance.hold;
@@ -398,7 +389,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
   let resultsEnd = resultsStart + RESULTS_HOLD_MS;
   if (outroCue) {
     const hold = cueHoldMs(outroCue);
-    const instance: CueInstance = { cue: outroCue, slot: "outro", start: resultsStart, hold, end: resultsStart + hold };
+    const instance: CueInstance = { cue: outroCue, slot: "outro", hideImageBox: settings.hideImageBoxes === true, start: resultsStart, hold, end: resultsStart + hold };
     cues.push(instance);
     fireCueEffects(instance);
     resultsEnd = Math.max(resultsEnd, resultsStart + hold + 1500);

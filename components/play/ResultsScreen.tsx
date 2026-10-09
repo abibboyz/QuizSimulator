@@ -66,7 +66,7 @@ export function ResultsScreen({
   return (
     <div className={`mx-auto flex w-full flex-col gap-8 px-5 py-10 ${narrow ? "max-w-[26rem]" : "max-w-3xl"}`}>
       {/* Nothing to resume afterwards — the run is over, so onDone just clears. */}
-      {outroCue && <CuePlayer cue={outroCue} onDone={() => {}} soundOn={soundOn} />}
+      {outroCue && <CuePlayer cue={outroCue} onDone={() => {}} soundOn={soundOn} hideImageBox={quiz.settings.hideImageBoxes} />}
       <header className="animate-pop text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-400">{quiz.title}</p>
         <h1 className="stage-prompt mt-2 text-5xl font-extrabold md:text-6xl" style={{ color: "var(--accent)" }}>

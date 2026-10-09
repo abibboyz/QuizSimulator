@@ -16,7 +16,7 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
-import { showsProgressBar } from "@/lib/progress";
+import { showsProgressBar, timerProgressStyle } from "@/lib/progress";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
@@ -32,6 +32,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
 import { clockHoldMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -111,7 +112,7 @@ function PlayView() {
 
   // One cue plays at a time. Its slot is what tells `handleCueDone` whether the
   // run is waiting on it or it was pure decoration over a question.
-  const [pending, setPending] = useState<{ cue: Cue; slot: CueSlot; token: number } | null>(null);
+  const [pending, setPending] = useState<{ cue: Cue; slot: CueSlot; token: number; hideImageBox: boolean } | null>(null);
   const cueTokenRef = useRef(0);
 
   /*
@@ -123,9 +124,9 @@ function PlayView() {
    */
   const pendingRef = useRef(pending);
 
-  const showCue = useCallback((cue: Cue, slot: CueSlot) => {
+  const showCue = useCallback((cue: Cue, slot: CueSlot, hideImageBox: boolean) => {
     cueTokenRef.current += 1;
-    const next = { cue, slot, token: cueTokenRef.current };
+    const next = { cue, slot, token: cueTokenRef.current, hideImageBox };
     pendingRef.current = next;
     setPending(next);
   }, []);
@@ -143,9 +144,9 @@ function PlayView() {
   // on a blank intro screen.
   useEffect(() => {
     if (phase !== "countdown") return;
-    if (introCue) showCue(introCue, "intro");
+    if (introCue) showCue(introCue, "intro", quiz?.settings.hideImageBoxes === true);
     else usePlaySession.getState().ready();
-  }, [phase, introCue, showCue]);
+  }, [phase, introCue, quiz?.settings.hideImageBoxes, showCue]);
 
   const handleExpire = useCallback(() => {
     if (limit === null) return;
@@ -222,7 +223,7 @@ function PlayView() {
     // feedback it is switched off to avoid.
     const cue = quiz.settings.revealAfterEach ? activeCue(quiz, order[index], correct ? "correct" : "wrong") : null;
     if (cue) {
-      showCue(cue, correct ? "correct" : "wrong");
+      showCue(cue, correct ? "correct" : "wrong", hidesImageBoxes(quiz.settings, current));
       return;
     }
 
@@ -249,7 +250,7 @@ function PlayView() {
       const isLast = state.index + 1 >= state.order.length;
       const between = isLast ? null : activeCue(quiz, state.order[state.index], "between");
       if (between) {
-        showCue(between, "between");
+        showCue(between, "between", hidesImageBoxes(quiz.settings, state.order[state.index]));
         return;
       }
 
@@ -451,15 +452,45 @@ function PlayView() {
         <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
-          {showsProgressBar(quiz.settings) && <QuizProgress
+          {showsProgressBar(quiz.settings) && !(limit !== null && quiz.settings.quizProgressStyle === "mascot") && <QuizProgress
             index={index}
             total={order.length}
             outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.unscored ? null : a.correct) : undefined}
             style={quiz.settings.quizProgressStyle}
             mascot={quiz.settings.progressMascot}
             mascotMedia={quiz.settings.progressMascotMedia}
+            mascotMotion={quiz.settings.progressMascotMotion}
+            color={quiz.settings.progressColor}
+            trackColor={quiz.settings.progressTrackColor}
+            thickness={quiz.settings.progressThickness}
             narrow={mobile}
           />}
+
+          {/* The countdown belongs to the question run, not to any particular
+              question layout. Keeping it outside QuestionStage prevents
+              Choice, T/F, Multi and Reveal mounts from affecting movement. */}
+          <div className="mb-4 flex min-h-16 items-center justify-end gap-4">
+            <MuteButton />
+            {limit !== null && (
+              <ProgressMeter
+                key={runKey}
+                fraction={countdown.fraction}
+                secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
+                urgent={countdown.urgent}
+                style={timerProgressStyle(quiz.settings)}
+                pulse={quiz.settings.progressPulse}
+                mascot={quiz.settings.progressMascot}
+                mascotMedia={quiz.settings.progressMascotMedia}
+                mascotMotion={quiz.settings.progressMascotMotion}
+                color={quiz.settings.progressColor}
+                trackColor={quiz.settings.progressTrackColor}
+                thickness={quiz.settings.progressThickness}
+                showNumber={quiz.settings.showTimerNumber !== false}
+                celebrate={justCorrect}
+                size={64}
+              />
+            )}
+          </div>
 
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}
@@ -499,24 +530,6 @@ function PlayView() {
                 theme={quiz.theme}
                 motion={stageMotion}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
-                header={
-                  <div className="flex items-center gap-4">
-                    <MuteButton />
-                    {limit !== null && (
-                      <ProgressMeter
-                        fraction={countdown.fraction}
-                        secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
-                        urgent={countdown.urgent}
-                        style={quiz.settings.progressStyle}
-                        pulse={quiz.settings.progressPulse}
-                        mascot={quiz.settings.progressMascot}
-                        mascotMedia={quiz.settings.progressMascotMedia}
-                        celebrate={justCorrect}
-                        size={64}
-                      />
-                    )}
-                  </div>
-                }
               />
             </motion.div>
           </AnimatePresence>
@@ -540,6 +553,10 @@ function PlayView() {
               key={`advance-${question.id}`}
               seconds={holdSeconds}
               label={index + 1 >= order.length ? "results" : "next question"}
+              message={quiz.settings.autoAdvanceMessage}
+              styleName={quiz.settings.autoAdvanceBarStyle}
+              color={quiz.settings.autoAdvanceColor}
+              trackColor={quiz.settings.autoAdvanceTrackColor}
             />
           )}
           {!autoAdvanceReady && (
@@ -563,7 +580,7 @@ function PlayView() {
               web view uses the viewport. Keep it outside the sliding question
               frame so that transform cannot move its fixed position. */}
           {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && !isUnscoredImage(question) && (
-            <CelebrationCard question={question} mode="solo" contained={mobile} />
+            <CelebrationCard question={question} mode="solo" contained={mobile} hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
           )}
         </div>
       )}
@@ -597,6 +614,7 @@ function PlayView() {
           onDone={handleCueDone}
           onMidpoint={handleCueMidpoint}
           soundOn={soundOn}
+          hideImageBox={pending.hideImageBox}
         />
       )}
     </ThemeShell>

@@ -14,6 +14,7 @@ interface Props {
   label: string;
   hint: string;
   cue: Cue | null | undefined;
+  hideImageBox?: boolean;
   /** `null` clears the slot; `undefined` means "inherit", when inheriting is on. */
   onChange: (cue: Cue | null | undefined) => void;
   /**
@@ -48,7 +49,7 @@ export function describeCue(cue: Cue | null | undefined): string {
  * (override the quiz back to off) are the same thing for a quiz-wide row and
  * genuinely different for a question.
  */
-export function CueEditor({ label, hint, cue, onChange, inherits }: Props) {
+export function CueEditor({ label, hint, cue, onChange, inherits, hideImageBox = false }: Props) {
   // Auditioning the real component, not an approximation — an author should see
   // exactly what a player will, including the hold time they typed.
   const [preview, setPreview] = useState(0);
@@ -109,7 +110,7 @@ export function CueEditor({ label, hint, cue, onChange, inherits }: Props) {
 
       {/* Keyed so pressing Preview again restarts a cue that is still running. */}
       {preview > 0 && (
-        <CuePlayer key={preview} cue={current} onDone={() => setPreview(0)} soundOn />
+        <CuePlayer key={preview} cue={current} onDone={() => setPreview(0)} soundOn hideImageBox={hideImageBox} />
       )}
 
       {inherits && (

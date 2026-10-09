@@ -63,7 +63,11 @@ function prepare(quiz: Quiz, onlyIds?: string[]): Question[] {
 
 export function timerFor(quiz: Quiz, question: Question | undefined): number | null {
   if (!question) return null;
-  return question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
+  // Undefined inherits the quiz-wide timer. An explicit null/0 remains the
+  // established per-question "untimed" override for backward compatibility.
+  const value = question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+  return value;
 }
 
 export function basePointsFor(quiz: Quiz, question: Question | undefined): number {

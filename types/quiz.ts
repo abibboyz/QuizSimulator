@@ -51,6 +51,18 @@ export type CueAnimation =
   | "countdown"
   | "confetti"
   | "stars"
+  | "shooting-star"
+  | "fireworks"
+  | "hearts"
+  | "bubbles"
+  | "sparkle-wave"
+  | "glass-assemble"
+  | "butterfly"
+  | "mosaic-assemble"
+  | "spiral-assemble"
+  | "curtain-assemble"
+  | "flip-assemble"
+  | "zoom-assemble"
   | "pulse-ring"
   | "shake"
   | "stamp"
@@ -96,17 +108,21 @@ export type CueSlot = "intro" | "correct" | "wrong" | "between" | "outro";
 export type CueSet = Partial<Record<CueSlot, Cue | null>>;
 
 /** How the question timer draws itself. */
-export type ProgressStyle = "ring" | "bar" | "segments" | "pill" | "dots" | "mascot";
+export type ProgressStyle = "ring" | "bar" | "colorful" | "segments" | "pill" | "dots" | "mascot";
 
 /** Motion layered on the timer as it drains — quickens as time runs out. */
 export type ProgressPulse = "none" | "heartbeat" | "throb" | "flash";
+
+/** Movement applied to an emoji, built-in picture, or uploaded GIF mascot. */
+export type MascotMotion = "walk" | "bounce" | "float" | "still";
+export type AutoAdvanceBarStyle = "line" | "pill" | "dots";
 
 /**
  * How far through the quiz you are — counts up, unlike the timer. Separate
  * from the timer's own style: a quiz can want a ring counting down and a bar
  * filling up at the same time.
  */
-export type QuizProgressStyle = "none" | "bar" | "segments" | "dots" | "mascot";
+export type QuizProgressStyle = "none" | "bar" | "colorful" | "segments" | "dots" | "mascot";
 
 export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice" | "reveal";
 
@@ -228,7 +244,24 @@ export type QuestionLayout = "grid" | "list" | "image-top" | "big-text";
  * `none` is the card by itself. `confetti` is the default when a question
  * turns the card on and doesn't pick one.
  */
-export type CelebrationAnimation = "confetti" | "stars" | "pulse-ring" | "stamp" | "none";
+export type CelebrationAnimation =
+  | "confetti"
+  | "stars"
+  | "shooting-star"
+  | "fireworks"
+  | "hearts"
+  | "bubbles"
+  | "sparkle-wave"
+  | "glass-assemble"
+  | "butterfly"
+  | "mosaic-assemble"
+  | "spiral-assemble"
+  | "curtain-assemble"
+  | "flip-assemble"
+  | "zoom-assemble"
+  | "pulse-ring"
+  | "stamp"
+  | "none";
 
 /**
  * Optional, per question. `enabled: false` (or a missing object) leaves the
@@ -241,7 +274,17 @@ export interface Celebration {
   image?: MediaRef;
   /** Use the correct answer's own picture when it has one, ahead of the uploaded card picture. */
   useAnswerImage?: boolean;
+  /** For picture celebrations, show only the image at its natural aspect ratio. */
+  hideBox?: boolean;
+  /** Moves a correct answer image from its tile into the celebration position. */
+  animateFromAnswer?: boolean;
+  /** Legacy name retained for quizzes saved before the animation was generalized. */
+  animateFromReveal?: boolean;
   animation?: CelebrationAnimation;
+  /** Actual photo entrance duration, clamped to fit within the reveal hold. */
+  durationMs?: number;
+  /** Number of flying image cards used by photo assembly entrances. */
+  pieces?: number;
 }
 
 export type LoopStyle = "none" | "hop" | "bounce" | "float" | "sideways" | "rock" | "wiggle" | "pulse" | "jelly" | "seesaw" | "orbit" | "dance" | "butterfly" | "flutter" | "shuffle" | "boomerang" | "figure-eight" | "heartbeat" | "leaf" | "pendulum" | "rubberband" | "shake" | "skipping" | "spiral" | "swing" | "tiptoe" | "wave" | "zigzag";
@@ -291,6 +334,8 @@ export interface AnswerTextStyle {
 export interface Question {
   /** Overrides quiz answer typography for this question, including image captions. */
   answerStyle?: AnswerTextStyle;
+  /** Overrides the quiz-wide image-box setting for this question. */
+  hideImageBoxes?: boolean;
   loopMotion?: LoopMotionSet;
   id: string;
   kind: QuestionKind;
@@ -463,6 +508,8 @@ export interface QuizSettings {
   pointsBase: number;
   speedBonus: boolean;
   streakBonus: boolean;
+  /** Shows image-choice, Reveal, and celebration pictures without their decorative boxes. */
+  hideImageBoxes?: boolean;
   sound: boolean;
   /** Host mode: show the answer by itself when the timer runs out. */
   autoReveal: boolean;
@@ -478,6 +525,13 @@ export interface QuizSettings {
   timeoutRevealSeconds: number;
   /** Shows the visible countdown while play, host mode, or video export advances automatically. */
   showAutoAdvanceCountdown?: boolean;
+  /** Supports {action} and {seconds}; emoji and ordinary text are both allowed. */
+  autoAdvanceMessage?: string;
+  /** Visual treatment for the timeout countdown; unset preserves the original thin line. */
+  autoAdvanceBarStyle?: AutoAdvanceBarStyle;
+  /** Timeout bar fill and empty-track colours; unset follow the theme/original track. */
+  autoAdvanceColor?: string;
+  autoAdvanceTrackColor?: string;
   /**
    * Quiz-wide animation and sound cues. New quizzes start with a small post pack
    * (countdown, confetti, etc.); clear a slot to silence it.
@@ -485,6 +539,14 @@ export interface QuizSettings {
   cues: CueSet;
   progressStyle: ProgressStyle;
   progressPulse: ProgressPulse;
+  /** Quiz-wide numeric countdown visibility. Unset keeps the original visible number. */
+  showTimerNumber?: boolean;
+  /** Custom meter fill. Unset follows the theme accent. */
+  progressColor?: string;
+  /** Custom empty-track colour. Unset uses a translucent white track. */
+  progressTrackColor?: string;
+  /** Mascot track thickness in pixels. Unset preserves the original 4px line. */
+  progressThickness?: number;
   /**
    * The character that walks the "mascot" meter. Any character or emoji, same
    * as an answer tile's icon — blank falls back to the default.
@@ -495,6 +557,8 @@ export interface QuizSettings {
    * when set; an animated GIF keeps animating, so it can carry its own walk.
    */
   progressMascotMedia?: MediaRef;
+  /** Defaults to the original walking motion for older quizzes. */
+  progressMascotMotion?: MascotMotion;
   /** The quiz-wide progress meter. Shares the mascot with the timer. */
   quizProgressStyle: QuizProgressStyle;
   /**

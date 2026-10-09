@@ -1,6 +1,6 @@
 "use client";
 
-import type { MediaRef } from "@/types/quiz";
+import type { MascotMotion, MediaRef } from "@/types/quiz";
 import { mascotOf } from "@/lib/progress";
 import { MediaImage } from "@/components/ui/MediaImage";
 
@@ -9,6 +9,7 @@ interface Props {
   media?: MediaRef;
   /** Celebrating rather than travelling. */
   dancing?: boolean;
+  motion?: MascotMotion;
   /** Rendered size in pixels. */
   size: number;
 }
@@ -17,11 +18,10 @@ interface Props {
  * The walking character, shared by the question timer and the quiz-wide meter
  * so a quiz only ever has one mascot to configure.
  */
-export function MascotFigure({ character, media, dancing = false, size }: Props) {
+export function MascotFigure({ character, media, dancing = false, motion = "walk", size }: Props) {
+  const motionClass = dancing ? "animate-mascot-dance" : motion === "still" ? "" : `animate-mascot-${motion}`;
   return (
-    <span
-      className={`grid h-full w-full place-items-center ${dancing ? "animate-mascot-dance" : "animate-mascot-walk"}`}
-    >
+    <span className={`grid h-full w-full place-items-center ${motionClass}`}>
       <MediaImage
         media={media}
         className="h-full w-full object-contain"

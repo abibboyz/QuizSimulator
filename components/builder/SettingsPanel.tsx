@@ -1,7 +1,7 @@
 "use client";
 
 import type { Cue, CueSlot, Quiz, QuizSettings, Theme } from "@/types/quiz";
-import { Field, Input, Textarea, Toggle } from "@/components/ui/Field";
+import { Field, Input, Select, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { CueEditor } from "@/components/builder/CueEditor";
 import { applyPostPack, CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
@@ -115,6 +115,12 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           onChange={(shuffleOptions) => onChangeSettings({ shuffleOptions })}
         />
         <Toggle
+          label="Hide image boxes"
+          hint="Uses natural image shapes for Image choice, Reveal and celebration pictures"
+          checked={settings.hideImageBoxes === true}
+          onChange={(hideImageBoxes) => onChangeSettings({ hideImageBoxes })}
+        />
+        <Toggle
           label="Sound effects"
           hint="Ticks, stings, and a fanfare at the end"
           checked={settings.sound}
@@ -122,7 +128,7 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
         />
       </div>
 
-      <ProgressPanel settings={settings} onChange={onChangeSettings} />
+      <ProgressPanel settings={settings} accent={quiz.theme.accent} onChange={onChangeSettings} />
 
       <div className="space-y-2 rounded-2xl border border-ink-700 p-3">
         <div className="flex items-start justify-between gap-3">
@@ -148,6 +154,7 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
             label={CUE_SLOT_LABELS[slot].label}
             hint={CUE_SLOT_LABELS[slot].hint}
             cue={settings.cues?.[slot]}
+            hideImageBox={settings.hideImageBoxes}
             onChange={(cue) => setCue(slot, cue)}
           />
         ))}
@@ -219,6 +226,39 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           checked={settings.showAutoAdvanceCountdown === true}
           onChange={(showAutoAdvanceCountdown) => onChangeSettings({ showAutoAdvanceCountdown })}
         />
+        {settings.showAutoAdvanceCountdown === true && (
+          <div className="space-y-3 rounded-xl border border-ink-800 p-3">
+            <Field
+              label="Countdown text"
+              hint="Use {action} for “next question/results” and {seconds} for the live number. Emoji are welcome."
+            >
+              <Input
+                value={settings.autoAdvanceMessage ?? "Out of time — {action} in {seconds}s"}
+                onChange={(event) => onChangeSettings({ autoAdvanceMessage: event.target.value })}
+                placeholder="Out of time — {action} in {seconds}s"
+                aria-label="Auto-advance countdown text"
+              />
+            </Field>
+            <Field label="Bar style">
+              <Select
+                value={settings.autoAdvanceBarStyle ?? "line"}
+                onChange={(event) => onChangeSettings({ autoAdvanceBarStyle: event.target.value as QuizSettings["autoAdvanceBarStyle"] })}
+              >
+                <option value="line">Thin line</option>
+                <option value="pill">Thick pill</option>
+                <option value="dots">Countdown dots</option>
+              </Select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Fill" action={<ColorSwatch label="Timeout bar fill colour" value={settings.autoAdvanceColor} fallback={quiz.theme.accent} onChange={(autoAdvanceColor) => onChangeSettings({ autoAdvanceColor })} />}>
+                <div className="h-8 rounded-lg border border-ink-700" style={{ background: settings.autoAdvanceColor ?? quiz.theme.accent }} />
+              </Field>
+              <Field label="Empty track" action={<ColorSwatch label="Timeout bar track colour" value={settings.autoAdvanceTrackColor} fallback="#1f2937" onChange={(autoAdvanceTrackColor) => onChangeSettings({ autoAdvanceTrackColor })} />}>
+                <div className="h-8 rounded-lg border border-ink-700" style={{ background: settings.autoAdvanceTrackColor ?? "var(--color-ink-800)" }} />
+              </Field>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

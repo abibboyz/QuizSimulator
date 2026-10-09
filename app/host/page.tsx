@@ -18,12 +18,15 @@ import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
-import { showsProgressBar } from "@/lib/progress";
+import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
+import { showsProgressBar, timerProgressStyle } from "@/lib/progress";
 import { showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
 import { MuteButton } from "@/components/ui/MuteButton";
 import { DEFAULT_THEME } from "@/lib/themes";
+import { hidesImageBoxes } from "@/lib/imageChoice";
+import { timerFor } from "@/lib/store/playSession";
 
 function toggleFullscreen() {
   if (document.fullscreenElement) void document.exitFullscreen();
@@ -118,11 +121,11 @@ function HostView() {
   const intro = activeCue(quiz, undefined, "intro");
   if (intro && introFinishedFor !== quiz.id) return <ThemeShell theme={quiz.theme}>
     <div className="min-h-dvh" aria-label="Quiz starting" />
-    <CuePlayer cue={intro} soundOn={quiz.settings.sound} onDone={() => setIntroFinishedFor(quiz.id)} />
+    <CuePlayer cue={intro} soundOn={quiz.settings.sound} hideImageBox={quiz.settings.hideImageBoxes} onDone={() => setIntroFinishedFor(quiz.id)} />
   </ThemeShell>;
 
   const question = questions[index];
-  const limit = question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
+  const limit = timerFor(quiz, question);
 
   return (
     <ThemeShell theme={questionTheme(quiz.theme, question)}>
@@ -164,6 +167,7 @@ function HostView() {
             autoReveal={quiz.settings.autoReveal}
             autoAdvanceSeconds={quiz.settings.autoAdvanceSeconds}
             showAutoAdvanceCountdown={showsAutoAdvanceCountdown(quiz.settings)}
+            autoAdvanceMessage={quiz.settings.autoAdvanceMessage}
             meter={quiz.settings}
             canBack={index > 0}
             isLast={index + 1 >= questions.length}
@@ -194,10 +198,11 @@ interface HostQuestionProps {
   autoReveal: boolean;
   autoAdvanceSeconds: number | null;
   showAutoAdvanceCountdown: boolean;
+  autoAdvanceMessage?: string;
   /** Just the meter's slice of settings — the rest already arrives unpacked. */
   meter: Pick<
     QuizSettings,
-    "progressStyle" | "progressPulse" | "progressMascot" | "progressMascotMedia" | "quizProgressStyle" | "showProgressBar"
+    "progressStyle" | "progressPulse" | "progressColor" | "progressTrackColor" | "progressThickness" | "showTimerNumber" | "progressMascot" | "progressMascotMedia" | "progressMascotMotion" | "quizProgressStyle" | "showProgressBar" | "autoAdvanceBarStyle" | "autoAdvanceColor" | "autoAdvanceTrackColor"
   >;
   canBack: boolean;
   isLast: boolean;
@@ -206,7 +211,7 @@ interface HostQuestionProps {
   theme: Theme;
   /** Entrances and the Reveal uncover run here; there are no exits (each question simply remounts). */
   motion: ResolvedMotion;
-  loopSettings: Pick<QuizSettings, "loopMotion">;
+  loopSettings: Pick<QuizSettings, "loopMotion" | "hideImageBoxes">;
 }
 
 function HostQuestion({
@@ -218,6 +223,7 @@ function HostQuestion({
   autoReveal,
   autoAdvanceSeconds,
   showAutoAdvanceCountdown,
+  autoAdvanceMessage,
   meter,
   canBack,
   isLast,
@@ -238,11 +244,23 @@ function HostQuestion({
   const ticking = running && !expired;
 
   useEffect(() => {
-    if (!ticking) return;
-    const id = window.setInterval(() => {
-      setRemainingMs((current) => (current === null ? null : Math.max(0, current - 100)));
-    }, 100);
-    return () => window.clearInterval(id);
+    if (!ticking || remainingMs === null) return;
+    const startedAt = performance.now();
+    const startedWith = remainingMs;
+    let frame = 0;
+
+    const step = (now: number) => {
+      const next = Math.max(0, startedWith - (now - startedAt));
+      setRemainingMs(next);
+      if (next > 0) frame = requestAnimationFrame(step);
+    };
+
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+    // A pause or expiry ends this run. Deliberately do not depend on
+    // remainingMs: every animation frame updates it, but must not restart the
+    // clock or the mascot would appear stuck at the starting line.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticking]);
 
   useEffect(() => {
@@ -309,13 +327,38 @@ function HostQuestion({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2" style={{ justifyContent: "safe center" }}>
         {/* Host mode doesn't score, so there are no per-question outcomes to
             colour in — the meter shows position only. */}
-        {showsProgressBar(meter) && <QuizProgress
+        {showsProgressBar(meter) && !(limitSeconds !== null && meter.quizProgressStyle === "mascot") && <QuizProgress
           index={index}
           total={total}
           style={meter.quizProgressStyle}
           mascot={meter.progressMascot}
           mascotMedia={meter.progressMascotMedia}
+          mascotMotion={meter.progressMascotMotion}
+          color={meter.progressColor}
+          trackColor={meter.progressTrackColor}
+          thickness={meter.progressThickness}
         />}
+        {remainingMs !== null && limitSeconds !== null && (
+          <div className="mb-4 flex min-h-24 items-center justify-end">
+            <ProgressMeter
+              key={question.id}
+              fraction={remainingMs / (limitSeconds * 1000)}
+              secondsLeft={Math.ceil(remainingMs / 1000)}
+              urgent={remainingMs / (limitSeconds * 1000) <= 0.25}
+              style={timerProgressStyle(meter)}
+              pulse={meter.progressPulse}
+              mascot={meter.progressMascot}
+              mascotMedia={meter.progressMascotMedia}
+              mascotMotion={meter.progressMascotMotion}
+              color={meter.progressColor}
+              trackColor={meter.progressTrackColor}
+              thickness={meter.progressThickness}
+              showNumber={meter.showTimerNumber !== false}
+              celebrate={revealed && !unscored}
+              size={96}
+            />
+          </div>
+        )}
         <QuestionStage
           loopSettings={loopSettings}
           question={question}
@@ -330,21 +373,6 @@ function HostQuestion({
           showCount={showsProgressBar(meter)}
           theme={theme}
           motion={motion}
-          header={
-            remainingMs !== null && limitSeconds ? (
-              <ProgressMeter
-                fraction={remainingMs / (limitSeconds * 1000)}
-                secondsLeft={Math.ceil(remainingMs / 1000)}
-                urgent={remainingMs / (limitSeconds * 1000) <= 0.25}
-                style={meter.progressStyle}
-                pulse={meter.progressPulse}
-                mascot={meter.progressMascot}
-                mascotMedia={meter.progressMascotMedia}
-                celebrate={revealed && !unscored}
-                size={96}
-              />
-            ) : null
-          }
         />
       </div>
 
@@ -381,18 +409,23 @@ function HostQuestion({
         )}
       </div>
 
-      {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" />}
+      {revealed && !unscored && celebrationReady && <CelebrationCard question={question} mode="host" hideImageBoxes={hidesImageBoxes(loopSettings, question)} />}
 
-      <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
-        {showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
-          <span style={{ color: "var(--accent)" }}>Moving on in {autoAdvanceSeconds}s · press ← → to take over</span>
-        ) : (
-          <>
-            Space {revealed || unscored ? "advances" : "reveals"} · ← → to move · F for fullscreen
-            {!unscored && autoReveal && !revealed && " · answer shows itself at zero"}
-          </>
-        )}
-      </p>
+      {showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
+        <AutoAdvanceBar
+          seconds={autoAdvanceSeconds}
+          label="next question"
+          message={autoAdvanceMessage}
+          styleName={meter.autoAdvanceBarStyle}
+          color={meter.autoAdvanceColor}
+          trackColor={meter.autoAdvanceTrackColor}
+        />
+      ) : (
+        <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
+          Space {revealed || unscored ? "advances" : "reveals"} · ← → to move · F for fullscreen
+          {!unscored && autoReveal && !revealed && " · answer shows itself at zero"}
+        </p>
+      )}
     </main>
   );
 }

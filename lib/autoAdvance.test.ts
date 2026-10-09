@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "./autoAdvance.ts";
+import { autoAdvanceMessage, DEFAULT_AUTO_ADVANCE_MESSAGE, revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "./autoAdvance.ts";
 import type { AnswerRecord } from "./store/playSession.ts";
 
 const on = { revealAfterEach: true, autoAdvanceOnTimeout: true };
@@ -59,4 +59,11 @@ test("the auto-advance countdown is hidden unless explicitly enabled", () => {
   assert.equal(showsAutoAdvanceCountdown({}), false);
   assert.equal(showsAutoAdvanceCountdown({ showAutoAdvanceCountdown: false }), false);
   assert.equal(showsAutoAdvanceCountdown({ showAutoAdvanceCountdown: true }), true);
+});
+
+test("timeout copy is customizable without losing the live action or seconds", () => {
+  assert.equal(autoAdvanceMessage(undefined, "next question", 5), "Out of time — next question in 5s");
+  assert.equal(autoAdvanceMessage(DEFAULT_AUTO_ADVANCE_MESSAGE, "results", 2), "Out of time — results in 2s");
+  assert.equal(autoAdvanceMessage("🚀 {action} starts in {seconds}!", "round two", 3), "🚀 round two starts in 3!");
+  assert.equal(autoAdvanceMessage("Take a breath 🧠", "ignored", 9), "Take a breath 🧠");
 });

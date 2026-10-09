@@ -12,12 +12,32 @@ import { POP_IN } from "./playTiming.ts";
 import { resolveReveal, revealAnswerMedia } from "./reveal.ts";
 
 export const CELEBRATION_ANIMATIONS: { id: CelebrationAnimation; label: string }[] = [
-  { id: "confetti", label: "Confetti burst" },
-  { id: "stars", label: "Star shower" },
-  { id: "pulse-ring", label: "Pulse ring" },
-  { id: "stamp", label: "Stamp" },
-  { id: "none", label: "Card only" },
+  { id: "confetti", label: "Smooth pop" },
+  { id: "shooting-star", label: "Shooting-star landing" },
+  { id: "bubbles", label: "Bubble assemble" },
+  { id: "butterfly", label: "Butterfly assemble" },
+  { id: "stars", label: "Star assemble" },
+  { id: "glass-assemble", label: "Glass assemble" },
+  { id: "mosaic-assemble", label: "Mosaic assemble" },
+  { id: "spiral-assemble", label: "Spiral assemble" },
+  { id: "curtain-assemble", label: "Curtain strips" },
+  { id: "flip-assemble", label: "Flip tiles" },
+  { id: "zoom-assemble", label: "Zoom fragments" },
+  { id: "none", label: "Smooth fade" },
 ];
+
+export const PHOTO_ASSEMBLY_ANIMATIONS: readonly CelebrationAnimation[] = [
+  "bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble",
+  "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble",
+];
+
+export function usesPhotoAssembly(animation: CelebrationAnimation): boolean {
+  return PHOTO_ASSEMBLY_ANIMATIONS.includes(animation);
+}
+
+export function celebrationPieceCount(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.min(25, Math.max(4, Math.round(value!))) : 9;
+}
 
 /** The card pops in, then the chosen animation starts. */
 export const CELEBRATION_FOLLOW_MS = POP_IN.durationMs;
@@ -26,6 +46,19 @@ const ANIMATION_IDS = new Set<string>(CELEBRATION_ANIMATIONS.map((item) => item.
 
 export function celebrationEnabled(question: Pick<Question, "celebration"> | undefined): boolean {
   return question?.celebration?.enabled === true;
+}
+
+/** Text-only celebrations retain their card so the answer stays readable. */
+export function hidesCelebrationBox(
+  question: Pick<Question, "celebration"> | undefined,
+  settings?: { hideImageBoxes?: boolean },
+): boolean {
+  return celebrationEnabled(question) && (settings?.hideImageBoxes === true || question?.celebration?.hideBox === true);
+}
+
+export function animatesCelebrationFromAnswer(question: Pick<Question, "celebration"> | undefined): boolean {
+  return celebrationEnabled(question) &&
+    (question?.celebration?.animateFromAnswer === true || question?.celebration?.animateFromReveal === true);
 }
 
 /** Reveal questions finish uncovering before their optional card appears. */
@@ -40,8 +73,9 @@ export function celebrationAnimation(question: Pick<Question, "celebration">): C
 }
 
 /** How long the follow-on motion runs. Confetti is drawn by its own physics. */
-export function celebrationMotionMs(animation: CelebrationAnimation): number {
+export function celebrationMotionMs(animation: CelebrationAnimation, durationMs?: number): number {
   if (animation === "none") return 0;
+  if (Number.isFinite(durationMs)) return Math.min(4000, Math.max(1000, Math.round(durationMs!)));
   return ANIMATIONS[animation].defaultMs;
 }
 

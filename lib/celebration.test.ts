@@ -4,9 +4,11 @@ import { createQuiz } from "./factory.ts";
 import { buildTimeline } from "./videoExport/timeline.ts";
 import { collectRefs, imageRefs, remapMedia } from "./mediaRefs.ts";
 import {
+  animatesCelebrationFromAnswer,
   celebrationAnimation,
   celebrationDelayMs,
   celebrationEnabled,
+  hidesCelebrationBox,
   celebrationView,
 } from "./celebration.ts";
 import { schemaVersionFor, type MediaRef, type Question, type Quiz } from "../types/quiz.ts";
@@ -31,6 +33,60 @@ test("a question that doesn't celebrate resolves to nothing", () => {
   assert.equal(celebrationView(question({ celebration: { enabled: false, image: picture("kept") } })), null);
   assert.equal(celebrationAnimation(question()), "confetti");
   assert.equal(celebrationAnimation(question({ celebration: { enabled: true, animation: "nope" as "none" } })), "confetti");
+});
+
+test("the celebration box is hidden only when an enabled question requests it", () => {
+  assert.equal(hidesCelebrationBox(question()), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: false, hideBox: true } })), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: true, hideBox: false } })), false);
+  assert.equal(hidesCelebrationBox(question({ celebration: { enabled: true, hideBox: true } })), true);
+});
+
+test("moving the celebration from the answer is opt-in for every question kind", () => {
+  assert.equal(animatesCelebrationFromAnswer(question()), false);
+  assert.equal(animatesCelebrationFromAnswer(question({ celebration: { enabled: false, animateFromAnswer: true } })), false);
+  for (const kind of ["multiple-choice", "true-false", "multi-select", "image-choice", "reveal"] as const) {
+    assert.equal(animatesCelebrationFromAnswer(question({ kind, celebration: { enabled: true, animateFromAnswer: true } })), true);
+  }
+  assert.equal(
+    animatesCelebrationFromAnswer(question({ kind: "reveal", celebration: { enabled: true, animateFromReveal: true } })),
+    true,
+    "the old Reveal-only flag remains compatible",
+  );
+});
+
+test("hiding the box applies to uploaded, answer, image-choice and Reveal pictures", () => {
+  const variants = [
+    question({ celebration: { enabled: true, hideBox: true, image: picture("upload") } }),
+    question({
+      celebration: { enabled: true, hideBox: true, useAnswerImage: true },
+      options: [
+        { id: "a", text: "Paris", correct: true, media: picture("answer") },
+        { id: "b", text: "Lyon", correct: false },
+      ],
+    }),
+    question({
+      kind: "image-choice",
+      celebration: { enabled: true, hideBox: true },
+      options: [
+        { id: "a", text: "Cat", correct: true, media: picture("choice") },
+        { id: "b", text: "Dog", correct: false, media: picture("dog") },
+      ],
+    }),
+    question({
+      kind: "reveal",
+      celebration: { enabled: true, hideBox: true, useAnswerImage: true },
+      options: [
+        { id: "a", text: "Tower", correct: true, media: picture("reveal") },
+        { id: "b", text: "Forest", correct: false },
+      ],
+    }),
+  ];
+
+  for (const item of variants) {
+    assert.ok(celebrationView(item)?.images.length);
+    assert.equal(hidesCelebrationBox(item), true);
+  }
 });
 
 test("an empty correct answer does not get a stand-in label", () => {
@@ -157,7 +213,11 @@ test("Reveal repeats its uncovered picture only when selected, after the uncover
   quiz.questions = [reveal];
   const run = buildTimeline(quiz, { answerMode: "pick-correct", sound: false });
   assert.equal(run.questions[0].advanceAt - run.questions[0].revealAt, 1800 + 5000);
-  assert.ok(run.confetti.some((cue) => cue.at - run.questions[0].revealAt === 1800 + 280));
+  assert.equal(
+    run.confetti.some((cue) => cue.at - run.questions[0].revealAt === 1800 + 280),
+    false,
+    "the photo entrance does not add decorative particles",
+  );
 });
 
 test("Reveal without a card picture falls back to answer words when its checkbox is off", () => {
@@ -241,14 +301,14 @@ test("schema, copy, and media refs stay quiet unless the celebration is in use",
   assert.equal(copied.questions[0].celebration?.useAnswerImage, true);
 });
 
-test("exported video adds confetti only when that question's celebration asks for it", () => {
+test("answer entrance styles animate only the photo and add no export particles", () => {
   const plain = createQuiz("Plain");
   plain.questions = [question()];
   const base = buildTimeline(plain, { answerMode: "pick-correct", sound: false }).confetti.length;
 
   const confetti = createQuiz("Confetti");
   confetti.questions = [question({ celebration: { enabled: true, animation: "confetti" } })];
-  assert.equal(buildTimeline(confetti, { answerMode: "pick-correct", sound: false }).confetti.length, base + 1);
+  assert.equal(buildTimeline(confetti, { answerMode: "pick-correct", sound: false }).confetti.length, base);
 
   const stars = createQuiz("Stars");
   stars.questions = [question({ celebration: { enabled: true, animation: "stars" } })];

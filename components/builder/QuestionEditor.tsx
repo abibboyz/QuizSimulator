@@ -5,7 +5,7 @@ import { themeInk } from "@/lib/themeInk";
 
 import { useEffect, useRef, useState } from "react";
 import type { CelebrationAnimation, Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
-import { CELEBRATION_ANIMATIONS } from "@/lib/celebration";
+import { CELEBRATION_ANIMATIONS, celebrationMotionMs, celebrationPieceCount, usesPhotoAssembly } from "@/lib/celebration";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { FONT_GROUPS, fontFamily } from "@/lib/themes";
@@ -18,6 +18,7 @@ import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 import { AnimationSection } from "@/components/builder/AnimationSection";
 import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
 import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
+import { hidesImageBoxes } from "@/lib/imageChoice";
 
 const PROMPT_EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -136,6 +137,27 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           ))}
         </Select>
       </header>
+
+      {(question.kind === "image-choice" || question.kind === "reveal") && (
+        <Field label="Image boxes" hint={`Quiz default: ${quiz.settings.hideImageBoxes ? "hidden" : "shown"}. A local choice affects only this question.`}>
+          <Select
+            value={question.hideImageBoxes === undefined ? "global" : question.hideImageBoxes ? "hide" : "show"}
+            onChange={(event) => {
+              if (event.target.value === "global") {
+                const rest = { ...question };
+                delete rest.hideImageBoxes;
+                onChange(rest);
+                return;
+              }
+              onChange({ ...question, hideImageBoxes: event.target.value === "hide" });
+            }}
+          >
+            <option value="global">Use quiz setting</option>
+            <option value="hide">Hide boxes</option>
+            <option value="show">Show boxes</option>
+          </Select>
+        </Field>
+      )}
 
       <Field
         label="Prompt"
@@ -363,7 +385,29 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 </span>
               </label>
             )}
-            <Field label="Animation" hint="Plays once the card has appeared. Card only skips the extra motion.">
+            <Toggle
+              label="Hide picture box"
+              hint="Shows only the image for uploads, answer pictures, image choices and Reveal"
+              checked={question.celebration.hideBox === true}
+              onChange={(hideBox) =>
+                onChange({
+                  ...question,
+                  celebration: { ...question.celebration!, hideBox },
+                })
+              }
+            />
+            <Toggle
+              label="Animate image from correct answer"
+              hint="Moves a correct answer image from its tile into the celebration position when available"
+              checked={question.celebration.animateFromAnswer === true || question.celebration.animateFromReveal === true}
+              onChange={(animateFromAnswer) =>
+                onChange({
+                  ...question,
+                  celebration: { ...question.celebration!, animateFromAnswer, animateFromReveal: undefined },
+                })
+              }
+            />
+            <Field label="Answer entrance" hint="Carries or assembles the answer into its final centre position. Card only uses a simple fade.">
               <Select
                 aria-label="Celebration animation"
                 value={question.celebration.animation ?? "confetti"}
@@ -384,6 +428,42 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 ))}
               </Select>
             </Field>
+            <Field label="Animation duration" hint="How long the photo cards travel before forming the final image (1–4 seconds).">
+              <Input
+                type="number"
+                min={1}
+                max={4}
+                step={0.25}
+                value={(question.celebration.durationMs ?? celebrationMotionMs(question.celebration.animation ?? "confetti")) / 1000}
+                onChange={(event) => {
+                  const seconds = Number(event.target.value);
+                  if (!Number.isFinite(seconds)) return;
+                  onChange({
+                    ...question,
+                    celebration: { ...question.celebration!, durationMs: Math.round(Math.min(4, Math.max(1, seconds)) * 1000) },
+                  });
+                }}
+              />
+            </Field>
+            {usesPhotoAssembly(question.celebration.animation ?? "confetti") && (
+              <Field label="Pieces" hint="How many shapes the picture is cut into. They fly in and join back into the picture (4–25).">
+                <Input
+                  type="number"
+                  min={4}
+                  max={25}
+                  step={1}
+                  value={celebrationPieceCount(question.celebration.pieces)}
+                  onChange={(event) => {
+                    const pieces = Number(event.target.value);
+                    if (!Number.isFinite(pieces)) return;
+                    onChange({
+                      ...question,
+                      celebration: { ...question.celebration!, pieces: celebrationPieceCount(pieces) },
+                    });
+                  }}
+                />
+              </Field>
+            )}
           </>
         )}
       </div>
@@ -417,13 +497,14 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             type="number"
             min={0}
             max={600}
-            value={question.timerSeconds ?? ""}
+            value={question.timerSeconds === null ? 0 : (question.timerSeconds ?? "")}
             placeholder="Use default"
             onChange={(event) => {
               const raw = event.target.value;
+              const value = Number(raw);
               onChange({
                 ...question,
-                timerSeconds: raw === "" ? undefined : Number(raw) === 0 ? null : Number(raw),
+                timerSeconds: raw === "" ? undefined : !Number.isFinite(value) || value <= 0 ? null : value,
               });
             }}
           />
@@ -461,6 +542,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             hint={CUE_SLOT_LABELS[slot].hint}
             cue={question.cues?.[slot]}
             inherits={describeCue(quiz.settings.cues?.[slot])}
+            hideImageBox={hidesImageBoxes(quiz.settings, question)}
             onChange={(cue) => setCue(slot, cue)}
           />
         ))}
