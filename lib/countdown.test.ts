@@ -35,17 +35,15 @@ test("every question kind resolves the same quiz timer unless explicitly overrid
   }
 });
 
-test("empty and invalid question timers inherit the shared quiz timer", () => {
+test("explicit zero/null question timers remain untimed while blank inherits", () => {
   const quiz = createQuiz();
   quiz.settings.timerSeconds = 12;
   const question = createQuestion();
+  assert.equal(timerFor(quiz, question), 12);
   question.timerSeconds = 0;
-  assert.equal(timerFor(quiz, question), 12);
+  assert.equal(timerFor(quiz, question), null);
   question.timerSeconds = null;
-  assert.equal(timerFor(quiz, question), 12);
+  assert.equal(timerFor(quiz, question), null);
   question.timerSeconds = Number.NaN;
-  assert.equal(timerFor(quiz, question), 12);
-
-  quiz.settings.timerSeconds = null;
   assert.equal(timerFor(quiz, question), null);
 });

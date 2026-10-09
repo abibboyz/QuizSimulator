@@ -446,7 +446,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
               />
             </Field>
             {usesPhotoAssembly(question.celebration.animation ?? "confetti") && (
-              <Field label="Pieces / butterflies" hint="How many small image cards fly in and combine (4–25).">
+              <Field label="Pieces" hint="How many shapes the picture is cut into. They fly in and join back into the picture (4–25).">
                 <Input
                   type="number"
                   min={4}
@@ -497,17 +497,14 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             type="number"
             min={0}
             max={600}
-            value={question.timerSeconds ?? ""}
+            value={question.timerSeconds === null ? 0 : (question.timerSeconds ?? "")}
             placeholder="Use default"
             onChange={(event) => {
               const raw = event.target.value;
               const value = Number(raw);
               onChange({
                 ...question,
-                // Empty/zero means "use the quiz countdown". The quiz-wide
-                // Timer setting is the single place that disables countdowns,
-                // keeping every question kind consistent.
-                timerSeconds: raw === "" || !Number.isFinite(value) || value <= 0 ? undefined : value,
+                timerSeconds: raw === "" ? undefined : !Number.isFinite(value) || value <= 0 ? null : value,
               });
             }}
           />

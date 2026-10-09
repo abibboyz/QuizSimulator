@@ -8,11 +8,12 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   animatesCelebrationFromAnswer,
   celebrationAnimation,
-  celebrationPieceCount,
   hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
+  usesPhotoAssembly,
 } from "@/lib/celebration";
+import { assemblyPieces, motionFrames, pieceWindow, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { promptFontStack } from "@/lib/promptText";
 import type { StageMode } from "@/components/play/AnswerGrid";
 import { hidesImageBoxes as resolvesHiddenImageBoxes } from "@/lib/imageChoice";
@@ -88,7 +89,6 @@ export function CelebrationCard({
           reduced={reduced}
           animation={animation}
           durationMs={question.celebration?.durationMs}
-          boxed={!imageOnly}
           pieces={question.celebration?.pieces}
           className={`relative z-10 w-fit max-w-full ${shell} text-center ${imageOnly ? "" : "border border-ink-500 bg-ink-900"}`}
           style={imageOnly ? undefined : { boxShadow: "0 0 0 1px var(--accent-line), 0 16px 36px -18px rgb(0 0 0 / 0.55)" }}
@@ -132,7 +132,6 @@ function RevealTravelCard({
   reduced,
   animation,
   durationMs,
-  boxed,
   pieces,
   className,
   style,
@@ -142,7 +141,6 @@ function RevealTravelCard({
   reduced: boolean;
   animation: CelebrationAnimation;
   durationMs?: number;
-  boxed: boolean;
   pieces?: number;
   className: string;
   style?: CSSProperties;
@@ -187,46 +185,30 @@ function RevealTravelCard({
       style={style}
       {...entrance}
     >
-      {isPhotoAssembly(animation) ? (
-        <PhotoAssembly animation={animation} durationMs={durationMs} boxed={boxed} pieces={pieces}>{children}</PhotoAssembly>
+      {usesPhotoAssembly(animation) ? (
+        <PhotoAssembly animation={animation} durationMs={durationMs} pieces={pieces} reduced={reduced}>{children}</PhotoAssembly>
       ) : children}
     </motion.div>
   );
 }
 
-type PhotoAssemblyAnimation =
-  | "bubbles"
-  | "butterfly"
-  | "stars"
-  | "glass-assemble"
-  | "mosaic-assemble"
-  | "spiral-assemble"
-  | "curtain-assemble"
-  | "flip-assemble"
-  | "zoom-assemble";
-
-function isPhotoAssembly(animation: CelebrationAnimation): animation is PhotoAssemblyAnimation {
-  return ["bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation);
-}
-
 function PhotoAssembly({
   animation,
   durationMs,
-  boxed,
   pieces,
+  reduced,
   children,
 }: {
-  animation: PhotoAssemblyAnimation;
+  animation: PhotoAssemblyStyle;
   durationMs?: number;
-  boxed: boolean;
   pieces?: number;
+  reduced: boolean;
   children: ReactNode;
 }) {
-  const duration = celebrationMotionMs(animation, durationMs) / 1000;
-  const count = celebrationPieceCount(pieces);
-  const columns = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / columns);
-  const maxDelay = Math.min(0.7, duration * 0.2);
+  if (reduced) return <>{children}</>;
+  const durationMsResolved = celebrationMotionMs(animation, durationMs);
+  const duration = durationMsResolved / 1000;
+  const parts = assemblyPieces(animation, pieces);
   return (
     <div className="relative">
       <motion.div
@@ -236,61 +218,29 @@ function PhotoAssembly({
       >
         {children}
       </motion.div>
-      {Array.from({ length: count }, (_, index) => {
-        const col = index % columns;
-        const row = Math.floor(index / columns);
-        const colCenter = (columns - 1) / 2;
-        const rowCenter = (rows - 1) / 2;
-        const clipPath = boxed
-          ? "inset(0% 0% 0% 0%)"
-          : `inset(${row / rows * 100}% ${(columns - col - 1) / columns * 100}% ${(rows - row - 1) / rows * 100}% ${col / columns * 100}%)`;
-        const angle = index / count * Math.PI * 2;
-        const initial = animation === "bubbles"
-          ? { x: (col - colCenter) * 42, y: 230 + row * 38, scale: 0.18, rotate: 0, borderRadius: "50%" }
-          : animation === "butterfly"
-            ? { x: (col <= colCenter ? -1 : 1) * (boxed ? 330 + row * 70 : 210 + row * 45), y: Math.sin(index * 1.7) * (boxed ? 210 : 120), scale: boxed ? 0.1 : 0.38, rotate: (col <= colCenter ? -1 : 1) * 38, rotateY: (col <= colCenter ? -1 : 1) * 72, borderRadius: "70% 25% 70% 25%" }
-            : animation === "curtain-assemble"
-              ? { x: 0, y: (col % 2 ? 1 : -1) * (260 + row * 40), scale: 1, rotate: 0, borderRadius: "0%" }
-              : animation === "flip-assemble"
-                ? { x: (col - colCenter) * 35, y: (row - rowCenter) * 28, scale: 0.8, rotate: 0, rotateY: index % 2 ? 90 : -90, borderRadius: "0%" }
-                : animation === "zoom-assemble"
-                  ? { x: (col - colCenter) * 55, y: (row - rowCenter) * 42, scale: 2.8, rotate: 0, borderRadius: "0%" }
-                  : animation === "mosaic-assemble"
-                    ? { x: (index % 2 ? 1 : -1) * (90 + col * 35), y: (row - rowCenter) * 120, scale: 0.55, rotate: (index - (count - 1) / 2) * 11, borderRadius: "0%" }
-                    : animation === "glass-assemble"
-                      ? { x: Math.cos(angle) * 240, y: Math.sin(angle) * 190, scale: 0.7, rotate: index * 47, borderRadius: "0%" }
-                      : { x: Math.cos(angle) * (animation === "spiral-assemble" ? 330 : 280), y: Math.sin(angle) * (animation === "spiral-assemble" ? 260 : 220), scale: 0.22, rotate: animation === "spiral-assemble" ? index * 95 : index * 34, borderRadius: "0%" };
-        const startX = initial.x;
-        const startY = initial.y;
-        const pieceMotion = animation === "butterfly"
-          ? {
-              x: [startX, startX * 0.78 + (index % 2 ? 70 : -70), startX * 0.4 + (index % 2 ? 65 : -65), 0],
-              y: [startY, startY - (boxed ? 120 : 65), startY * 0.25 + (index % 3 - 1) * (boxed ? 70 : 38), 0],
-              scale: [initial.scale, boxed ? 0.2 : 0.56, boxed ? 0.55 : 0.82, 1],
-              rotate: [initial.rotate, -initial.rotate * 0.45, initial.rotate * 0.2, 0],
-              rotateY: [initial.rotateY ?? 70, -(initial.rotateY ?? 70) * 0.7, (initial.rotateY ?? 70) * 0.4, 0],
-            }
-          : animation === "bubbles"
-            ? { x: [startX, startX + (index % 2 ? 48 : -48), startX * 0.25, 0], y: [startY, 95 - row * 25, -18, 0], scale: [initial.scale, 0.48, 1.06, 1], rotate: [0, index % 2 ? 12 : -12, 0, 0], rotateY: [0, 22, -12, 0] }
-            : animation === "stars"
-              ? { x: [startX, startX * 0.48, startX * 0.14, 0], y: [startY, startY * 0.5 - 45, startY * 0.12, 0], scale: [initial.scale, 0.48, 0.86, 1], rotate: [initial.rotate, initial.rotate * 0.5, -8, 0], rotateY: [55, -35, 16, 0] }
-              : animation === "spiral-assemble"
-                ? { x: [startX, -startY * 0.72, startX * -0.28, 0], y: [startY, startX * 0.55, startY * -0.22, 0], scale: [initial.scale, 0.5, 0.82, 1], rotate: [initial.rotate, initial.rotate * 0.68, 120, 0], rotateY: [65, -45, 22, 0] }
-                : animation === "curtain-assemble"
-                  ? { x: [startX, (col - 1) * 38, 0], y: [startY, startY * 0.35, 0], scale: [1, 0.92, 1], rotate: [0, col % 2 ? 8 : -8, 0], rotateY: [col % 2 ? 68 : -68, col % 2 ? -18 : 18, 0] }
-                  : animation === "flip-assemble"
-                    ? { x: [startX, startX * 0.35, 0], y: [startY, startY - 35, 0], scale: [initial.scale, 0.9, 1], rotate: [0, index % 2 ? 12 : -12, 0], rotateY: [initial.rotateY ?? 90, -(initial.rotateY ?? 90) * 0.45, 0] }
-                    : animation === "zoom-assemble"
-                      ? { x: [startX, startX * 0.3, 0], y: [startY, startY * 0.3, 0], scale: [initial.scale, 1.55, 0.92, 1], rotate: [0, index % 2 ? 7 : -7, 0, 0], rotateY: [35, -18, 0, 0] }
-                      : { x: [startX, startX * 0.42, 0], y: [startY, startY * 0.38, 0], scale: [initial.scale, 0.82, 1], rotate: [initial.rotate, initial.rotate * 0.3, 0], rotateY: [index % 2 ? 58 : -58, index % 2 ? -20 : 20, 0] };
+      {parts.map((piece) => {
+        const frames = motionFrames(piece);
+        const timing = pieceWindow(piece.index, parts.length, durationMsResolved);
         return (
           <motion.div
-            key={index}
+            key={piece.index}
             className="pointer-events-none absolute inset-0 overflow-hidden"
-            style={{ clipPath, transformPerspective: 900, transformStyle: "preserve-3d", filter: "drop-shadow(0 8px 10px rgb(0 0 0 / 0.22))" }}
-            initial={{ ...initial, opacity: 0 }}
-            animate={{ ...pieceMotion, borderRadius: "0%", opacity: [0, 1, 1, 0] }}
-            transition={{ duration: Math.max(0.6, duration - maxDelay), delay: count === 1 ? 0 : index / (count - 1) * maxDelay, times: [0, 0.1, 0.86, 1], ease: [0.22, 1, 0.36, 1] }}
+            style={{ filter: "drop-shadow(0 8px 10px rgb(0 0 0 / 0.22))" }}
+            initial={{ x: frames.x[0], y: frames.y[0], scale: frames.scale[0], rotate: frames.rotate[0], clipPath: frames.clipPath[0], opacity: 0 }}
+            animate={{
+              x: frames.x,
+              y: frames.y,
+              scale: frames.scale,
+              rotate: frames.rotate,
+              clipPath: frames.clipPath,
+              opacity: [0, 1, 1, 0],
+            }}
+            transition={{
+              duration: timing.span / 1000,
+              delay: timing.delay / 1000,
+              times: frames.times,
+              ease: [0.22, 1, 0.36, 1],
+            }}
           >
             {children}
           </motion.div>
@@ -311,25 +261,26 @@ function celebrationEntrance(
     ? { x: origin.x, y: origin.y, scaleX: origin.scaleX, scaleY: origin.scaleY, opacity: 0.72 }
     : { x: 0, y: 0, scale: 0.97, opacity: 0 };
   const final = { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, rotate: 0, opacity: 1, filter: "blur(0px)", clipPath: "inset(0% 0% 0% 0%)" };
-  const authoredDuration = celebrationMotionMs(animation, durationMs) / 1000;
-  const duration = isPhotoAssembly(animation) ? authoredDuration : Math.min(1.5, authoredDuration);
+  const duration = Math.min(1.5, celebrationMotionMs(animation, durationMs) / 1000);
+  // The pieces themselves fly. The wrapper only carries an answer-tile travel,
+  // and it stays visible so the silhouettes are not faded out underneath it.
+  if (usesPhotoAssembly(animation)) {
+    return {
+      initial: origin
+        ? { x: origin.x, y: origin.y, scaleX: origin.scaleX, scaleY: origin.scaleY, opacity: 1 }
+        : { opacity: 1 },
+      animate: { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1, opacity: 1 },
+      transition: { duration: origin ? 0.58 : 0.01, ease: [0.22, 1, 0.36, 1] },
+    };
+  }
   if (animation === "shooting-star") return {
     initial: { ...source, x: origin?.x ?? -320, y: origin?.y ?? -180, rotate: -20, scale: origin ? undefined : 0.45 },
     animate: { ...final, x: [origin?.x ?? -320, -80, 0], y: [origin?.y ?? -180, -110, 0], rotate: [-20, -8, 0] },
     transition: { duration, ease: [0.22, 1, 0.36, 1] },
   };
-  if (animation === "glass-assemble") return {
-    initial: { ...source, scale: 1.18, opacity: 0, filter: "blur(12px)", clipPath: "polygon(0 0, 18% 8%, 8% 45%, 30% 62%, 12% 100%, 0 100%)" },
-    animate: { ...final, opacity: [0, 0.55, 1], scale: [1.18, 0.96, 1], clipPath: ["polygon(0 0, 18% 8%, 8% 45%, 30% 62%, 12% 100%, 0 100%)", "polygon(0 0, 72% 0, 58% 34%, 100% 45%, 78% 100%, 0 100%)", "inset(0% 0% 0% 0%)"] },
-    transition: { duration, ease: "easeOut" },
-  };
   if (animation === "fireworks") return { initial: { ...source, scale: 0.15 }, animate: { ...final, scale: [0.15, 1.12, 1] }, transition: { duration, ease: "easeOut" } };
   if (animation === "hearts") return { initial: { ...source, y: origin?.y ?? 240, scale: 0.65 }, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
-  if (animation === "bubbles") return { initial: { ...source, y: origin?.y ?? 220, scale: 0.35, opacity: 0 }, animate: { ...final, y: [origin?.y ?? 220, -20, 0], scale: [0.35, 1.06, 1] }, transition: { duration, ease: "easeOut" } };
-  if (animation === "butterfly") return { initial: source, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
-  if (["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation)) return { initial: source, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
   if (animation === "sparkle-wave") return { initial: { ...source, x: origin?.x ?? -220, filter: "blur(8px)" }, animate: final, transition: { duration, ease: [0.22, 1, 0.36, 1] } };
-  if (animation === "stars") return { initial: { ...source, y: origin?.y ?? -180, rotate: -8 }, animate: final, transition: { duration, ease: "easeOut" } };
   if (animation === "pulse-ring") return { initial: { ...source, scale: 0.2 }, animate: { ...final, scale: [0.2, 1.08, 1] }, transition: { duration, ease: "easeOut" } };
   if (animation === "stamp") return { initial: { ...source, scale: 2.3, rotate: -16 }, animate: { ...final, scale: [2.3, 0.9, 1] }, transition: { duration, ease: "easeOut" } };
   return { initial: source, animate: final, transition: { duration: origin ? 0.58 : 0.28, ease: "easeOut" } };

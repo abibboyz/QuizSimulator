@@ -25,7 +25,7 @@ import { promptAlign, promptFontStack, promptGraphemes, promptHasEmoji, splitEmo
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
 import { questionTheme, promptPosition } from "@/lib/questionPresentation";
-import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
+import type { CelebrationAnimation, Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns } from "@/lib/imageChoice";
@@ -66,8 +66,10 @@ import {
   hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
+  usesPhotoAssembly,
   type CelebrationView,
 } from "@/lib/celebration";
+import { assemblyPieces, isPhotoAssemblyStyle, morphedPoints, pieceProgress, poseAt, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 import { frameSource } from "@/lib/videoExport/animatedImage";
 
@@ -1658,14 +1660,15 @@ export class FrameRenderer {
       return;
     }
     const animation = celebrationAnimation(run.question);
-    const photoAssembly = ["bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation);
     const authoredEntranceMs = celebrationMotionMs(animation, run.question.celebration?.durationMs);
-    const entranceMs = photoAssembly
+    const entranceMs = usesPhotoAssembly(animation)
       ? Math.max(POP_IN.durationMs, authoredEntranceMs)
       : Math.min(1500, Math.max(POP_IN.durationMs, authoredEntranceMs));
     const p = popEase(clamp01(since / entranceMs));
     const hasBody = view.images.length > 0 || view.lines.some((line) => line.trim());
-    if (hasBody) {
+    if (hasBody && usesPhotoAssembly(animation)) {
+      this.drawPhotoAssembly(view, run, since, animation, entranceMs);
+    } else if (hasBody) {
       const answerTravel = animatesCelebrationFromAnswer(run.question) && view.images.length > 0;
       if (answerTravel) {
         const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
@@ -1710,7 +1713,123 @@ export class FrameRenderer {
     ctx.restore();
   }
 
-  private drawCelebrationCard(view: CelebrationView, at: number, imageOnly: boolean) {
+  /**
+   * The picture (or the answer words) is cut into the same silhouettes the
+   * live card uses. They fly in, open into their rectangles, and the whole
+   * card fades in over the top so the join has no seam.
+   */
+  private drawPhotoAssembly(view: CelebrationView, run: QuestionRun, since: number, animation: CelebrationAnimation, durationMs: number) {
+    if (!isPhotoAssemblyStyle(animation)) return;
+    const imageOnly = hidesCelebrationBox(run.question, {
+      hideImageBoxes: hidesImageBoxes(this.quiz.settings, run.question),
+    });
+    const reveal = since <= durationMs * 0.86 ? 0 : clamp01((since - durationMs * 0.86) / (durationMs * 0.14));
+    const pieces = assemblyPieces(animation, run.question.celebration?.pieces);
+    const { ctx } = this;
+
+    const paint = () => {
+      ctx.save();
+      ctx.globalAlpha *= reveal;
+      const rect = this.drawCelebrationCard(view, since, imageOnly);
+      ctx.restore();
+      if (!rect) return;
+      for (const piece of pieces) {
+        const progress = pieceProgress(since, piece.index, pieces.length, durationMs);
+        const pose = poseAt(piece, progress);
+        if (pose.opacity <= 0.01) continue;
+        this.paintAssemblyPiece(view, since, imageOnly, rect, piece, pose);
+      }
+    };
+
+    const answerTravel = animatesCelebrationFromAnswer(run.question) && view.images.length > 0;
+    if (!answerTravel) {
+      paint();
+      return;
+    }
+
+    const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
+    const imageGrid = run.question.kind === "image-choice" || run.question.kind === "reveal";
+    const columns = imageGrid
+      ? Math.max(1, imageChoiceColumns(run.question.options.length))
+      : this.narrow || run.question.layout === "list"
+        ? 1
+        : Math.min(2, run.question.options.length);
+    const rows = Math.max(1, Math.ceil(run.question.options.length / columns));
+    const column = correctIndex % columns;
+    const row = Math.floor(correctIndex / columns);
+    const travel = popEase(clamp01(since / 580));
+    const sourceX = ((column + 0.5) / columns - 0.5) * Math.min(this.W * 0.72, 820);
+    const sourceY = (0.12 + (row + 0.5) / rows * 0.28) * this.H;
+    ctx.save();
+    ctx.translate(sourceX * (1 - travel), sourceY * (1 - travel));
+    paint();
+    ctx.restore();
+  }
+
+  private paintAssemblyPiece(
+    view: CelebrationView,
+    at: number,
+    imageOnly: boolean,
+    rect: { x: number; y: number; w: number; h: number },
+    piece: ReturnType<typeof assemblyPieces>[number],
+    pose: ReturnType<typeof poseAt>,
+  ) {
+    const { ctx } = this;
+    const points = morphedPoints(piece, pose.morph);
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    ctx.save();
+    ctx.globalAlpha *= pose.opacity;
+    ctx.translate(cx + pose.x * rect.w, cy + pose.y * rect.h);
+    ctx.rotate((pose.rotate * Math.PI) / 180);
+    ctx.scale(pose.scale, pose.scale);
+    ctx.translate(-cx, -cy);
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = rect.x + point.x * rect.w;
+      const y = rect.y + point.y * rect.h;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.clip();
+    this.drawCelebrationCard(view, at, imageOnly);
+    ctx.restore();
+  }
+
+  /** Accent silhouettes for the cue of the same name, on the same clock as play. */
+  private drawShapeGather(style: PhotoAssemblyStyle, hold: number, local: number) {
+    const { ctx, W, H } = this;
+    const pieces = assemblyPieces(style, 9);
+    const box = Math.min(W, H) * 0.62;
+    const originX = (W - box) / 2;
+    const originY = (H - box) / 2;
+    for (const piece of pieces) {
+      const pose = poseAt(piece, pieceProgress(local, piece.index, pieces.length, hold));
+      if (pose.opacity <= 0.01) continue;
+      const points = morphedPoints(piece, pose.morph);
+      const cx = originX + box / 2;
+      const cy = originY + box / 2;
+      ctx.save();
+      ctx.globalAlpha *= pose.opacity;
+      ctx.translate(cx + pose.x * box, cy + pose.y * box);
+      ctx.rotate((pose.rotate * Math.PI) / 180);
+      ctx.scale(pose.scale, pose.scale);
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        const x = (point.x - 0.5) * box;
+        const y = (point.y - 0.5) * box;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = this.accent;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  private drawCelebrationCard(view: CelebrationView, at: number, imageOnly: boolean): { x: number; y: number; w: number; h: number } | null {
     const { ctx, W, H } = this;
     // Match the larger live card while keeping the vertical export inside its phone frame.
     const maxW = this.narrow ? Math.min(W * 0.82, 352) : Math.min(W * 0.4, 512);
@@ -1737,7 +1856,7 @@ export class FrameRenderer {
           ctx.drawImage(frameSource(item.img, at), cx, y, w, h);
           cx += w + gap * scale;
         }
-        return;
+        return { x: (W - rowW) / 2, y: (H - natural[0].h * scale) / 2, w: rowW, h: natural[0].h * scale };
       }
       const cellW = Math.min(this.narrow ? 300 : 384, (maxW - pad * 2 - gap * (pictures.length - 1)) / pictures.length);
       const cellH = Math.min(H * 0.35, this.narrow ? 256 : 288);
@@ -1760,10 +1879,10 @@ export class FrameRenderer {
         ctx.restore();
         cx += cellW + gap;
       }
-      return;
+      return { x, y, w: cardW, h: cardH };
     }
 
-    if (!view.lines.some((line) => line.trim())) return;
+    if (!view.lines.some((line) => line.trim())) return null;
 
     const font = this.font(800, this.md ? 30 : 24, face);
     const lines = view.lines.flatMap((line) => this.wrap(line, font, maxW - pad * 2));
@@ -1781,6 +1900,7 @@ export class FrameRenderer {
     lines.forEach((line, i) =>
       this.drawLine(line, W / 2, y + pad + i * lineH, lineH, font, this.ink[100], "center"),
     );
+    return { x, y, w: cardW, h: cardH };
   }
 
   /** Solid rounded card with a soft drop shadow, and no full-frame wash behind it. */
@@ -1898,9 +2018,9 @@ export class FrameRenderer {
     if (animation === "hearts") return this.drawFloatingHearts(hold, local);
     if (animation === "bubbles") return this.drawBubbles(hold, local);
     if (animation === "sparkle-wave") return this.drawSparkleWave(hold, local);
-    if (animation === "glass-assemble") return this.drawGlassAssemble(hold, local);
-    if (animation === "butterfly") return this.drawFloatingHearts(hold, local);
-    if (["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(animation)) return this.drawGlassAssemble(hold, local);
+    if (animation === "butterfly" || animation === "glass-assemble" || animation === "mosaic-assemble" || animation === "spiral-assemble" || animation === "curtain-assemble" || animation === "flip-assemble" || animation === "zoom-assemble") {
+      return this.drawShapeGather(animation, hold, local);
+    }
     if (animation === "pulse-ring") return this.drawPulseRing(hold, local);
     if (animation === "stamp") return this.drawStamp(hold, local);
   }
@@ -1991,31 +2111,6 @@ export class FrameRenderer {
       this.drawLine("✦", (i + 0.5) / 15 * W, y - 18, 36, font, this.accent, "center");
       this.ctx.restore();
     }
-  }
-
-  private drawGlassAssemble(hold: number, local: number) {
-    const { ctx, W, H } = this;
-    const p = easeOut(clamp01(local / hold));
-    if (p >= 1) return;
-    ctx.save();
-    ctx.strokeStyle = this.accent;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha *= keyframes([0, 0.8, 0], p, easeOut);
-    for (let i = 0; i < 12; i++) {
-      const sx = (i % 4 - 1.5) * 180 * (1 - p);
-      const sy = (Math.floor(i / 4) - 1) * 150 * (1 - p);
-      ctx.save();
-      ctx.translate(W / 2 + sx, H / 2 + sy);
-      ctx.rotate(i * 31 * (1 - p) * Math.PI / 180);
-      ctx.beginPath();
-      ctx.moveTo(0, -32);
-      ctx.lineTo(32, 32);
-      ctx.lineTo(-32, 14);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();
   }
 
   private drawPulseRing(hold: number, local: number) {

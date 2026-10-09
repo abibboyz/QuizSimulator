@@ -63,15 +63,9 @@ function prepare(quiz: Quiz, onlyIds?: string[]): Question[] {
 
 export function timerFor(quiz: Quiz, question: Question | undefined): number | null {
   if (!question) return null;
-  // A question only overrides the shared countdown with a real positive
-  // duration. Older quizzes sometimes persisted null/0 on text, Reveal and
-  // true/false questions while newly-added image questions omitted the field;
-  // treating those legacy empty values as "untimed" made the same quiz appear
-  // to support the progress mascot on only some question kinds.
-  const override = question.timerSeconds;
-  const value = typeof override === "number" && Number.isFinite(override) && override > 0
-    ? override
-    : quiz.settings.timerSeconds;
+  // Undefined inherits the quiz-wide timer. An explicit null/0 remains the
+  // established per-question "untimed" override for backward compatibility.
+  const value = question.timerSeconds !== undefined ? question.timerSeconds : quiz.settings.timerSeconds;
   if (value === null || !Number.isFinite(value) || value <= 0) return null;
   return value;
 }

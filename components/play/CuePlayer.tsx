@@ -9,6 +9,7 @@ import { playCountdownBeep, playCue } from "@/lib/sound";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useMediaUrl } from "@/hooks/useMediaUrl";
 import { COUNTDOWN_BEATS, CUE_CONFETTI, STAR_LANES, countdownBeatTransitionS } from "@/lib/playTiming";
+import { assemblyPieces, motionFrames, pieceWindow, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 
 interface Props {
   cue: Cue;
@@ -100,9 +101,7 @@ export function CuePlayer({ cue, onDone, soundOn, hideImageBox = false, onMidpoi
       {cue.animation === "hearts" && <FloatingGlyphs holdMs={holdMs} glyph="♥" />}
       {cue.animation === "bubbles" && <Bubbles holdMs={holdMs} />}
       {cue.animation === "sparkle-wave" && <SparkleWave holdMs={holdMs} />}
-      {cue.animation === "glass-assemble" && <GlassAssemble holdMs={holdMs} />}
-      {cue.animation === "butterfly" && <FloatingGlyphs holdMs={holdMs} glyph="◆" />}
-      {["mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"].includes(cue.animation) && <GlassAssemble holdMs={holdMs} />}
+      {cue.animation && isAssemblyCue(cue.animation) && <ShapeGather style={cue.animation} holdMs={holdMs} />}
       {cue.animation === "pulse-ring" && <PulseRing holdMs={holdMs} />}
       {cue.animation === "shake" && <Shake holdMs={holdMs} />}
       {cue.animation === "stamp" && <Stamp holdMs={holdMs} />}
@@ -201,8 +200,33 @@ function SparkleWave({ holdMs }: { holdMs: number }) {
   return <div className="absolute inset-0 flex items-center justify-around">{Array.from({ length: 15 }, (_, i) => <motion.span key={i} initial={{ opacity: 0, scale: 0, y: 0 }} animate={{ opacity: [0, 1, 0], scale: [0, 1.5, 0], y: [0, i % 2 ? 45 : -45, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.045, ease: "easeInOut" }} className="text-4xl" style={{ color: "var(--accent)" }}>✦</motion.span>)}</div>;
 }
 
-function GlassAssemble({ holdMs }: { holdMs: number }) {
-  return <div className="absolute inset-0 grid place-items-center">{Array.from({ length: 12 }, (_, i) => <motion.span key={i} initial={{ x: (i % 4 - 1.5) * 180, y: (Math.floor(i / 4) - 1) * 150, rotate: i * 31, opacity: 0 }} animate={{ x: 0, y: 0, rotate: 0, opacity: [0, 0.8, 0] }} transition={{ duration: holdMs / 1000, delay: i * 0.025, ease: "easeOut" }} className="absolute h-16 w-16 border-2" style={{ borderColor: "var(--accent)", clipPath: "polygon(50% 0, 100% 100%, 0 72%)" }} />)}</div>;
+const ASSEMBLY_CUES = ["butterfly", "glass-assemble", "mosaic-assemble", "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble"] as const;
+
+function isAssemblyCue(animation: string): animation is (typeof ASSEMBLY_CUES)[number] {
+  return (ASSEMBLY_CUES as readonly string[]).includes(animation);
+}
+
+/** The same silhouettes the celebration uses, gathering on the stage. */
+function ShapeGather({ style, holdMs }: { style: PhotoAssemblyStyle; holdMs: number }) {
+  const parts = assemblyPieces(style, 9);
+  return (
+    <div className="absolute left-1/2 top-1/2 h-[min(70vh,40rem)] w-[min(70vw,40rem)] -translate-x-1/2 -translate-y-1/2">
+      {parts.map((piece) => {
+        const frames = motionFrames(piece);
+        const timing = pieceWindow(piece.index, parts.length, holdMs);
+        return (
+          <motion.div
+            key={piece.index}
+            className="absolute inset-0"
+            style={{ background: "var(--accent)" }}
+            initial={{ x: frames.x[0], y: frames.y[0], scale: frames.scale[0], rotate: frames.rotate[0], clipPath: frames.clipPath[0], opacity: 0 }}
+            animate={{ x: frames.x, y: frames.y, scale: frames.scale, rotate: frames.rotate, clipPath: frames.clipPath, opacity: [0, 1, 1, 0] }}
+            transition={{ duration: timing.span / 1000, delay: timing.delay / 1000, times: frames.times, ease: [0.22, 1, 0.36, 1] }}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function PulseRing({ holdMs }: { holdMs: number }) {
