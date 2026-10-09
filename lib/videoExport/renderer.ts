@@ -29,8 +29,9 @@ import type { Cue, MediaRef, Option, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns } from "@/lib/imageChoice";
-import { litSteps, mascotOf, METER_STEPS, pulseMs, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar } from "@/lib/progress";
+import { litSteps, mascotOf, METER_STEPS, progressThickness, pulseMs, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar, timerMascotGeometry, timerProgressStyle } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
+import { autoAdvanceMessage } from "@/lib/autoAdvance";
 import { basePointsFor } from "@/lib/store/playSession";
 import {
   COUNTDOWN_BEATS,
@@ -572,7 +573,6 @@ export class FrameRenderer {
 
   /** AutoAdvanceBar. */
   private drawTimeoutBar(run: QuestionRun, t: number, x0: number, y: number, CW: number) {
-    const { ctx } = this;
     const total = Math.max(1, run.holdSeconds);
     const since = t - run.revealAt - celebrationDelayMs(run.question);
     const left = Math.max(0, total - Math.floor(since / 1000));
@@ -580,16 +580,24 @@ export class FrameRenderer {
     const w = Math.min(320, CW);
     const x = x0 + (CW - w) / 2;
     const font = this.font(600, 12);
-    const lead = `Out of time — ${isLast ? "results" : "next question"} in `;
-    const tail = `${left}s`;
-    const lw = this.measure(lead, font);
-    const tw = this.measure(tail, font);
-    const start = x + (w - lw - tw) / 2;
-    this.drawLine(lead, start, y, 16, font, this.ink[400], "left");
-    this.drawLine(tail, start + lw, y, 16, font, this.accent, "left");
-    this.fillRR(x, y + 24, w, 2, 1, this.ink[800]);
-    ctx.fillStyle = this.accent;
-    ctx.fillRect(x, y + 24, w * Math.max(0, 1 - since / (total * 1000)), 2);
+    const message = autoAdvanceMessage(this.quiz.settings.autoAdvanceMessage, isLast ? "results" : "next question", left);
+    this.drawLine(message, x + w / 2, y, 16, font, this.ink[400], "center");
+    const fill = this.quiz.settings.autoAdvanceColor ?? this.accent;
+    const track = this.quiz.settings.autoAdvanceTrackColor ?? this.ink[800];
+    const style = this.quiz.settings.autoAdvanceBarStyle ?? "line";
+    const fraction = Math.max(0, 1 - since / (total * 1000));
+    if (style === "dots") {
+      const count = Math.min(12, total);
+      const gap = 6;
+      const dot = 8;
+      const dotsW = count * dot + (count - 1) * gap;
+      const lit = Math.ceil(fraction * count);
+      for (let i = 0; i < count; i++) this.fillRR(x + (w - dotsW) / 2 + i * (dot + gap), y + 22, dot, dot, dot / 2, i < lit ? fill : track);
+    } else {
+      const h = style === "pill" ? 8 : 2;
+      this.fillRR(x, y + 24, w, h, h / 2, track);
+      if (fraction > 0) this.fillRR(x, y + 24, w * fraction, h, h / 2, fill);
+    }
   }
 
   /* ------------------------------------------------------- quiz progress */
@@ -627,7 +635,11 @@ export class FrameRenderer {
     const settings = this.quiz.settings;
     const style = settings.quizProgressStyle;
     const total = this.timeline.questions.length;
+    const currentRun = this.timeline.questions[index];
     if (style === "none" || total <= 0 || !showsProgressBar(settings)) return null;
+    // A timed mascot is the countdown mascot. Drawing the question-position
+    // mascot as well produces two incompatible positions on the same rail.
+    if (style === "mascot" && currentRun?.limitSeconds !== null) return null;
 
     const outcomes = settings.revealAfterEach
       ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isUnscoredImage(r.question) ? null : r.correct)
@@ -636,21 +648,26 @@ export class FrameRenderer {
     const { value: reached, shown } = this.reachedAt(t);
     const fraction = quizProgressFraction(shown, total);
     const { ctx } = this;
+    const progressColor = settings.progressColor ?? this.accent;
+    const trackColor = settings.progressTrackColor ?? "rgba(255,255,255,0.12)";
+    const lineH = progressThickness(settings.progressThickness);
 
     if (style === "mascot") {
+      const mascotFraction = quizMascotFraction(reached, total);
       return {
         w: CW,
         h: 36,
         draw: (x, y) => {
-          this.fillRR(x, y + 32, CW, 4, 2, "rgba(255,255,255,0.12)");
-          this.fillRR(x, y + 32, CW * fraction, 4, 2, this.accent);
+          const mascotX = 14 + (CW - 28) * mascotFraction;
+          this.fillRR(x, y + 32, CW, lineH, lineH / 2, trackColor);
+          this.fillRR(x, y + 32, mascotX, lineH, lineH / 2, progressColor);
           ctx.save();
           ctx.globalAlpha *= 0.7;
           this.drawLine("🏁", x + CW, y + 18, 18, this.font(400, 18), "#fff", "right");
           ctx.restore();
           const mountAt = this.timeline.questions[0]?.mountAt ?? 0;
-          this.drawMascot(x + CW * fraction, y + 32, 28, 24, settings.progressMascot, settings.progressMascotMedia, {
-            kind: "walk",
+          this.drawMascot(x + 14 + (CW - 28) * mascotFraction, y + 32, 28, 24, settings.progressMascot, settings.progressMascotMedia, {
+            kind: settings.progressMascotMotion ?? "walk",
             phase: (t - mountAt) / 1200,
           });
         },
@@ -675,10 +692,10 @@ export class FrameRenderer {
                 ? this.good
                 : this.bad
               : current
-                ? this.accent
+                ? progressColor
                 : i < reached
-                  ? withAlpha(this.accent, 0.35)
-                  : "rgba(255,255,255,0.14)";
+                  ? withAlpha(progressColor, 0.35)
+                  : (settings.progressTrackColor ?? "rgba(255,255,255,0.14)");
             const ix = x + i * (w + gap);
             const r = dot ? h / 2 : 2;
             if (current) this.fillRing(ix, y, w, h, r, 2, "rgba(255,255,255,0.5)");
@@ -692,8 +709,15 @@ export class FrameRenderer {
       w: CW,
       h: 6,
       draw: (x, y) => {
-        this.fillRR(x, y, CW, 6, 3, "rgba(255,255,255,0.12)");
-        if (fraction > 0) this.fillRR(x, y, CW * fraction, 6, 3, this.accent);
+        this.fillRR(x, y, CW, 6, 3, trackColor);
+        if (fraction > 0 && style === "colorful") {
+          ctx.save();
+          this.rr(x, y, CW * fraction, 6, 3);
+          ctx.clip();
+          ctx.fillStyle = this.colorfulGradient(x, x + CW * fraction);
+          ctx.fillRect(x, y, CW * fraction, 6);
+          ctx.restore();
+        } else if (fraction > 0) this.fillRR(x, y, CW * fraction, 6, 3, progressColor);
       },
     };
   }
@@ -893,10 +917,13 @@ export class FrameRenderer {
   private meterBox(run: QuestionRun, t: number): Box {
     const { ctx } = this;
     const size = 64;
-    const style = this.quiz.settings.progressStyle;
+    const style = timerProgressStyle(this.quiz.settings);
+    const showNumber = this.quiz.settings.showTimerNumber !== false;
     const pulse = this.quiz.settings.progressPulse;
     const st = this.meterState(run, t);
-    const tint = st.urgent ? this.bad : this.accent;
+    const progressColor = this.quiz.settings.progressColor ?? this.accent;
+    const trackColor = this.quiz.settings.progressTrackColor ?? "rgba(255,255,255,0.12)";
+    const tint = st.urgent ? this.bad : progressColor;
     const phase = this.pulsePhase(run, t);
     const cyc = phase - Math.floor(phase);
 
@@ -918,7 +945,8 @@ export class FrameRenderer {
     const countFont = this.font(700, size * 0.34);
     const countLh = size * 0.34 * 1.5;
     const count = `${st.secondsLeft}`;
-    const countW = this.measure(count, countFont);
+    const countW = showNumber ? this.measure(count, countFont) : 0;
+    const countGap = showNumber ? 8 : 0;
 
     if (style === "ring") {
       // TimerRing: `.animate-urgent` blinks the whole ring once it's urgent.
@@ -930,20 +958,20 @@ export class FrameRenderer {
           const cx = x + size / 2;
           const cy = y + size / 2;
           ctx.lineWidth = stroke;
-          ctx.strokeStyle = "rgba(255,255,255,0.12)";
+          ctx.strokeStyle = trackColor;
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
           ctx.stroke();
           if (st.fraction > 0.001) {
             // `transition: stroke 0.3s ease` when it turns urgent.
-            ctx.strokeStyle = mixColor(this.accent, this.bad, st.urgent ? clamp01((t - st.urgentSince) / 300) : 0);
+            ctx.strokeStyle = mixColor(progressColor, this.bad, st.urgent ? clamp01((t - st.urgentSince) / 300) : 0);
             ctx.lineCap = "round";
             ctx.beginPath();
             ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * st.fraction);
             ctx.stroke();
             ctx.lineCap = "butt";
           }
-          this.drawLine(
+          if (showNumber) this.drawLine(
             count,
             cx,
             cy - size * 0.24,
@@ -956,16 +984,23 @@ export class FrameRenderer {
       });
     }
 
-    if (style === "bar") {
+    if (style === "bar" || style === "colorful") {
       const trackW = size * 2.4;
       const trackH = Math.max(6, size * 0.14);
       const h = Math.max(countLh, trackH);
-      return wrap(countW + 8 + trackW, h, (x, y) => {
-        this.drawLine(count, x, y + (h - countLh) / 2, countLh, countFont, tint, "left");
-        const tx = x + countW + 8;
+      return wrap(countW + countGap + trackW, h, (x, y) => {
+        if (showNumber) this.drawLine(count, x, y + (h - countLh) / 2, countLh, countFont, tint, "left");
+        const tx = x + countW + countGap;
         const ty = y + (h - trackH) / 2;
-        this.fillRR(tx, ty, trackW, trackH, trackH / 2, "rgba(255,255,255,0.12)");
-        if (st.fraction > 0) this.fillRR(tx, ty, trackW * st.fraction, trackH, trackH / 2, tint);
+        this.fillRR(tx, ty, trackW, trackH, trackH / 2, trackColor);
+        if (st.fraction > 0 && style === "colorful") {
+          ctx.save();
+          this.rr(tx, ty, trackW * st.fraction, trackH, trackH / 2);
+          ctx.clip();
+          ctx.fillStyle = this.colorfulGradient(tx, tx + trackW * st.fraction);
+          ctx.fillRect(tx, ty, trackW * st.fraction, trackH);
+          ctx.restore();
+        } else if (st.fraction > 0) this.fillRR(tx, ty, trackW * st.fraction, trackH, trackH / 2, tint);
       });
     }
 
@@ -976,13 +1011,13 @@ export class FrameRenderer {
         ctx.save();
         this.rr(x, y, w, h, h / 2);
         ctx.clip();
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
+        ctx.fillStyle = trackColor;
         ctx.fillRect(x, y, w, h);
         ctx.globalAlpha *= 0.35;
         ctx.fillStyle = tint;
         ctx.fillRect(x, y, w * st.fraction, h);
         ctx.restore();
-        this.drawLine(count, x + w / 2, y + (h - countLh) / 2, countLh, countFont, tint, "center");
+        if (showNumber) this.drawLine(count, x + w / 2, y + (h - countLh) / 2, countLh, countFont, tint, "center");
       });
     }
 
@@ -994,18 +1029,18 @@ export class FrameRenderer {
       const g = Math.max(2, size * 0.05);
       const stepsW = METER_STEPS * sw + (METER_STEPS - 1) * g;
       const h = Math.max(countLh, sh);
-      return wrap(countW + 8 + stepsW, h, (x, y) => {
-        this.drawLine(count, x, y + (h - countLh) / 2, countLh, countFont, tint, "left");
+      return wrap(countW + countGap + stepsW, h, (x, y) => {
+        if (showNumber) this.drawLine(count, x, y + (h - countLh) / 2, countLh, countFont, tint, "left");
         for (let i = 0; i < METER_STEPS; i++) {
           ctx.save();
           ctx.globalAlpha *= i < lit ? 1 : 0.6;
           this.fillRR(
-            x + countW + 8 + i * (sw + g),
+            x + countW + countGap + i * (sw + g),
             y + (h - sh) / 2,
             sw,
             sh,
             dot ? sw / 2 : 2,
-            i < lit ? tint : "rgba(255,255,255,0.14)",
+            i < lit ? tint : (this.quiz.settings.progressTrackColor ?? "rgba(255,255,255,0.14)"),
           );
           ctx.restore();
         }
@@ -1017,27 +1052,29 @@ export class FrameRenderer {
     const glyph = size * 0.5;
     const mFont = this.font(700, size * 0.3);
     const mLh = size * 0.3 * 1.5;
-    const mW = this.measure(count, mFont);
+    const mW = showNumber ? this.measure(count, mFont) : 0;
     const h = Math.max(mLh, glyph * 1.5);
     const celebrate = t >= run.revealAt && run.correct;
-    return wrap(mW + 8 + track, h, (x, y) => {
-      this.drawLine(count, x, y + (h - mLh) / 2, mLh, mFont, tint, "left");
-      const tx = x + mW + 8;
+    return wrap(mW + countGap + track, h, (x, y) => {
+      if (showNumber) this.drawLine(count, x, y + (h - mLh) / 2, mLh, mFont, tint, "left");
+      const tx = x + mW + countGap;
       const base = y + (h - glyph * 1.5) / 2 + glyph * 1.5;
-      const lineH = Math.max(2, size * 0.04);
-      this.fillRR(tx, base - lineH, track, lineH, lineH / 2, "rgba(255,255,255,0.16)");
+      const lineH = progressThickness(this.quiz.settings.progressThickness);
+      this.fillRR(tx, base - lineH, track, lineH, lineH / 2, trackColor);
+      const geometry = timerMascotGeometry(st.fraction, track, glyph);
+      this.fillRR(tx, base - lineH, geometry.fillPx, lineH, lineH / 2, tint);
       ctx.save();
       ctx.globalAlpha *= 0.7;
       this.drawLine("🏁", tx + track, base - glyph * 0.7, glyph * 0.7, this.font(400, glyph * 0.7), "#fff", "right");
       ctx.restore();
       this.drawMascot(
-        tx + (1 - st.fraction) * track,
+        tx + glyph / 2 + geometry.travelPx,
         base,
         glyph,
         glyph,
         this.quiz.settings.progressMascot,
         this.quiz.settings.progressMascotMedia,
-        celebrate ? { kind: "dance", phase: (t - run.revealAt) / 600 } : { kind: "walk", phase },
+        celebrate ? { kind: "dance", phase: (t - run.revealAt) / 600 } : { kind: this.quiz.settings.progressMascotMotion ?? "walk", phase },
       );
     });
   }
@@ -1050,7 +1087,7 @@ export class FrameRenderer {
     glyph: number,
     character: string | undefined,
     media: MediaRef | undefined,
-    anim: { kind: "walk" | "dance"; phase: number },
+    anim: { kind: "walk" | "bounce" | "float" | "still" | "dance"; phase: number },
   ) {
     const p = anim.phase - Math.floor(anim.phase);
     let ty: number;
@@ -1059,6 +1096,16 @@ export class FrameRenderer {
     if (anim.kind === "walk") {
       ty = keyframes([0, -0.22, 0], p, easeInOut) * box;
       rot = keyframes([-7, 7, -7], p, easeInOut);
+    } else if (anim.kind === "bounce") {
+      ty = keyframes([0, -0.42, 0], p, easeInOut) * box;
+      rot = 0;
+      sc = keyframes([0.96, 1.06, 0.96], p, easeInOut);
+    } else if (anim.kind === "float") {
+      ty = keyframes([0.08, -0.22, 0.08], p, easeInOut) * box;
+      rot = keyframes([-3, 3, -3], p, easeInOut);
+    } else if (anim.kind === "still") {
+      ty = 0;
+      rot = 0;
     } else {
       ty = keyframes([0, -0.45, 0, -0.45, 0], p, easeInOut) * box;
       rot = keyframes([0, -20, 0, 20, 0], p, easeInOut);
@@ -2208,6 +2255,16 @@ export class FrameRenderer {
   private rr(x: number, y: number, w: number, h: number, r: number) {
     this.ctx.beginPath();
     this.rrPath(x, y, w, h, r);
+  }
+
+  private colorfulGradient(fromX: number, toX: number): CanvasGradient {
+    const gradient = this.ctx.createLinearGradient(fromX, 0, toX, 0);
+    gradient.addColorStop(0, "#22d3ee");
+    gradient.addColorStop(0.24, "#8b5cf6");
+    gradient.addColorStop(0.48, "#ec4899");
+    gradient.addColorStop(0.72, "#f97316");
+    gradient.addColorStop(1, "#facc15");
+    return gradient;
   }
 
   private fillRR(x: number, y: number, w: number, h: number, r: number, color: string) {

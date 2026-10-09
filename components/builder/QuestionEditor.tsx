@@ -5,7 +5,7 @@ import { themeInk } from "@/lib/themeInk";
 
 import { useEffect, useRef, useState } from "react";
 import type { CelebrationAnimation, Cue, CueSlot, FontChoice, Question, QuestionKind, QuestionLayout, Quiz, Theme } from "@/types/quiz";
-import { CELEBRATION_ANIMATIONS, celebrationMotionMs } from "@/lib/celebration";
+import { CELEBRATION_ANIMATIONS, celebrationMotionMs, celebrationPieceCount, usesPhotoAssembly } from "@/lib/celebration";
 import { convertKind } from "@/lib/factory";
 import { imageFromTransfer, MediaError, putImage } from "@/lib/media";
 import { FONT_GROUPS, fontFamily } from "@/lib/themes";
@@ -445,6 +445,25 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 }}
               />
             </Field>
+            {usesPhotoAssembly(question.celebration.animation ?? "confetti") && (
+              <Field label="Pieces / butterflies" hint="How many small image cards fly in and combine (4–25).">
+                <Input
+                  type="number"
+                  min={4}
+                  max={25}
+                  step={1}
+                  value={celebrationPieceCount(question.celebration.pieces)}
+                  onChange={(event) => {
+                    const pieces = Number(event.target.value);
+                    if (!Number.isFinite(pieces)) return;
+                    onChange({
+                      ...question,
+                      celebration: { ...question.celebration!, pieces: celebrationPieceCount(pieces) },
+                    });
+                  }}
+                />
+              </Field>
+            )}
           </>
         )}
       </div>
@@ -482,9 +501,13 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
             placeholder="Use default"
             onChange={(event) => {
               const raw = event.target.value;
+              const value = Number(raw);
               onChange({
                 ...question,
-                timerSeconds: raw === "" ? undefined : Number(raw) === 0 ? null : Number(raw),
+                // Empty/zero means "use the quiz countdown". The quiz-wide
+                // Timer setting is the single place that disables countdowns,
+                // keeping every question kind consistent.
+                timerSeconds: raw === "" || !Number.isFinite(value) || value <= 0 ? undefined : value,
               });
             }}
           />

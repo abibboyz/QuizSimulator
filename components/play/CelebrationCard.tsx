@@ -8,6 +8,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import {
   animatesCelebrationFromAnswer,
   celebrationAnimation,
+  celebrationPieceCount,
   hidesCelebrationBox,
   celebrationMotionMs,
   celebrationView,
@@ -88,6 +89,7 @@ export function CelebrationCard({
           animation={animation}
           durationMs={question.celebration?.durationMs}
           boxed={!imageOnly}
+          pieces={question.celebration?.pieces}
           className={`relative z-10 w-fit max-w-full ${shell} text-center ${imageOnly ? "" : "border border-ink-500 bg-ink-900"}`}
           style={imageOnly ? undefined : { boxShadow: "0 0 0 1px var(--accent-line), 0 16px 36px -18px rgb(0 0 0 / 0.55)" }}
         >
@@ -131,6 +133,7 @@ function RevealTravelCard({
   animation,
   durationMs,
   boxed,
+  pieces,
   className,
   style,
   children,
@@ -140,6 +143,7 @@ function RevealTravelCard({
   animation: CelebrationAnimation;
   durationMs?: number;
   boxed: boolean;
+  pieces?: number;
   className: string;
   style?: CSSProperties;
   children: ReactNode;
@@ -184,7 +188,7 @@ function RevealTravelCard({
       {...entrance}
     >
       {isPhotoAssembly(animation) ? (
-        <PhotoAssembly animation={animation} durationMs={durationMs} boxed={boxed}>{children}</PhotoAssembly>
+        <PhotoAssembly animation={animation} durationMs={durationMs} boxed={boxed} pieces={pieces}>{children}</PhotoAssembly>
       ) : children}
     </motion.div>
   );
@@ -209,14 +213,20 @@ function PhotoAssembly({
   animation,
   durationMs,
   boxed,
+  pieces,
   children,
 }: {
   animation: PhotoAssemblyAnimation;
   durationMs?: number;
   boxed: boolean;
+  pieces?: number;
   children: ReactNode;
 }) {
   const duration = celebrationMotionMs(animation, durationMs) / 1000;
+  const count = celebrationPieceCount(pieces);
+  const columns = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / columns);
+  const maxDelay = Math.min(0.7, duration * 0.2);
   return (
     <div className="relative">
       <motion.div
@@ -226,25 +236,27 @@ function PhotoAssembly({
       >
         {children}
       </motion.div>
-      {Array.from({ length: 9 }, (_, index) => {
-        const col = index % 3;
-        const row = Math.floor(index / 3);
+      {Array.from({ length: count }, (_, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        const colCenter = (columns - 1) / 2;
+        const rowCenter = (rows - 1) / 2;
         const clipPath = boxed
           ? "inset(0% 0% 0% 0%)"
-          : `inset(${row * 33.333}% ${(2 - col) * 33.333}% ${(2 - row) * 33.333}% ${col * 33.333}%)`;
-        const angle = index / 9 * Math.PI * 2;
+          : `inset(${row / rows * 100}% ${(columns - col - 1) / columns * 100}% ${(rows - row - 1) / rows * 100}% ${col / columns * 100}%)`;
+        const angle = index / count * Math.PI * 2;
         const initial = animation === "bubbles"
-          ? { x: (col - 1) * 42, y: 230 + row * 38, scale: 0.18, rotate: 0, borderRadius: "50%" }
+          ? { x: (col - colCenter) * 42, y: 230 + row * 38, scale: 0.18, rotate: 0, borderRadius: "50%" }
           : animation === "butterfly"
-            ? { x: (col < 1 ? -1 : 1) * (boxed ? 330 + row * 70 : 210 + row * 45), y: Math.sin(index * 1.7) * (boxed ? 210 : 120), scale: boxed ? 0.12 : 0.45, rotate: (col < 1 ? -1 : 1) * 38, rotateY: (col < 1 ? -1 : 1) * 72, borderRadius: "18%" }
+            ? { x: (col <= colCenter ? -1 : 1) * (boxed ? 330 + row * 70 : 210 + row * 45), y: Math.sin(index * 1.7) * (boxed ? 210 : 120), scale: boxed ? 0.1 : 0.38, rotate: (col <= colCenter ? -1 : 1) * 38, rotateY: (col <= colCenter ? -1 : 1) * 72, borderRadius: "70% 25% 70% 25%" }
             : animation === "curtain-assemble"
               ? { x: 0, y: (col % 2 ? 1 : -1) * (260 + row * 40), scale: 1, rotate: 0, borderRadius: "0%" }
               : animation === "flip-assemble"
-                ? { x: (col - 1) * 35, y: (row - 1) * 28, scale: 0.8, rotate: 0, rotateY: index % 2 ? 90 : -90, borderRadius: "0%" }
+                ? { x: (col - colCenter) * 35, y: (row - rowCenter) * 28, scale: 0.8, rotate: 0, rotateY: index % 2 ? 90 : -90, borderRadius: "0%" }
                 : animation === "zoom-assemble"
-                  ? { x: (col - 1) * 55, y: (row - 1) * 42, scale: 2.8, rotate: 0, borderRadius: "0%" }
+                  ? { x: (col - colCenter) * 55, y: (row - rowCenter) * 42, scale: 2.8, rotate: 0, borderRadius: "0%" }
                   : animation === "mosaic-assemble"
-                    ? { x: (index % 2 ? 1 : -1) * (90 + col * 35), y: (row - 1) * 120, scale: 0.55, rotate: (index - 4) * 11, borderRadius: "0%" }
+                    ? { x: (index % 2 ? 1 : -1) * (90 + col * 35), y: (row - rowCenter) * 120, scale: 0.55, rotate: (index - (count - 1) / 2) * 11, borderRadius: "0%" }
                     : animation === "glass-assemble"
                       ? { x: Math.cos(angle) * 240, y: Math.sin(angle) * 190, scale: 0.7, rotate: index * 47, borderRadius: "0%" }
                       : { x: Math.cos(angle) * (animation === "spiral-assemble" ? 330 : 280), y: Math.sin(angle) * (animation === "spiral-assemble" ? 260 : 220), scale: 0.22, rotate: animation === "spiral-assemble" ? index * 95 : index * 34, borderRadius: "0%" };
@@ -278,7 +290,7 @@ function PhotoAssembly({
             style={{ clipPath, transformPerspective: 900, transformStyle: "preserve-3d", filter: "drop-shadow(0 8px 10px rgb(0 0 0 / 0.22))" }}
             initial={{ ...initial, opacity: 0 }}
             animate={{ ...pieceMotion, borderRadius: "0%", opacity: [0, 1, 1, 0] }}
-            transition={{ duration, delay: index * 0.055, times: [0, 0.1, 0.86, 1], ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: Math.max(0.6, duration - maxDelay), delay: count === 1 ? 0 : index / (count - 1) * maxDelay, times: [0, 0.1, 0.86, 1], ease: [0.22, 1, 0.36, 1] }}
           >
             {children}
           </motion.div>

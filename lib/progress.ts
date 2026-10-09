@@ -4,16 +4,29 @@
  * runs under `node --test`, which strips types but can't resolve the `@/` alias.
  */
 
-import type { ProgressPulse, ProgressStyle, QuizProgressStyle } from "@/types/quiz";
+import type { ProgressPulse, ProgressStyle, QuizProgressStyle, QuizSettings } from "@/types/quiz";
+
+export const COLORFUL_PROGRESS_GRADIENT = "linear-gradient(90deg, #22d3ee 0%, #8b5cf6 24%, #ec4899 48%, #f97316 72%, #facc15 100%)";
 
 export const PROGRESS_STYLES: { id: ProgressStyle; label: string; hint: string }[] = [
   { id: "ring", label: "Ring", hint: "A circle that empties clockwise" },
   { id: "bar", label: "Bar", hint: "A straight track that drains" },
+  { id: "colorful", label: "Colorful", hint: "A bright rainbow-gradient bar" },
   { id: "segments", label: "Segments", hint: "Blocks that go dark one by one" },
   { id: "pill", label: "Pill", hint: "Compact capsule with the count inside" },
   { id: "dots", label: "Dots", hint: "A row of lights going out" },
   { id: "mascot", label: "Mascot", hint: "A character racing the clock to the finish" },
 ];
+
+/**
+ * The single timer-style decision used by preview, web/mobile play, host and
+ * video. When the configured shared mascot is visible on a timed question it
+ * belongs to the countdown, so every surface renders the synchronized mascot
+ * rail instead of a separate question-position rail.
+ */
+export function timerProgressStyle(settings: Pick<QuizSettings, "progressStyle" | "quizProgressStyle">): ProgressStyle {
+  return settings.quizProgressStyle === "mascot" ? "mascot" : settings.progressStyle;
+}
 
 /**
  * Suggested characters for the mascot meter. Not a closed set — the setting
@@ -23,6 +36,13 @@ export const PROGRESS_STYLES: { id: ProgressStyle; label: string; hint: string }
 export const MASCOTS = ["🐛", "🐝", "🐞", "🦋", "🐜", "🦗", "🐌", "🕷️", "🦀", "🐢", "🦔", "🐿️"];
 
 export const DEFAULT_MASCOT = "🐛";
+export const DEFAULT_PROGRESS_THICKNESS = 4;
+
+/** Keeps hand-edited/imported thickness values usable and visually bounded. */
+export function progressThickness(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_PROGRESS_THICKNESS;
+  return Math.min(20, Math.max(1, Math.round(value!)));
+}
 
 /** Blank or whitespace-only settings fall back rather than rendering nothing. */
 export function mascotOf(value: string | undefined): string {
@@ -61,6 +81,27 @@ export function pulseMs(fraction: number): number {
   return Math.round(420 + safe * 900);
 }
 
+/** Timer mascot travel: full time is the start, zero time is the finish. */
+export function timerMascotTravelFraction(fractionRemaining: number): number {
+  const safe = Number.isFinite(fractionRemaining) ? Math.min(1, Math.max(0, fractionRemaining)) : 0;
+  return 1 - safe;
+}
+
+/**
+ * One geometry source for the countdown mascot and its fill endpoint.
+ * `fillPx` is the character's centre, so the coloured rail can never lag
+ * behind or run ahead after a question remount.
+ */
+export function timerMascotGeometry(fractionRemaining: number, trackPx: number, glyphPx: number) {
+  const elapsed = timerMascotTravelFraction(fractionRemaining);
+  const travelPx = elapsed * Math.max(0, trackPx - glyphPx);
+  // During travel the fill meets the character's centre. At completion it
+  // closes the final half-character gap so the whole finish line carries the
+  // timer's final colour.
+  const fillPx = elapsed >= 1 ? Math.max(0, trackPx) : travelPx + glyphPx / 2;
+  return { elapsed, travelPx, fillPx };
+}
+
 export const PULSE_CLASS: Record<ProgressPulse, string> = {
   none: "",
   heartbeat: "animate-meter-heartbeat",
@@ -72,6 +113,7 @@ export const PULSE_CLASS: Record<ProgressPulse, string> = {
 
 export const QUIZ_PROGRESS_STYLES: { id: QuizProgressStyle; label: string; hint: string }[] = [
   { id: "bar", label: "Bar", hint: "A track that fills as you go" },
+  { id: "colorful", label: "Colorful", hint: "A rainbow-gradient track that fills as you go" },
   { id: "segments", label: "Segments", hint: "One block per question, coloured by how it went" },
   { id: "dots", label: "Dots", hint: "One dot per question, coloured by how it went" },
   { id: "mascot", label: "Mascot", hint: "A character walking the length of the quiz" },
@@ -87,6 +129,17 @@ export const MAX_PROGRESS_SEGMENTS = 20;
 export function quizProgressFraction(answered: number, total: number): number {
   if (!Number.isFinite(answered) || !Number.isFinite(total) || total <= 0) return 0;
   return Math.min(1, Math.max(0, answered / total));
+}
+
+/**
+ * Position of a mascot racing from the first question to the last. Unlike a
+ * filled completion bar, question 1 belongs at the starting line: for a
+ * five-question quiz the positions are 0%, 25%, 50%, 75%, 100%.
+ */
+export function quizMascotFraction(reached: number, total: number): number {
+  if (!Number.isFinite(reached) || !Number.isFinite(total) || total <= 0) return 0;
+  if (total === 1) return 1;
+  return Math.min(1, Math.max(0, (reached - 1) / (total - 1)));
 }
 
 /**

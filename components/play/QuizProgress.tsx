@@ -1,7 +1,7 @@
 "use client";
 
-import type { MediaRef, QuizProgressStyle } from "@/types/quiz";
-import { quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
+import type { MascotMotion, MediaRef, QuizProgressStyle } from "@/types/quiz";
+import { COLORFUL_PROGRESS_GRADIENT, progressThickness, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion } from "@/lib/progress";
 import { MascotFigure } from "@/components/play/MascotFigure";
 
 interface Props {
@@ -16,6 +16,10 @@ interface Props {
   style: QuizProgressStyle;
   mascot?: string;
   mascotMedia?: MediaRef;
+  mascotMotion?: MascotMotion;
+  color?: string;
+  trackColor?: string;
+  thickness?: number;
   narrow?: boolean;
 }
 
@@ -27,7 +31,7 @@ interface Props {
  * run of right and wrong at a glance — the one piece of standing feedback that
  * isn't a number going up.
  */
-export function QuizProgress({ index, total, outcomes = [], style, mascot, mascotMedia, narrow = false }: Props) {
+export function QuizProgress({ index, total, outcomes = [], style, mascot, mascotMedia, mascotMotion, color, trackColor, thickness, narrow = false }: Props) {
   if (style === "none" || total <= 0) return null;
 
   const answered = outcomes.length;
@@ -42,13 +46,16 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
   const meter = { role: "progressbar" as const, "aria-valuemin": 0, "aria-valuemax": total, "aria-valuenow": reached, "aria-label": label };
 
   if (style === "mascot") {
+    const mascotFraction = quizMascotFraction(reached, total);
+    const lineHeight = progressThickness(thickness);
+    const mascotPosition = `calc(14px + ${mascotFraction * 100}% - ${mascotFraction * 28}px)`;
     return (
       <div className={shell} {...meter}>
         <div className="relative h-9">
-          <div className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-white/12" />
+          <div className="absolute inset-x-0 bottom-0 rounded-full" style={{ height: lineHeight, background: trackColor ?? "rgba(255,255,255,0.12)" }} />
           <div
-            className="absolute bottom-0 h-1 rounded-full transition-[width] duration-300 ease-out"
-            style={{ width: `${fraction * 100}%`, background: "var(--accent)" }}
+            className="absolute bottom-0 rounded-full transition-[width] duration-300 ease-out"
+            style={{ width: mascotPosition, height: lineHeight, background: color ?? "var(--accent)" }}
           />
           <span aria-hidden className="absolute bottom-0 right-0 text-lg leading-none opacity-70">
             🏁
@@ -56,9 +63,9 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
           <span
             aria-hidden
             className="absolute bottom-1 grid h-7 w-7 place-items-center transition-[left] duration-300 ease-out"
-            style={{ left: `${fraction * 100}%`, transform: "translateX(-50%)" }}
+            style={{ left: mascotPosition, transform: "translateX(-50%)" }}
           >
-            <MascotFigure character={mascot} media={mascotMedia} size={24} />
+            <MascotFigure character={mascot} media={mascotMedia} motion={mascotMotion} size={24} />
           </span>
         </div>
       </div>
@@ -81,10 +88,10 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
               ? "var(--color-good)"
               : "var(--color-bad)"
             : current
-              ? "var(--accent)"
+              ? (color ?? "var(--accent)")
               : i < reached
-                ? "var(--accent-line)"
-                : "rgba(255,255,255,0.14)";
+                ? (color ?? "var(--accent-line)")
+                : (trackColor ?? "rgba(255,255,255,0.14)");
 
           return (
             <span
@@ -102,10 +109,10 @@ export function QuizProgress({ index, total, outcomes = [], style, mascot, masco
 
   return (
     <div className={shell} {...meter}>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/12">
+      <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: trackColor ?? "rgba(255,255,255,0.12)" }}>
         <div
           className="h-full rounded-full transition-[width] duration-300 ease-out"
-          style={{ width: `${fraction * 100}%`, background: "var(--accent)" }}
+          style={{ width: `${fraction * 100}%`, background: style === "colorful" ? COLORFUL_PROGRESS_GRADIENT : (color ?? "var(--accent)") }}
         />
       </div>
     </div>

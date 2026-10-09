@@ -8,14 +8,19 @@ import {
   METER_STEPS,
   PROGRESS_PULSES,
   PROGRESS_STYLES,
+  progressThickness,
   MAX_PROGRESS_SEGMENTS,
   pulseMs,
   PULSE_CLASS,
   QUIZ_PROGRESS_STYLES,
   quizProgressFraction,
+  quizMascotFraction,
   quizProgressReached,
   showsPerQuestion,
   showsProgressBar,
+  timerMascotTravelFraction,
+  timerMascotGeometry,
+  timerProgressStyle,
   withProgressBarDefault,
 } from "./progress.ts";
 import { DEFAULT_SETTINGS } from "@/lib/factory";
@@ -28,6 +33,7 @@ test("every style and pulse is offered exactly once", () => {
   assert.deepEqual(pulses, [...new Set(pulses)], "no duplicate pulses");
   assert.equal(styles[0], "ring", "the existing look stays the default");
   assert.equal(pulses[0], "none");
+  assert.ok(styles.includes("colorful"), "the colorful timer bar is offered as its own shape");
 });
 
 test("every pulse has a class, and none is genuinely still", () => {
@@ -67,10 +73,45 @@ test("the mascot falls back rather than rendering nothing", () => {
   assert.equal(mascotOf(undefined), DEFAULT_MASCOT, "and so does a quiz saved before this existed");
 });
 
+test("the timer mascot travels from start to finish as time drains", () => {
+  assert.equal(timerMascotTravelFraction(1), 0, "full time starts at the left");
+  assert.equal(timerMascotTravelFraction(0.5), 0.5, "half time is the middle");
+  assert.equal(timerMascotTravelFraction(0), 1, "zero reaches the finish");
+  assert.equal(timerMascotTravelFraction(NaN), 1, "a bad timer fails safe at the finish");
+});
+
+test("the timer fill endpoint is always the mascot centre", () => {
+  for (const fraction of [1, 0.75, 0.5, 0.25]) {
+    const geometry = timerMascotGeometry(fraction, 160, 32);
+    assert.equal(geometry.fillPx, geometry.travelPx + 16);
+  }
+  assert.equal(timerMascotGeometry(0, 160, 32).fillPx, 160, "the completed timer fills the whole track");
+});
+
+test("mascot bar thickness keeps the existing default and clamps imports", () => {
+  assert.equal(progressThickness(undefined), 4);
+  assert.equal(progressThickness(9), 9);
+  assert.equal(progressThickness(0), 1);
+  assert.equal(progressThickness(99), 20);
+  assert.equal(progressThickness(Number.NaN), 4);
+});
+
 test("the mascot is a real style with suggestions behind it", () => {
   assert.ok(PROGRESS_STYLES.some((s) => s.id === "mascot"));
   assert.ok(MASCOTS.length > 0);
   assert.ok(MASCOTS.includes(DEFAULT_MASCOT), "the default should be offered in the picker");
+});
+
+test("every surface resolves the same synchronized timer style", () => {
+  assert.equal(timerProgressStyle({ progressStyle: "bar", quizProgressStyle: "mascot" }), "mascot");
+  assert.equal(timerProgressStyle({ progressStyle: "colorful", quizProgressStyle: "bar" }), "colorful");
+});
+
+test("timer numbers stay visible by default and can be hidden globally", () => {
+  assert.equal(DEFAULT_SETTINGS.showTimerNumber, true);
+  const legacy: Pick<QuizSettings, "showTimerNumber"> = {};
+  assert.equal(legacy.showTimerNumber !== false, true, "older quizzes retain the visible countdown");
+  assert.equal(({ showTimerNumber: false } satisfies Pick<QuizSettings, "showTimerNumber">).showTimerNumber !== false, false);
 });
 
 /* ------------------------------------------------------- quiz-wide progress */
@@ -90,6 +131,13 @@ test("quiz progress advances with every current question and reaches full on the
   assert.equal(quizProgressReached(2, 4, 5), 4, "recorded outcomes win when they are further ahead");
   assert.equal(quizProgressReached(4, 0, 5), 5, "the final question fills the meter");
   assert.equal(quizProgressReached(10, 20, 5), 5, "malformed imported state cannot overflow the meter");
+});
+
+test("the quiz mascot starts at the line, reaches the middle on question 3 of 5, and finishes on the last", () => {
+  assert.equal(quizMascotFraction(1, 5), 0);
+  assert.equal(quizMascotFraction(3, 5), 0.5);
+  assert.equal(quizMascotFraction(5, 5), 1);
+  assert.equal(quizMascotFraction(1, 1), 1, "a one-question race is already at its finish");
 });
 
 test("every quiz-progress style and question kind uses the shared reached-question count", () => {
@@ -120,6 +168,7 @@ test("hiding the meter is a real choice, and every style is listed once", () => 
   const ids = QUIZ_PROGRESS_STYLES.map((s) => s.id);
   assert.deepEqual(ids, [...new Set(ids)]);
   assert.ok(ids.includes("none"), "an author must be able to turn it off");
+  assert.ok(ids.includes("colorful"), "quiz progress also offers the colorful bar");
 });
 
 test("the progress header is on by default and only an explicit false hides it", () => {

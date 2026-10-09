@@ -6,9 +6,12 @@ interface Props {
   secondsLeft: number;
   urgent: boolean;
   size?: number;
+  color?: string;
+  trackColor?: string;
+  showNumber?: boolean;
 }
 
-export function TimerRing({ fraction, secondsLeft, urgent, size = 88 }: Props) {
+export function TimerRing({ fraction, secondsLeft, urgent, size = 88, color, trackColor, showNumber = true }: Props) {
   const stroke = size * 0.09;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -27,7 +30,7 @@ export function TimerRing({ fraction, secondsLeft, urgent, size = 88 }: Props) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.12)"
+          stroke={trackColor ?? "rgba(255,255,255,0.12)"}
           strokeWidth={stroke}
         />
         <circle
@@ -35,7 +38,7 @@ export function TimerRing({ fraction, secondsLeft, urgent, size = 88 }: Props) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={urgent ? "var(--color-bad)" : "var(--accent)"}
+          stroke={urgent ? "var(--color-bad)" : (color ?? "var(--accent)")}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -43,12 +46,12 @@ export function TimerRing({ fraction, secondsLeft, urgent, size = 88 }: Props) {
           style={{ transition: "stroke 0.3s ease" }}
         />
       </svg>
-      <div
+      {showNumber && <div
         className="absolute inset-0 grid place-items-center font-bold tabular-nums"
         style={{ fontSize: size * 0.32, color: urgent ? "var(--color-bad)" : "var(--color-ink-100)" }}
       >
         {secondsLeft}
-      </div>
+      </div>}
     </div>
   );
 }

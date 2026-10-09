@@ -26,6 +26,19 @@ export const CELEBRATION_ANIMATIONS: { id: CelebrationAnimation; label: string }
   { id: "none", label: "Smooth fade" },
 ];
 
+export const PHOTO_ASSEMBLY_ANIMATIONS: readonly CelebrationAnimation[] = [
+  "bubbles", "butterfly", "stars", "glass-assemble", "mosaic-assemble",
+  "spiral-assemble", "curtain-assemble", "flip-assemble", "zoom-assemble",
+];
+
+export function usesPhotoAssembly(animation: CelebrationAnimation): boolean {
+  return PHOTO_ASSEMBLY_ANIMATIONS.includes(animation);
+}
+
+export function celebrationPieceCount(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.min(25, Math.max(4, Math.round(value!))) : 9;
+}
+
 /** The card pops in, then the chosen animation starts. */
 export const CELEBRATION_FOLLOW_MS = POP_IN.durationMs;
 

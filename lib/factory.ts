@@ -25,11 +25,16 @@ export const DEFAULT_SETTINGS: QuizSettings = {
   autoAdvanceOnTimeout: true,
   timeoutRevealSeconds: 5,
   showAutoAdvanceCountdown: false,
+  autoAdvanceMessage: "Out of time — {action} in {seconds}s",
+  autoAdvanceBarStyle: "line",
   // Sensible motion + sound out of the box; authors can clear or swap any slot.
   cues: { ...POST_PACK_CUES },
   progressStyle: "ring",
   progressPulse: "none",
+  showTimerNumber: true,
+  progressThickness: 4,
   progressMascot: "\u{1F41B}",
+  progressMascotMotion: "walk",
   quizProgressStyle: "bar",
   showProgressBar: true,
 };

@@ -2,6 +2,15 @@ import type { QuizSettings } from "@/types/quiz";
 import type { AnswerRecord } from "@/lib/store/playSession";
 import type { Phase } from "@/lib/store/playSession";
 
+export const DEFAULT_AUTO_ADVANCE_MESSAGE = "Out of time — {action} in {seconds}s";
+
+/** Inserts the live destination and countdown while leaving all other text and emoji untouched. */
+export function autoAdvanceMessage(template: string | undefined, action: string, seconds: number): string {
+  return (template ?? DEFAULT_AUTO_ADVANCE_MESSAGE)
+    .replaceAll("{action}", action)
+    .replaceAll("{seconds}", String(Math.max(0, Math.ceil(seconds))));
+}
+
 /**
  * Whether solo play should show the answer for a beat and then carry on by
  * itself.
