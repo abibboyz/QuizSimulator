@@ -189,6 +189,7 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
     ...question,
     kind,
     layout: question.layout === "big-text" ? "grid" : question.layout,
-    options: capTextOptions(base),
+    // A lone answer is a single-answer slide and is always saved correct.
+    options: capTextOptions(base.length === 1 ? [{ ...base[0], correct: true }] : base),
   };
 }

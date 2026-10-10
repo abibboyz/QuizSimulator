@@ -24,11 +24,29 @@ export function imageChoiceColumns(count: number): number {
   return Math.min(n, Math.round(Math.sqrt(n)));
 }
 
+/**
+ * Tile width and left offset inside a grid `width` wide. A lone picture (a
+ * single-answer slide) keeps the size of one of a pair, centred, instead of
+ * filling the whole row and pushing the page past the screen.
+ */
+export function imageChoiceTile(count: number, width: number, gapPx: number): { w: number; offset: number } {
+  const cols = imageChoiceColumns(count);
+  if (Math.floor(count) <= 1) {
+    const w = (width - gapPx) / 2;
+    return { w, offset: (width - w) / 2 };
+  }
+  return { w: (width - gapPx * (cols - 1)) / cols, offset: 0 };
+}
+
 export function imageChoiceGridStyle(count: number, gapPx: number): {
   display: "grid";
   gap: string;
   gridTemplateColumns: string;
+  justifyContent?: "center";
 } {
+  if (Math.floor(count) <= 1) {
+    return { display: "grid", gap: `${gapPx}px`, gridTemplateColumns: `minmax(0, calc((100% - ${gapPx}px) / 2))`, justifyContent: "center" };
+  }
   return {
     display: "grid",
     gap: `${gapPx}px`,

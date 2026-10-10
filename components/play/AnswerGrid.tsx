@@ -1,6 +1,6 @@
 "use client";
 
-import { answerTextStyle, isUnscoredImage } from "@/lib/answerPresentation";
+import { answerTextStyle, isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
 import { fontFamily } from "@/lib/themes";
 import type { ElementMotion, LoopMotionSet, Question, Theme } from "@/types/quiz";
 import { DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, readableTextOn, withAlpha } from "@/lib/themes";
@@ -311,7 +311,7 @@ export function AnswerGrid({
     );
   }
 
-  const columns = narrow || question.layout === "list" ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+  const columns = narrow || question.layout === "list" || isSingleAnswer(question) ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
 
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";
 

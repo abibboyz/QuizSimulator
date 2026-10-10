@@ -1,8 +1,29 @@
-import type { AnswerTextStyle, Question, Theme } from "../types/quiz.ts";
+import type { AnswerTextStyle, Question, QuizSettings, Theme } from "../types/quiz.ts";
 
-/** Image slides with no marked answer run without scoring or reveal feedback. */
+const SINGLE_ANSWER_KINDS: readonly Question["kind"][] = ["multiple-choice", "multi-select", "image-choice", "reveal"];
+
+/**
+ * A question with exactly one answer (no new field): the answer is always
+ * correct, a tap or a timeout always celebrates, and it is never scored.
+ * True/false stays a fixed pair, so it never qualifies.
+ */
+export function isSingleAnswer(question: Pick<Question, "kind" | "options"> | undefined): boolean {
+  return !!question && SINGLE_ANSWER_KINDS.includes(question.kind) && question.options.length === 1;
+}
+
+/** Image slides with no marked answer run without scoring or reveal feedback. A single answer wins over this path. */
 export function isUnscoredImage(question: Pick<Question, "kind" | "options"> | undefined): boolean {
-  return question?.kind === "image-choice" && !question.options.some((option) => option.correct);
+  return question?.kind === "image-choice" && !isSingleAnswer(question) && !question.options.some((option) => option.correct);
+}
+
+/** Counts toward score, streak, Correct x/y and accuracy. */
+export function isScored(question: Pick<Question, "kind" | "options"> | undefined): boolean {
+  return !isUnscoredImage(question) && !isSingleAnswer(question);
+}
+
+/** Whether the answer is shown with feedback right away: the quiz setting, or always for a single answer. */
+export function showsFeedback(settings: Pick<QuizSettings, "revealAfterEach">, question: Pick<Question, "kind" | "options"> | undefined): boolean {
+  return settings.revealAfterEach || isSingleAnswer(question);
 }
 
 /** Undefined fields inherit; false explicitly turns off an inherited style. */
