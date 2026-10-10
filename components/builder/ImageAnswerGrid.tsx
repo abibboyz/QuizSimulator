@@ -1,5 +1,7 @@
 "use client";
 
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
+import { answerColorPresets } from "@/lib/ageBands";
 import {
   DndContext,
   KeyboardSensor,
@@ -275,6 +277,9 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
                       ),
                     )
                   }
+                  onColor={(color) =>
+                    commit(latest.current.question.options.map((item) => (item.id === option.id ? { ...item, color } : item)))
+                  }
                 />
               ))}
             </div>
@@ -316,6 +321,7 @@ function ImageTile({
   disabled,
   onSelect,
   onText,
+  onColor,
 }: {
   option: Option;
   index: number;
@@ -323,6 +329,7 @@ function ImageTile({
   disabled: boolean;
   onSelect: () => void;
   onText: (text: string) => void;
+  onColor: (color: string | undefined) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: option.id });
 
@@ -373,6 +380,10 @@ function ImageTile({
         disabled={disabled}
         className="focus-ring mt-1 w-full rounded-lg border border-ink-700 bg-ink-900/70 px-1.5 py-1 text-center text-xs text-ink-100 placeholder:text-ink-500"
       />
+      {/* No tile to colour on a picture answer: the answer colour tints its caption lettering when an answer text style is on. */}
+      <span className="mt-1 self-end">
+        <ColorSwatch label={`Caption colour for image ${index + 1}`} value={option.color} fallback="#e9ebf4" onChange={onColor} compact presets={answerColorPresets()} />
+      </span>
     </div>
   );
 }

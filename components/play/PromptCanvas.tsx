@@ -8,6 +8,7 @@ import { createPromptDrawing } from "@/lib/promptRenderer";
 import { loadImage } from "@/lib/videoExport/assets";
 import { frameSource } from "@/lib/videoExport/animatedImage";
 import type { LoadedImage } from "@/lib/videoExport/renderer";
+import { loadCartoonFont, resolveTextStyle } from "@/lib/textStyle";
 
 /** The same measured drawing is used by live preview, both play modes and video. */
 export function PromptCanvas({ question, theme, elapsed, typed }: { question: Question; theme: Theme; elapsed: number; typed: number }) {
@@ -17,6 +18,10 @@ export function PromptCanvas({ question, theme, elapsed, typed }: { question: Qu
   const imageRef = question.promptStyle?.box?.backgroundStyle === "image" ? question.promptStyle.box.image : undefined;
   const prompt = question.prompt;
   const style = question.promptStyle;
+  const lettering = resolveTextStyle(theme.promptTextStyle);
+  // A picture fill for the letters (any styled preset), loaded like the frame picture.
+  const fillRef = lettering?.image;
+  const fillKey = fillRef ? (fillRef.kind === "stored" ? `s:${fillRef.id}` : `u:${fillRef.url}`) : "";
 
   useEffect(() => {
     const canvas = ref.current;
@@ -25,6 +30,7 @@ export function PromptCanvas({ question, theme, elapsed, typed }: { question: Qu
     if (!ctx) return;
     let active = true;
     let picture: LoadedImage | null = null;
+    let fillPicture: LoadedImage | null = null;
     const startedAt = performance.now();
     const abort = new AbortController();
     const release = (image: LoadedImage | null) => {
@@ -51,13 +57,21 @@ export function PromptCanvas({ question, theme, elapsed, typed }: { question: Qu
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.scale(canvas.width / drawing.width, canvas.width / drawing.width);
-      drawing.draw(clock.current.elapsed, clock.current.typed, picture ? { ...picture, source: frameSource(picture, performance.now() - startedAt) } : undefined);
+      drawing.draw(
+        clock.current.elapsed,
+        clock.current.typed,
+        picture ? { ...picture, source: frameSource(picture, performance.now() - startedAt) } : undefined,
+        fillPicture ? { ...fillPicture, source: frameSource(fillPicture, performance.now() - startedAt) } : undefined,
+      );
     };
     redraw.current = draw;
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
     draw();
-    void document.fonts.load(`${style?.italic ? "italic " : ""}${style?.bold === false ? 400 : 700} 30px ${family}`).then(() => {
+    void Promise.all([
+      document.fonts.load(`${style?.italic ? "italic " : ""}${style?.bold === false ? 400 : 700} 30px ${family}`),
+      resolveTextStyle(theme.promptTextStyle) ? loadCartoonFont() : undefined,
+    ]).then(() => {
       if (!active) return;
       drawing = createPromptDrawing(ctx, { prompt, promptStyle: style }, theme, family);
       draw();
@@ -73,8 +87,20 @@ export function PromptCanvas({ question, theme, elapsed, typed }: { question: Qu
         animatePicture();
       });
     }
-    return () => { active = false; abort.abort(); release(picture); cancelAnimationFrame(frame); observer.disconnect(); redraw.current = null; };
-  }, [prompt, style, theme, imageRef]);
+    const fillMedia = resolveTextStyle(theme.promptTextStyle)?.image;
+    if (fillMedia) {
+      void loadImage(fillMedia, abort.signal).then((loaded) => {
+        if (!active) { release(loaded); return; }
+        fillPicture = loaded;
+        const animateFill = () => {
+          draw();
+          if (active && (fillPicture?.frames?.length ?? 0) > 1) frame = requestAnimationFrame(animateFill);
+        };
+        animateFill();
+      });
+    }
+    return () => { active = false; abort.abort(); release(picture); release(fillPicture); cancelAnimationFrame(frame); observer.disconnect(); redraw.current = null; };
+  }, [prompt, style, theme, imageRef, fillKey]);
 
   useEffect(() => {
     clock.current = { elapsed, typed };

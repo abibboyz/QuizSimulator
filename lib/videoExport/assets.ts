@@ -9,6 +9,7 @@ import { decodeAnimatedBlob } from "@/lib/videoExport/animatedImage";
 import type { MediaRef, Quiz } from "@/types/quiz";
 import { getMedia } from "@/lib/storage";
 import { imageRefs, mediaKey } from "@/lib/mediaRefs";
+import { loadCartoonFont, usesTextStyle } from "@/lib/textStyle";
 import type { FontSet, LoadedImage, RenderAssets } from "@/lib/videoExport/renderer";
 
 async function decodePicture(blob: Blob): Promise<LoadedImage> {
@@ -132,7 +133,12 @@ export async function loadAssets(
     const results = await Promise.allSettled(Array.from({ length: Math.min(6, refs.length) }, worker));
     const failure = results.find((result) => result.status === "rejected");
     if (failure?.status === "rejected") throw failure.reason;
-    const fonts = await exportWait(loadFonts(), signal, "Font loading");
+    // Styled lettering draws with the bundled cartoon face; wait for it before the first frame.
+    const fonts = await exportWait(
+      Promise.all([loadFonts(), usesTextStyle(quiz.theme) ? loadCartoonFont() : undefined]).then(([set]) => set),
+      signal,
+      "Font loading",
+    );
     return { assets: { images, fonts }, missingImages };
   } catch (error) {
     releaseAssets({ images, fonts: { sans: "", mono: "", display: "" } });

@@ -20,6 +20,7 @@ import { AGE_BANDS, OPTION_MARKERS, optionColor, themeAgeBand } from "@/lib/ageB
 import { Field, Input, Select } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
+import { TextStylePicker } from "@/components/builder/TextStylePicker";
 
 const FITS: { id: BgImageFit; label: string }[] = [
   { id: "cover", label: "Fill" },
@@ -212,8 +213,23 @@ export function ThemePanel({ theme, onChange }: Props) {
         summary={`${uniformColor ? "One colour" : "Per position"} · ${markerName}`}
         preview={tileColors.slice(0, 4).map((color, i) => <Dot key={i} color={color} />)}
       >
+        <div className="space-y-1.5">
+          <CheckRow
+            label="Hide bullets"
+            hint="Removes the shape, letter, number or icon marker from every answer."
+            checked={theme.hideAnswerMarkers === true}
+            onChange={(on) => onChange({ ...theme, hideAnswerMarkers: on || undefined })}
+          />
+          <CheckRow
+            label="Hide answer boxes"
+            hint="Text answers lose their card; only the text shows. Picks and correct/wrong show as a coloured bar, tint and ✓/✕."
+            checked={theme.hideAnswerBoxes === true}
+            onChange={(on) => onChange({ ...theme, hideAnswerBoxes: on || undefined })}
+          />
+        </div>
+
         <div className="flex items-center justify-between gap-2">
-          <SubHeading label="Tile colours" flush />
+          <SubHeading label="Tile colours" />
           {theme.optionColors && (
             <button
               type="button"
@@ -345,6 +361,11 @@ export function ThemePanel({ theme, onChange }: Props) {
           <Input value={theme.customFont ?? ""} placeholder="Font family name" onChange={(event) => onChange({ ...theme, customFont: event.target.value })} />
         </Field>}
 
+        <SubHeading label="Lettering style" />
+        <Note>Bubbly 3D cartoon lettering. Plain keeps the normal text. A question with its own Word Art keeps it.</Note>
+        <TextStylePicker label="Prompt text style" value={theme.promptTextStyle} onChange={(promptTextStyle) => onChange({ ...theme, promptTextStyle })} />
+        <TextStylePicker label="Answer text style" value={theme.answerTextStyle} onChange={(answerTextStyle) => onChange({ ...theme, answerTextStyle })} />
+
         <SubHeading label="Colours" />
         <div className="space-y-1.5">
           <ColorRow
@@ -434,6 +455,19 @@ function SubHeading({ label, flush = false }: { label: string; flush?: boolean }
 
 function Note({ children }: { children: ReactNode }) {
   return <p className="text-xs text-ink-500">{children}</p>;
+}
+
+/** A labelled on/off switch row (default off). */
+function CheckRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-ink-700 px-3 py-2">
+      <input type="checkbox" className="mt-0.5" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ink-100">{label}</span>
+        <span className="block text-[11px] text-ink-500">{hint}</span>
+      </span>
+    </label>
+  );
 }
 
 /** A named colour with its current state and a swatch to change it. */
