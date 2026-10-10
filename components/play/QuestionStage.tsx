@@ -6,7 +6,7 @@ import type { Question, QuizSettings, Theme } from "@/types/quiz";
 import { LoopMotion } from "@/components/play/LoopMotion";
 import { resolveLoops } from "@/lib/loopMotion";
 import { PromptCanvas } from "@/components/play/PromptCanvas";
-import { isUnscoredImage } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
 import { promptAnimationSpan } from "@/lib/promptDesign";
 import { promptPosition } from "@/lib/questionPresentation";
 import { promptAlign } from "@/lib/promptText";
@@ -145,7 +145,7 @@ export function QuestionStage({
       {(showCount || header) && <div className={`flex items-start gap-4 ${showCount ? "justify-between" : "justify-end"}`}>
         {showCount && <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
           Question {index + 1} of {total}
-          {question.kind === "multi-select" && <span className="ml-2 text-ink-400">· pick all that apply</span>}
+          {question.kind === "multi-select" && !isSingleAnswer(question) && <span className="ml-2 text-ink-400">· pick all that apply</span>}
           {question.kind === "image-choice" && <span className="ml-2 text-ink-400">· {isUnscoredImage(question) ? "look and decide" : "pick an image"}</span>}
           {question.kind === "reveal" && <span className="ml-2 text-ink-400">· pick a cover</span>}
         </span>}

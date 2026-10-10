@@ -1,6 +1,9 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 8 adds single-answer questions (exactly one answer on a non true/false
+ * question: always correct, celebrated, not scored). Older builds would
+ * reject the one-answer question, so such files are stamped 8.
  * 7 adds bubbly cartoon lettering for the prompt and answers (theme
  * promptTextStyle / answerTextStyle), plus hiding answer markers and answer
  * boxes. Absent, Plain or off draws exactly as before.
@@ -14,7 +17,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -24,6 +27,7 @@ export const SCHEMA_VERSION = 7;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.questions.some((q) => ["multiple-choice", "multi-select", "image-choice", "reveal"].includes(q.kind) && q.options.length === 1)) return 8;
   if (quiz.theme?.hideAnswerMarkers || quiz.theme?.hideAnswerBoxes || [quiz.theme?.promptTextStyle, quiz.theme?.answerTextStyle].some((style) => style && style.preset !== "plain")) return 7;
   if (quiz.theme?.answerStyle || quiz.questions.some((q) => q.answerStyle || q.promptStyle?.wordArtColors || q.promptStyle?.letterShape || q.promptStyle?.textAnimation?.unit === "letter" || (q.kind === "image-choice" && !q.options.some((o) => o.correct)))) return 6;
   if (quiz.questions.some((q) => q.promptStyle && (q.promptStyle.box || q.promptStyle.textShape || q.promptStyle.paragraphShape || q.promptStyle.fillEffect || q.promptStyle.textAnimation || q.promptStyle.letterSpacing !== undefined || q.promptStyle.lineSpacing !== undefined))) return 5;
@@ -659,8 +663,10 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
     if (!q.prompt.trim() && !hasPicture) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no prompt or image.` });
     }
-    if (q.options.length < 2) {
-      issues.push({ questionId: q.id, severity: "error", message: `${label} needs at least 2 answers.` });
+    // Single answer (lib/answerPresentation isSingleAnswer): one answer is enough, except true/false stays a pair.
+    const single = q.kind !== "true-false" && q.options.length === 1;
+    if (q.kind === "true-false" ? q.options.length < 2 : q.options.length < 1) {
+      issues.push({ questionId: q.id, severity: "error", message: q.kind === "true-false" ? `${label} needs at least 2 answers.` : `${label} needs at least 1 answer.` });
     }
     if (q.kind === "image-choice") {
       if (q.options.length > 100) {
@@ -671,11 +677,11 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
         });
       }
       const withMedia = q.options.filter((o) => o.media).length;
-      if (withMedia < 2) {
+      if (single ? withMedia < 1 : withMedia < 2) {
         issues.push({
           questionId: q.id,
           severity: "error",
-          message: `${label} needs at least 2 answers with images.`,
+          message: single ? `${label} needs a picture for its answer.` : `${label} needs at least 2 answers with images.`,
         });
       }
       const correctCount = q.options.filter((o) => o.correct).length;
@@ -698,11 +704,11 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
         });
       }
       const withMedia = q.options.filter((o) => o.media).length;
-      if (withMedia < 2) {
+      if (single ? withMedia < 1 : withMedia < 2) {
         issues.push({
           questionId: q.id,
           severity: "error",
-          message: `${label} needs at least 2 answers with images.`,
+          message: single ? `${label} needs a picture for its answer.` : `${label} needs at least 2 answers with images.`,
         });
       }
       const correctCount = q.options.filter((o) => o.correct).length;

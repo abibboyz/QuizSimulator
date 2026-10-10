@@ -1,6 +1,6 @@
 "use client";
 
-import { isUnscoredImage } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage, showsFeedback } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -209,19 +209,20 @@ function PlayView() {
     if (revealFiredRef.current === answerCount) return;
     revealFiredRef.current = answerCount;
 
-    if (answers[answerCount - 1].unscored) return;
+    if (answers[answerCount - 1].unscored && !answers[answerCount - 1].single) return;
     const correct = answers[answerCount - 1].correct;
     // A Reveal question's picture uncovers now; its sound rides alongside the
     // usual feedback. Same gate as the answer showing at all.
     const current = order[index];
-    if (current?.kind === "reveal" && quiz.settings.revealAfterEach && soundOn) {
+    const feedback = showsFeedback(quiz.settings, current);
+    if (current?.kind === "reveal" && feedback && soundOn) {
       playCue(resolveReveal(current).sound);
     }
     // With reveal-off the run only pauses here for 220ms before rolling on, so
     // a cue would flash a fraction of itself and get yanked. That setting means
     // "no feedback until the results screen" — a celebration is exactly the
     // feedback it is switched off to avoid.
-    const cue = quiz.settings.revealAfterEach ? activeCue(quiz, order[index], correct ? "correct" : "wrong") : null;
+    const cue = feedback ? activeCue(quiz, order[index], correct ? "correct" : "wrong") : null;
     if (cue) {
       showCue(cue, correct ? "correct" : "wrong", hidesImageBoxes(quiz.settings, current));
       return;
@@ -297,7 +298,7 @@ function PlayView() {
 
   // With instant reveal switched off, roll straight into the next question.
   useEffect(() => {
-    if (phase !== "revealed" || !quiz || (quiz.settings.revealAfterEach && !isUnscoredImage(question))) return;
+    if (phase !== "revealed" || !quiz || (showsFeedback(quiz.settings, question) && !isUnscoredImage(question))) return;
     const id = window.setTimeout(() => goNextRef.current(false), REVEAL_OFF_HOLD_MS);
     return () => window.clearTimeout(id);
   }, [phase, quiz, question]);
@@ -306,7 +307,7 @@ function PlayView() {
   // answer is shown for a beat and the quiz keeps going on its own — through to
   // the results screen if that was the last question.
   const advancingAfterTimeout = quiz
-    ? !isUnscoredImage(question) && shouldAutoAdvanceAfterTimeout(quiz.settings, phase, answers[answers.length - 1])
+    ? !isUnscoredImage(question) && shouldAutoAdvanceAfterTimeout({ ...quiz.settings, revealAfterEach: showsFeedback(quiz.settings, question) }, phase, answers[answers.length - 1])
     : false;
   const autoAdvanceReady = advancingAfterTimeout && (!question?.celebration?.enabled || celebrationReady);
   const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
@@ -330,8 +331,9 @@ function PlayView() {
       state.toggle(optionId);
       if (soundOn) playSelect();
 
-      // Single-answer questions lock in on click; multi-select waits for Submit.
-      if (state.order[state.index]?.kind !== "multi-select") {
+      // Single-answer questions lock in on click; multi-select waits for Submit
+      // (a lone multi-select answer behaves like multiple choice).
+      if (state.order[state.index]?.kind !== "multi-select" || isSingleAnswer(state.order[state.index])) {
         const elapsed = limit !== null ? countdown.elapsedMs : Date.now() - startedAtRef.current;
         usePlaySession.getState().submit(elapsed);
       }
@@ -536,12 +538,12 @@ function PlayView() {
 
           <div className="mt-8 flex justify-center gap-3">
             {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
-            {phase === "asking" && question.kind === "multi-select" && (
+            {phase === "asking" && question.kind === "multi-select" && !isSingleAnswer(question) && (
               <Button variant="primary" size="lg" disabled={!selected.length} onClick={submitAnswer}>
                 Submit answer
               </Button>
             )}
-            {phase === "revealed" && quiz.settings.revealAfterEach && (
+            {phase === "revealed" && showsFeedback(quiz.settings, question) && (
               <Button variant="primary" size="lg" onClick={advance}>
                 {index + 1 >= order.length ? "See results" : "Next question"} →
               </Button>
@@ -571,7 +573,9 @@ function PlayView() {
                 : phase === "asking"
                   ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Click an image"
-                    : `Press 1–${question.options.length} to answer`
+                    : isSingleAnswer(question)
+                      ? "Press 1 to answer"
+                      : `Press 1–${question.options.length} to answer`
                   : "Press Enter for the next question"}
             </p>
           )}
@@ -579,7 +583,7 @@ function PlayView() {
           {/* Mobile celebration stays centred in the visible phone frame;
               web view uses the viewport. Keep it outside the sliding question
               frame so that transform cannot move its fixed position. */}
-          {phase === "revealed" && quiz.settings.revealAfterEach && celebrationReady && !isUnscoredImage(question) && (
+          {phase === "revealed" && showsFeedback(quiz.settings, question) && celebrationReady && !isUnscoredImage(question) && (
             <CelebrationCard question={question} mode="solo" contained={mobile} hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
           )}
         </div>

@@ -2,7 +2,7 @@
 
 import { activeCue } from "@/lib/cues";
 import { CuePlayer } from "@/components/play/CuePlayer";
-import { isUnscoredImage } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -286,11 +286,13 @@ function HostQuestion({
 
   // Time's up: show the answer on its own. The short beat lets the room register
   // that the clock ran out before the answer lands.
+  // A single answer always celebrates when the clock runs out, auto-reveal or not.
+  const single = isSingleAnswer(question);
   useEffect(() => {
-    if (unscored || !autoReveal || !expired || revealed) return;
+    if (unscored || !(autoReveal || single) || !expired || revealed) return;
     const id = window.setTimeout(reveal, 600);
     return () => window.clearTimeout(id);
-  }, [unscored, autoReveal, expired, revealed, reveal]);
+  }, [unscored, autoReveal, single, expired, revealed, reveal]);
 
   // Hands-free run: roll on to the next question by itself.
   useEffect(() => {
