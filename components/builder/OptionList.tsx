@@ -22,8 +22,8 @@ import type { ReactNode } from "react";
 import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
 import { readableTextOn } from "@/lib/themes";
-import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { AnswerColorPicker, answerSwatches } from "@/components/builder/AnswerColorPicker";
+import { answerColorPresets, optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Input } from "@/components/ui/Field";
 import { ImageAnswerGrid } from "@/components/builder/ImageAnswerGrid";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
@@ -224,12 +224,13 @@ function OptionRow({
         style={{ background: bg, color: textColor ?? readableTextOn(bg) }}
       />
 
-      <AnswerColorPicker
-        label={`Colour for answer ${index + 1}`}
+      <ColorSwatch
+        label={`Tile colour for answer ${index + 1}`}
         value={option.color}
         fallback={optionColor(index, { band: ageBand, colors })}
-        swatches={answerSwatches(ageBand)}
         onChange={onColor}
+        compact
+        presets={answerColorPresets(ageBand)}
       />
 
       <button

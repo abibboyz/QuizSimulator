@@ -1,6 +1,7 @@
 "use client";
 
-import { AnswerColorPicker, answerSwatches } from "@/components/builder/AnswerColorPicker";
+import { ColorSwatch } from "@/components/ui/ColorSwatch";
+import { answerColorPresets } from "@/lib/ageBands";
 import {
   DndContext,
   KeyboardSensor,
@@ -276,12 +277,8 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
                       ),
                     )
                   }
-                  onCaptionColor={(captionColor) =>
-                    commit(
-                      latest.current.question.options.map((item) =>
-                        item.id === option.id ? { ...item, captionColor } : item,
-                      ),
-                    )
+                  onColor={(color) =>
+                    commit(latest.current.question.options.map((item) => (item.id === option.id ? { ...item, color } : item)))
                   }
                 />
               ))}
@@ -324,7 +321,7 @@ function ImageTile({
   disabled,
   onSelect,
   onText,
-  onCaptionColor,
+  onColor,
 }: {
   option: Option;
   index: number;
@@ -332,7 +329,7 @@ function ImageTile({
   disabled: boolean;
   onSelect: () => void;
   onText: (text: string) => void;
-  onCaptionColor: (color: string | undefined) => void;
+  onColor: (color: string | undefined) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: option.id });
 
@@ -374,24 +371,18 @@ function ImageTile({
           )}
         </span>
       </button>
-      <span className="mt-1 flex w-full items-center gap-1">
-        <input
-          value={option.text}
-          onChange={(event) => onText(event.target.value)}
-          onPointerDown={(event) => event.stopPropagation()}
-          placeholder="Text"
-          aria-label={`Optional text for image ${index + 1}`}
-          disabled={disabled}
-          className="focus-ring min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900/70 px-1.5 py-1 text-center text-xs text-ink-100 placeholder:text-ink-500"
-        />
-        {/* Image answers have no tile, so their colour tints the caption. */}
-        <AnswerColorPicker
-          label={`Caption colour for image ${index + 1}`}
-          value={option.captionColor}
-          fallback="#e9ebf4"
-          swatches={answerSwatches()}
-          onChange={onCaptionColor}
-        />
+      <input
+        value={option.text}
+        onChange={(event) => onText(event.target.value)}
+        onPointerDown={(event) => event.stopPropagation()}
+        placeholder="Text"
+        aria-label={`Optional text for image ${index + 1}`}
+        disabled={disabled}
+        className="focus-ring mt-1 w-full rounded-lg border border-ink-700 bg-ink-900/70 px-1.5 py-1 text-center text-xs text-ink-100 placeholder:text-ink-500"
+      />
+      {/* No tile to colour on a picture answer: the answer colour tints its caption lettering when an answer text style is on. */}
+      <span className="mt-1 self-end">
+        <ColorSwatch label={`Caption colour for image ${index + 1}`} value={option.color} fallback="#e9ebf4" onChange={onColor} compact presets={answerColorPresets()} />
       </span>
     </div>
   );

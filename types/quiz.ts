@@ -24,7 +24,7 @@ export const SCHEMA_VERSION = 7;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
-  if (quiz.theme?.hideAnswerMarkers || quiz.theme?.hideAnswerBoxes || quiz.questions.some((q) => q.options.some((o) => o.captionColor)) || [quiz.theme?.promptTextStyle, quiz.theme?.answerTextStyle].some((style) => style && style.preset !== "plain")) return 7;
+  if (quiz.theme?.hideAnswerMarkers || quiz.theme?.hideAnswerBoxes || [quiz.theme?.promptTextStyle, quiz.theme?.answerTextStyle].some((style) => style && style.preset !== "plain")) return 7;
   if (quiz.theme?.answerStyle || quiz.questions.some((q) => q.answerStyle || q.promptStyle?.wordArtColors || q.promptStyle?.letterShape || q.promptStyle?.textAnimation?.unit === "letter" || (q.kind === "image-choice" && !q.options.some((o) => o.correct)))) return 6;
   if (quiz.questions.some((q) => q.promptStyle && (q.promptStyle.box || q.promptStyle.textShape || q.promptStyle.paragraphShape || q.promptStyle.fillEffect || q.promptStyle.textAnimation || q.promptStyle.letterSpacing !== undefined || q.promptStyle.lineSpacing !== undefined))) return 5;
   if (quiz.questions.some((q) => q.celebration?.enabled)) return 4;
@@ -320,12 +320,6 @@ export interface Option {
    * `Theme.optionColors`, and then to the palette for its position.
    */
   color?: string;
-  /**
-   * Image and Reveal answers have no tile to colour, so their per-answer colour
-   * tints the caption instead. Kept apart from `color` so tile colours carried
-   * over from a converted text question never recolour existing captions.
-   */
-  captionColor?: string;
 }
 
 /** What to draw in the little badge on each answer tile. */

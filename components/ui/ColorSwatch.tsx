@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { contrastRatio } from "@/lib/themes";
 
 /** Below this, text stops being comfortably readable (WCAG AA for body text). */
@@ -21,6 +22,8 @@ interface Props {
   contrastAgainst?: string[];
   /** Drops the reset button to a hover affordance, for tight rows. */
   compact?: boolean;
+  /** Optional quick picks, offered in a small palette next to the picker (with "Reset to default"). */
+  presets?: string[];
 }
 
 /**
@@ -30,7 +33,7 @@ interface Props {
  * Unset is a real state, not the same as "happens to equal the default": it
  * means the element follows the theme, so switching age band re-colours it.
  */
-export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst, compact }: Props) {
+export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst, compact, presets }: Props) {
   const effective = value ?? fallback;
 
   const failing = (contrastAgainst ?? []).filter((bg) => {
@@ -80,6 +83,74 @@ export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst,
           compact ? "h-6 w-5" : "h-5 w-7"
         } ${value === undefined ? "border-ink-600 opacity-60" : "border-ink-400"}`}
       />
+
+      {presets && presets.length > 0 && <PresetPalette label={label} value={value} presets={presets} onChange={onChange} />}
+    </span>
+  );
+}
+
+/** A ▾ button opening quick colour picks plus an explicit "Reset to default". */
+function PresetPalette({ label, value, presets, onChange }: { label: string; value: string | undefined; presets: string[]; onChange: (value: string | undefined) => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
+    };
+    const esc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const chosen = value?.toLowerCase();
+  return (
+    <span ref={root} className="relative inline-flex" onPointerDown={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        aria-label={`${label} presets`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="focus-ring rounded px-0.5 text-[10px] leading-none text-ink-400 hover:text-ink-200"
+      >
+        ▾
+      </button>
+      {open && (
+        <span role="dialog" aria-label={`${label} presets`} className="absolute right-0 top-6 z-30 w-40 space-y-2 rounded-xl border border-ink-700 bg-ink-900 p-2 shadow-xl">
+          <span className="grid grid-cols-6 gap-1">
+            {Array.from(new Set(presets.map((c) => c.toLowerCase()))).map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Use ${color}`}
+                aria-pressed={chosen === color}
+                onClick={() => {
+                  onChange(color);
+                  setOpen(false);
+                }}
+                className={`focus-ring h-5 w-5 rounded ${chosen === color ? "ring-2 ring-white" : "border border-ink-700"}`}
+                style={{ background: color }}
+              />
+            ))}
+          </span>
+          <button
+            type="button"
+            disabled={value === undefined}
+            onClick={() => {
+              onChange(undefined);
+              setOpen(false);
+            }}
+            className="focus-ring w-full rounded-lg border border-ink-700 px-2 py-1 text-[11px] font-semibold text-ink-200 hover:bg-ink-800 disabled:opacity-40"
+          >
+            Reset to default
+          </button>
+        </span>
+      )}
     </span>
   );
 }

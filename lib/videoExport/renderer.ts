@@ -72,7 +72,7 @@ import {
 import { assemblyPieces, isPhotoAssemblyStyle, morphedPoints, pieceProgress, poseAt, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 import { frameSource } from "@/lib/videoExport/animatedImage";
-import { answerChrome, boxlessState, boxlessTextColor, feedbackBarColor, FEEDBACK_BAR, tintLettering } from "@/lib/answerChrome";
+import { answerChrome, boxlessFrame, FEEDBACK_BAR, tintLettering } from "@/lib/answerChrome";
 import { cartoonFamily, cartoonFont, paintStyledLines, resolveTextStyle, styledWrapWidth, wrapWords, type ResolvedTextStyle } from "@/lib/textStyle";
 
 /* ---------------------------------------------------------------- framing */
@@ -1260,20 +1260,11 @@ export class FrameRenderer {
     const r = 16;
     // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
     const boxless = answerChrome(theme).hideBoxes;
-    let markColor = textColor;
-    let bar: { color: string; alpha: number; glow: boolean } | null = null;
-    if (boxless) {
-      const colors = { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad };
-      const now = boxlessState({ revealed, correct: option.correct, picked: tile.isPicked });
-      const before = boxlessState({ revealed: false, correct: option.correct, picked: tile.isPicked });
-      markColor = revealed ? mixColor(boxlessTextColor(before, colors), boxlessTextColor(now, colors), rp) : colors.rest;
-      const barNow = feedbackBarColor(now, { correct: this.good, wrong: this.bad });
-      const barBefore = feedbackBarColor(before, { correct: this.good, wrong: this.bad });
-      if (revealed && barNow) bar = { color: barNow, alpha: barBefore ? 1 : rp, glow: now === "correct" };
-      else if (revealed && barBefore) bar = { color: barBefore, alpha: 1 - rp, glow: false };
-      else if (!revealed && barBefore) bar = { color: barBefore, alpha: pickP, glow: false };
-    }
-    const tileText = boxless ? markColor : textColor;
+    const frame = boxless
+      ? boxlessFrame({ revealed, rp, pickP, correct: option.correct, picked: tile.isPicked }, { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad }, mixColor)
+      : null;
+    const bar = frame?.bar;
+    const tileText = frame?.text ?? textColor;
 
     this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, x, y, w, h, () => this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
       if (!boxless) {
@@ -1475,7 +1466,7 @@ export class FrameRenderer {
                 const m = this.metrics(capFont);
                 ctx.font = capFont;
                 ctx.letterSpacing = "0px";
-                paintStyledLines(ctx, caption, { x: tx, width: colW, top: ry + boxH + 4, lineHeight: capLh, px: size, align: "center", ascent: m.ascent, descent: m.descent }, tintLettering(lettering, option.captionColor), i, this.letteringPicture(lettering));
+                paintStyledLines(ctx, caption, { x: tx, width: colW, top: ry + boxH + 4, lineHeight: capLh, px: size, align: "center", ascent: m.ascent, descent: m.descent }, tintLettering(lettering, option.color), i, this.letteringPicture(lettering));
               } else caption.forEach((line, li) =>
                 this.drawLine(
                   line,
@@ -1483,7 +1474,7 @@ export class FrameRenderer {
                   ry + boxH + 4 + li * capLh,
                   capLh,
                   capFont,
-                  option.captionColor ?? typography.color ?? this.promptColor,
+                  typography.color ?? this.promptColor,
                   "center",
                   0,
                   !!typography.underline,

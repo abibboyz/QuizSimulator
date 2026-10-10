@@ -15,10 +15,10 @@ import { REVEAL_TILE } from "@/lib/revealDraw";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { tileDelayMs } from "@/lib/playTiming";
 import { answerPoseAt, isRestPose, type Pose } from "@/lib/stageMotion";
+import { useMemo } from "react";
 import { resolveTextStyle } from "@/lib/textStyle";
 import { StyledText } from "@/components/play/StyledText";
-import { useMemo } from "react";
-import { answerChrome, boxlessState, boxlessTextColor, feedbackBarColor, FEEDBACK_BAR } from "@/lib/answerChrome";
+import { answerChrome, boxlessState, boxlessTextColor, feedbackBarColor, FEEDBACK_BAR, type BoxlessState } from "@/lib/answerChrome";
 import { themeInk } from "@/lib/themeInk";
 
 const HIDDEN_REVEAL_TILE = Object.freeze({ fit: "contain" as const, backdrop: "transparent" });
@@ -212,9 +212,9 @@ export function AnswerGrid({
                   )}
                 </span>
                 {option.text.trim() && (lettering ? (
-                  <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.captionColor} className={`mt-1 w-full ${captionText}`} />
+                  <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.color} className={`mt-1 w-full ${captionText}`} />
                 ) : (
-                  <span className={`mt-1 min-w-0 break-words ${captionText}`} style={option.captionColor ? { ...captionStyle, color: option.captionColor } : captionStyle}>
+                  <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
                     {option.text}
                   </span>
                 ))}
@@ -297,9 +297,9 @@ export function AnswerGrid({
                 )}
               </span>
               {option.text.trim() && (lettering ? (
-                <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.captionColor} className={`mt-1 w-full ${captionText}`} />
+                <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.color} className={`mt-1 w-full ${captionText}`} />
               ) : (
-                <span className={`mt-1 min-w-0 break-words ${captionText}`} style={option.captionColor ? { ...captionStyle, color: option.captionColor } : captionStyle}>
+                <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
                   {option.text}
                 </span>
               ))}
@@ -322,7 +322,7 @@ export function AnswerGrid({
         const marker = chrome.hideMarkers ? "" : optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
         const isPicked = selected.includes(option.id);
         const boxless = chrome.hideBoxes ? boxlessState({ revealed, correct: option.correct, picked: isPicked, unscored }) : null;
-        const boxlessBar = boxless ? feedbackBarColor(boxless, { correct: correctColor, wrong: wrongColor }) : null;
+        const boxlessBar = boxless && feedbackBarColor(boxless, { correct: correctColor, wrong: wrongColor });
 
         // Once revealed, the correct answer always lights up — including when
         // nobody picked it, which is the moment the room actually learns something.
@@ -404,27 +404,31 @@ export function AnswerGrid({
                 {option.correct ? "✓" : "✕"}
               </span>
             )}
-            {boxless && (
-              // Box-less feedback bar: white while picked, glowing correct colour, or the wrong colour.
-              <span
-                aria-hidden
-                data-feedback-bar={boxless}
-                className="pointer-events-none absolute rounded-full transition-all duration-200"
-                style={{
-                  left: FEEDBACK_BAR.inset,
-                  right: FEEDBACK_BAR.inset,
-                  bottom: FEEDBACK_BAR.bottom,
-                  height: FEEDBACK_BAR.height,
-                  background: boxlessBar ?? "transparent",
-                  boxShadow: boxless === "correct" && boxlessBar ? `0 0 ${FEEDBACK_BAR.glow}px ${boxlessBar}` : undefined,
-                  opacity: boxlessBar ? 1 : 0,
-                }}
-              />
-            )}
+            {boxless && <FeedbackBar state={boxless} color={boxlessBar} />}
           </button>
             </LoopMotion>
         );
       })}
     </div>
+  );
+}
+
+/** Hide answer boxes: the bar that carries picked / correct (glowing) / wrong once there's no card colour. */
+function FeedbackBar({ state, color }: { state: BoxlessState; color: string | null }) {
+  return (
+    <span
+      aria-hidden
+      data-feedback-bar={state}
+      className="pointer-events-none absolute rounded-full transition-all duration-200"
+      style={{
+        left: FEEDBACK_BAR.inset,
+        right: FEEDBACK_BAR.inset,
+        bottom: FEEDBACK_BAR.bottom,
+        height: FEEDBACK_BAR.height,
+        background: color ?? "transparent",
+        boxShadow: state === "correct" && color ? `0 0 ${FEEDBACK_BAR.glow}px ${color}` : undefined,
+        opacity: color ? 1 : 0,
+      }}
+    />
   );
 }

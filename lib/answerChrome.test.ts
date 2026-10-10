@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { answerChrome, boxlessState, boxlessTextColor, feedbackBarColor, lighten, tintLettering } from "./answerChrome.ts";
+import { answerChrome, boxlessFrame, boxlessState, boxlessTextColor, feedbackBarColor, lighten, tintLettering } from "./answerChrome.ts";
 import { schemaVersionFor, type Quiz } from "../types/quiz.ts";
 
 test("old quizzes (no flags) keep markers and boxes", () => {
@@ -47,10 +47,19 @@ test("per-answer colour becomes the lettering accent; unset leaves the preset al
   assert.equal(lighten("#ffffff", 0.3), "#ffffff");
 });
 
-test("schema: caption colours bump, tile colours (already supported) do not", () => {
+test("schema: per-answer colours (an existing field) never bump the version", () => {
   const q = (opt: object) => ({ id: "q", kind: "image-choice", prompt: "", layout: "grid", options: [{ id: "o", text: "", correct: true, ...opt }] }) as unknown as Quiz["questions"][number];
   const theme = {} as Quiz["theme"];
   const settings = {} as Quiz["settings"];
-  assert.equal(schemaVersionFor({ theme, settings, questions: [q({ captionColor: "#ff0000" })] }), 7);
   assert.ok(schemaVersionFor({ theme, settings, questions: [q({ color: "#ff0000" })] }) < 7);
+});
+
+test("boxlessFrame eases bar and text like the DOM transition", () => {
+  const mix = (a: string, b: string, t: number) => (a === b || t >= 1 ? b : t <= 0 ? a : `${a}->${b}@${t}`);
+  const colors = { rest: "#fff", correct: "#0f0", wrong: "#f00" };
+  assert.deepEqual(boxlessFrame({ revealed: false, rp: 0, pickP: 0, correct: true, picked: false }, colors, mix), { text: "#fff", bar: null });
+  assert.deepEqual(boxlessFrame({ revealed: false, rp: 0, pickP: 0.5, correct: false, picked: true }, colors, mix).bar, { color: "rgba(255,255,255,0.7)", alpha: 0.5, glow: false });
+  assert.deepEqual(boxlessFrame({ revealed: true, rp: 1, pickP: 1, correct: true, picked: false }, colors, mix), { text: "#0f0", bar: { color: "#0f0", alpha: 1, glow: true } });
+  assert.deepEqual(boxlessFrame({ revealed: true, rp: 1, pickP: 1, correct: false, picked: true }, colors, mix), { text: "#f00", bar: { color: "#f00", alpha: 1, glow: false } });
+  assert.deepEqual(boxlessFrame({ revealed: true, rp: 0.5, pickP: 1, correct: false, picked: false }, colors, mix), { text: "#fff", bar: null });
 });

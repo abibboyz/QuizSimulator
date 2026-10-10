@@ -51,6 +51,28 @@ export function boxlessTextColor(state: BoxlessState, colors: { rest: string; co
   return state === "correct" ? colors.correct : state === "wrong" ? colors.wrong : colors.rest;
 }
 
+/**
+ * One video frame of a box-less tile: text/mark colour and the bar, eased the
+ * way the DOM's `transition-all duration-200` eases them (`rp` = reveal
+ * progress, `pickP` = pick progress, both 0–1). `mix` is the renderer's colour lerp.
+ */
+export function boxlessFrame(
+  o: { revealed: boolean; rp: number; pickP: number; correct: boolean; picked: boolean },
+  colors: { rest: string; correct: string; wrong: string },
+  mix: (from: string, to: string, t: number) => string,
+): { text: string; bar: { color: string; alpha: number; glow: boolean } | null } {
+  const now = boxlessState({ revealed: o.revealed, correct: o.correct, picked: o.picked });
+  const before = boxlessState({ revealed: false, correct: o.correct, picked: o.picked });
+  const text = o.revealed ? mix(boxlessTextColor(before, colors), boxlessTextColor(now, colors), o.rp) : colors.rest;
+  const barNow = feedbackBarColor(now, colors);
+  const barBefore = feedbackBarColor(before, colors);
+  let bar: { color: string; alpha: number; glow: boolean } | null = null;
+  if (o.revealed && barNow) bar = { color: barNow, alpha: barBefore ? 1 : o.rp, glow: now === "correct" };
+  else if (o.revealed && barBefore) bar = { color: barBefore, alpha: 1 - o.rp, glow: false };
+  else if (!o.revealed && barBefore) bar = { color: barBefore, alpha: o.pickP, glow: false };
+  return { text, bar };
+}
+
 /* ------------------------------------------------------- per-answer colour */
 
 function hexRgb(hex: string): [number, number, number] | null {
