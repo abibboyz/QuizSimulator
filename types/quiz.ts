@@ -1,6 +1,9 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 7 adds bubbly cartoon lettering for the prompt and answers (theme
+ * promptTextStyle / answerTextStyle), plus hiding answer markers and answer
+ * boxes. Absent, Plain or off draws exactly as before.
  * 6 adds answer typography, custom Word Art colours, letter contours, and unscored images.
  * 5 adds prompt frames, curved text, paragraph layouts, and text sequencing.
  * 4 adds an optional per-question celebration card. Absent, or switched off,
@@ -11,7 +14,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -21,6 +24,7 @@ export const SCHEMA_VERSION = 6;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.theme?.hideAnswerMarkers || quiz.theme?.hideAnswerBoxes || quiz.questions.some((q) => q.options.some((o) => o.captionColor)) || [quiz.theme?.promptTextStyle, quiz.theme?.answerTextStyle].some((style) => style && style.preset !== "plain")) return 7;
   if (quiz.theme?.answerStyle || quiz.questions.some((q) => q.answerStyle || q.promptStyle?.wordArtColors || q.promptStyle?.letterShape || q.promptStyle?.textAnimation?.unit === "letter" || (q.kind === "image-choice" && !q.options.some((o) => o.correct)))) return 6;
   if (quiz.questions.some((q) => q.promptStyle && (q.promptStyle.box || q.promptStyle.textShape || q.promptStyle.paragraphShape || q.promptStyle.fillEffect || q.promptStyle.textAnimation || q.promptStyle.letterSpacing !== undefined || q.promptStyle.lineSpacing !== undefined))) return 5;
   if (quiz.questions.some((q) => q.celebration?.enabled)) return 4;
@@ -316,6 +320,12 @@ export interface Option {
    * `Theme.optionColors`, and then to the palette for its position.
    */
   color?: string;
+  /**
+   * Image and Reveal answers have no tile to colour, so their per-answer colour
+   * tints the caption instead. Kept apart from `color` so tile colours carried
+   * over from a converted text question never recolour existing captions.
+   */
+  captionColor?: string;
 }
 
 /** What to draw in the little badge on each answer tile. */
@@ -460,7 +470,35 @@ export type FontChoice = "sans" | "display" | "mono" | "georgia" | "arial" | "ve
 
 export type BgImageFit = "cover" | "contain" | "tile";
 
+/** Lettering style for prompt or answer text (lib/textStyle). `plain` is today's look. */
+export type TextStylePreset = "plain" | "bubble-pink" | "sunny-yellow" | "orange-pop" | "sky-blue" | "candy" | "custom";
+
+export interface TextStyleSetting {
+  preset: TextStylePreset;
+  /** Custom only: gradient top (lighter) and bottom (deeper) colours. */
+  top?: string;
+  bottom?: string;
+  /** Custom only: outline and extrusion colour. */
+  outline?: string;
+  /** Custom only: extrusion depth, 0 (flat) to 2; presets use 1. */
+  depth?: number;
+  /** Custom only: thin white rim around the outline; presets have it on. */
+  rim?: boolean;
+  /** Any non-plain preset: fill the letters with this picture instead of the gradient. */
+  image?: MediaRef;
+}
+
 export interface Theme {
+  /**
+   * Bubbly 3D lettering for the prompt and for answer text (and captions).
+   * Unset, or `plain`, keeps today's text exactly.
+   */
+  promptTextStyle?: TextStyleSetting;
+  answerTextStyle?: TextStyleSetting;
+  /** Hides the answer tiles' marker badge (shapes, letters, numbers, bullets, per-answer icons). Absent = shown. */
+  hideAnswerMarkers?: boolean;
+  /** Text answers drop their card background, ring and border; feedback moves to a bar + mark + text tint. Absent = boxes. */
+  hideAnswerBoxes?: boolean;
   /** Quiz-wide answer typography; questions can override individual fields. */
   answerStyle?: AnswerTextStyle;
   preset: ThemePreset;

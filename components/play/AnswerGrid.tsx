@@ -15,6 +15,11 @@ import { REVEAL_TILE } from "@/lib/revealDraw";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { tileDelayMs } from "@/lib/playTiming";
 import { answerPoseAt, isRestPose, type Pose } from "@/lib/stageMotion";
+import { resolveTextStyle } from "@/lib/textStyle";
+import { StyledText } from "@/components/play/StyledText";
+import { useMemo } from "react";
+import { answerChrome, boxlessState, boxlessTextColor, feedbackBarColor, FEEDBACK_BAR } from "@/lib/answerChrome";
+import { themeInk } from "@/lib/themeInk";
 
 const HIDDEN_REVEAL_TILE = Object.freeze({ fit: "contain" as const, backdrop: "transparent" });
 
@@ -115,6 +120,10 @@ export function AnswerGrid({
     textDecoration: typography.underline ? "underline" : "none",
     lineHeight: 1.5,
   };
+  // Bubbly lettering for answer text and captions (Plain = null keeps the text exactly as before).
+  const lettering = useMemo(() => resolveTextStyle(theme.answerTextStyle), [theme.answerTextStyle]);
+  // Hide bullets / hide boxes (lib/answerChrome). Both off = the tiles below render exactly as before.
+  const chrome = answerChrome(theme);
   const captionStyle = { ...textStyle, fontSize: `${(typography.fontSize ?? 14) / 728 * 100}cqw`, color: typography.color ?? "var(--prompt-color, #e9ebf4)" };
 
   // Reveal uses the same picture grid as image answers. Every tile shows one
@@ -202,11 +211,13 @@ export function AnswerGrid({
                     </span>
                   )}
                 </span>
-                {option.text.trim() && (
-                  <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
+                {option.text.trim() && (lettering ? (
+                  <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.captionColor} className={`mt-1 w-full ${captionText}`} />
+                ) : (
+                  <span className={`mt-1 min-w-0 break-words ${captionText}`} style={option.captionColor ? { ...captionStyle, color: option.captionColor } : captionStyle}>
                     {option.text}
                   </span>
-                )}
+                ))}
               </button>
             </LoopMotion>
             );
@@ -285,11 +296,13 @@ export function AnswerGrid({
                   </span>
                 )}
               </span>
-              {option.text.trim() && (
-                <span className={`mt-1 min-w-0 break-words ${captionText}`} style={captionStyle}>
+              {option.text.trim() && (lettering ? (
+                <StyledText text={option.text} style={lettering} align="center" colorIndex={index} fontSize={captionStyle.fontSize} tint={option.captionColor} className={`mt-1 w-full ${captionText}`} />
+              ) : (
+                <span className={`mt-1 min-w-0 break-words ${captionText}`} style={option.captionColor ? { ...captionStyle, color: option.captionColor } : captionStyle}>
                   {option.text}
                 </span>
-              )}
+              ))}
             </button>
             </LoopMotion>
           );
@@ -306,8 +319,10 @@ export function AnswerGrid({
     <div className={`grid w-full ${columns} ${gap}`} style={{ containerType: "inline-size" }} role={question.kind === "multi-select" ? "group" : undefined}>
       {question.options.map((option, index) => {
         const bg = optionColor(index, { band: ageBand, colors: theme.optionColors, override: option.color });
-        const marker = optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
+        const marker = chrome.hideMarkers ? "" : optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
         const isPicked = selected.includes(option.id);
+        const boxless = chrome.hideBoxes ? boxlessState({ revealed, correct: option.correct, picked: isPicked, unscored }) : null;
+        const boxlessBar = boxless ? feedbackBarColor(boxless, { correct: correctColor, wrong: wrongColor }) : null;
 
         // Once revealed, the correct answer always lights up — including when
         // nobody picked it, which is the moment the room actually learns something.
@@ -325,13 +340,14 @@ export function AnswerGrid({
             disabled={!interactive || unscored}
             onClick={() => onPick(option.id)}
             aria-pressed={isPicked}
+            data-answer-box={boxless ? "hidden" : undefined}
             className={`w-full h-full focus-ring relative flex items-center gap-3 overflow-hidden rounded-2xl text-left font-semibold transition-all duration-200 ${
               tileIn ? "animate-tile-in" : ""
             } ${PAD[mode]} ${TEXT[mode]} ${
               interactive ? "cursor-pointer hover:brightness-110 active:scale-[0.99]" : "cursor-default"
             } ${faded ? "opacity-35 saturate-50" : "opacity-100"} ${
-              isPicked && !revealed ? "ring-4 ring-white/70" : ""
-            } ${showWrong ? "ring-4 ring-white/40" : ""}`}
+              !boxless && isPicked && !revealed ? "ring-4 ring-white/70" : ""
+            } ${!boxless && showWrong ? "ring-4 ring-white/40" : ""}`}
             style={{
               // Tiles land one after another rather than all at once. Capped so a
               // six-answer question doesn't make the last one feel late.
@@ -339,14 +355,16 @@ export function AnswerGrid({
               // The correct tile's white ring and glow ship as one box-shadow:
               // Tailwind's ring is itself a box-shadow, so an inline one would
               // otherwise wipe it out. The glow follows the reveal colour.
-              boxShadow: showCorrect
+              boxShadow: boxless ? undefined : showCorrect
                 ? `0 0 0 4px #ffffff, 0 0 40px -6px ${withAlpha(correctColor, 0.9)}`
                 : undefined,
-              background: showCorrect ? correctColor : showWrong ? wrongColor : bg,
+              background: boxless ? "transparent" : showCorrect ? correctColor : showWrong ? wrongColor : bg,
               // Every state picks text that stays readable on whatever colour it
               // landed on — the reveal colours are author-settable now, so
               // hardcoding white here would break on a pale one.
-              color: showCorrect
+              color: boxless
+                ? boxlessTextColor(boxless, { rest: option.color ?? typography.color ?? themeInk(theme)[100], correct: correctColor, wrong: wrongColor })
+                : showCorrect
                 ? readableTextOn(correctColor)
                 : showWrong
                   ? readableTextOn(wrongColor)
@@ -375,12 +393,33 @@ export function AnswerGrid({
               </span>
             )}
 
-            <span className="min-w-0 flex-1 break-words">{option.text}</span>
+            {lettering ? (
+              <StyledText text={option.text} style={lettering} colorIndex={index} tint={boxless ? option.color : undefined} className="flex-1" />
+            ) : (
+              <span className="min-w-0 flex-1 break-words">{option.text}</span>
+            )}
 
             {!unscored && revealed && (option.correct || isPicked) && (
               <span aria-hidden className={mode === "preview" ? "text-xs" : "text-2xl"}>
                 {option.correct ? "✓" : "✕"}
               </span>
+            )}
+            {boxless && (
+              // Box-less feedback bar: white while picked, glowing correct colour, or the wrong colour.
+              <span
+                aria-hidden
+                data-feedback-bar={boxless}
+                className="pointer-events-none absolute rounded-full transition-all duration-200"
+                style={{
+                  left: FEEDBACK_BAR.inset,
+                  right: FEEDBACK_BAR.inset,
+                  bottom: FEEDBACK_BAR.bottom,
+                  height: FEEDBACK_BAR.height,
+                  background: boxlessBar ?? "transparent",
+                  boxShadow: boxless === "correct" && boxlessBar ? `0 0 ${FEEDBACK_BAR.glow}px ${boxlessBar}` : undefined,
+                  opacity: boxlessBar ? 1 : 0,
+                }}
+              />
             )}
           </button>
             </LoopMotion>

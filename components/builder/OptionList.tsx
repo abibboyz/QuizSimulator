@@ -23,7 +23,7 @@ import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/qui
 import { createOption } from "@/lib/factory";
 import { readableTextOn } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { ColorSwatch } from "@/components/ui/ColorSwatch";
+import { AnswerColorPicker, answerSwatches } from "@/components/builder/AnswerColorPicker";
 import { Input } from "@/components/ui/Field";
 import { ImageAnswerGrid } from "@/components/builder/ImageAnswerGrid";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
@@ -224,12 +224,12 @@ function OptionRow({
         style={{ background: bg, color: textColor ?? readableTextOn(bg) }}
       />
 
-      <ColorSwatch
-        label={`Tile colour for answer ${index + 1}`}
+      <AnswerColorPicker
+        label={`Colour for answer ${index + 1}`}
         value={option.color}
         fallback={optionColor(index, { band: ageBand, colors })}
+        swatches={answerSwatches(ageBand)}
         onChange={onColor}
-        compact
       />
 
       <button

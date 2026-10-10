@@ -224,8 +224,11 @@ function EditView() {
   }
 
   return (
-    <div className="min-h-dvh bg-ink-950 text-ink-100" style={themeVars(quiz.theme)}>
-      <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
+    // Fixed-height builder on desktop: the page never scrolls; each column below scrolls on its own
+    // (overflow-y-auto + overscroll-contain, min-h-0 so grid/flex children can shrink). Narrow screens
+    // stack the panels and the page scrolls between them, with each panel's own scroll contained.
+    <div className="min-h-dvh bg-ink-950 text-ink-100 lg:flex lg:h-dvh lg:flex-col lg:overflow-hidden" style={themeVars(quiz.theme)}>
+      <header className="sticky top-0 z-20 shrink-0 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3 px-4 py-3">
           <Link href="/" className="focus-ring rounded-lg px-2 py-1 text-sm text-ink-400 hover:text-ink-200">
             ← Quizzes
@@ -282,8 +285,8 @@ function EditView() {
         )}
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 px-4 py-5 lg:grid-cols-[19rem_minmax(0,1fr)_22rem]">
-        <aside className="space-y-3">
+      <main className="mx-auto grid w-full max-w-[1600px] gap-4 px-4 py-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[19rem_minmax(0,1fr)_22rem] lg:grid-rows-[minmax(0,1fr)]">
+        <aside data-builder-column="questions" className="max-h-[60dvh] min-h-0 space-y-3 overflow-y-auto overscroll-contain lg:max-h-none">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-ink-400">
               {quiz.questions.length} {quiz.questions.length === 1 ? "question" : "questions"}
@@ -326,7 +329,7 @@ function EditView() {
           {clipboardMessage && <p role="status" className={`text-xs ${clipboardError ? "text-bad" : "text-ink-300"}`}>{clipboardMessage}</p>}
         </aside>
 
-        <section className="glass min-w-0 rounded-2xl p-5">
+        <section data-builder-column="editor" className="glass max-h-[85dvh] min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded-2xl p-5 lg:max-h-none">
           {active ? (
             <QuestionEditor
               quiz={quiz}
@@ -340,8 +343,8 @@ function EditView() {
           )}
         </section>
 
-        <aside id="quiz-appearance-panel" className="scroll-mt-40 space-y-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto">
-          <div className="flex gap-1 rounded-xl border border-ink-700 bg-ink-900/50 p-1">
+        <aside id="quiz-appearance-panel" data-builder-column="panel" className="max-h-[85dvh] min-h-0 scroll-mt-40 space-y-3 overflow-y-auto overscroll-contain lg:max-h-none">
+          <div className="sticky top-0 z-10 flex gap-1 rounded-xl border border-ink-700 bg-ink-900 p-1">
             {(["preview", "theme", "settings", "animate"] as Tab[]).map((id) => (
               <button
                 key={id}
