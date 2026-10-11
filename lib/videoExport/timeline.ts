@@ -1,4 +1,4 @@
-import { isUnscoredImage, unscoredResult } from "../answerPresentation.ts";
+import { isScored, isSingleAnswer, isUnscoredImage, showsFeedback, unscoredResult } from "../answerPresentation.ts";
 /**
  * The whole solo run, laid out on a clock before a single frame is drawn.
  *
@@ -239,6 +239,9 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
 
   questions.forEach((question, index) => {
     const unscored = isUnscoredImage(question);
+    // Single answer: always celebrated (pick or timeout), feedback even with reveal-after-each off, never scored.
+    const single = isSingleAnswer(question);
+    const feedbackOn = showsFeedback(settings, question);
     const limitSeconds = timerFor(quiz, question);
     const thinkMs = limitSeconds !== null ? limitSeconds * 1000 : UNTIMED_THINK_MS;
 
@@ -280,8 +283,8 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     }
 
     const selectedIds = picks.map((p) => p.optionId);
-    const correct = !timedOut && isCorrect(question, selectedIds);
-    const result = unscored ? unscoredResult(streak) : scoreQuestion({
+    const correct = single || (!timedOut && isCorrect(question, selectedIds));
+    const result = unscored || single ? unscoredResult(streak) : scoreQuestion({
       correct,
       base: basePointsFor(quiz, question),
       timeLeftFraction: limitSeconds ? Math.max(0, 1 - msTaken / (limitSeconds * 1000)) : null,
@@ -294,21 +297,21 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     score += result.points;
     streak = result.streakAfter;
     bestStreak = Math.max(bestStreak, streak);
-    if (correct) correctCount += 1;
+    if (correct && !single) correctCount += 1;
 
     // Reveal feedback: an authored cue replaces the stock chime entirely.
-    const feedback = !unscored && settings.revealAfterEach ? activeCue(quiz, question, correct ? "correct" : "wrong") : null;
+    const feedback = !unscored && feedbackOn ? activeCue(quiz, question, correct ? "correct" : "wrong") : null;
     if (feedback) showCue(feedback, correct ? "correct" : "wrong", revealAt, question);
     else if (!unscored) audio.push({ at: revealAt, recipe: correct ? "correct" : "wrong" });
 
     // A Reveal question's picture uncovers with the answer, with its own sound (play page's reveal effect).
-    if (question.kind === "reveal" && settings.revealAfterEach) {
+    if (question.kind === "reveal" && feedbackOn) {
       const sound = resolveReveal(question).sound;
       if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
     }
 
     const holdSeconds = revealHoldSeconds(settings);
-    const timeoutBar = showsAutoAdvanceCountdown(settings) && !unscored && shouldAutoAdvanceAfterTimeout(settings, "revealed", {
+    const timeoutBar = showsAutoAdvanceCountdown(settings) && !unscored && shouldAutoAdvanceAfterTimeout({ ...settings, revealAfterEach: feedbackOn }, "revealed", {
       questionId: question.id,
       selectedIds,
       correct,
@@ -318,7 +321,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     });
     // A player who answered would be left to click on; the video carries on
     // after the same hold the timeout path uses.
-    const advanceAt = !unscored && settings.revealAfterEach
+    const advanceAt = !unscored && feedbackOn
       ? revealAt + celebrationDelayMs(question) + holdSeconds * 1000
       : revealAt + REVEAL_OFF_HOLD_MS;
 
@@ -384,7 +387,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
   /* ---- results */
   const resultsStart = clock;
   const outroCue = activeCue(quiz, undefined, "outro");
-  const scoredCount = questions.filter((q) => !isUnscoredImage(q)).length;
+  const scoredCount = questions.filter((q) => isScored(q)).length;
   const verdict = accuracyLabel(scoredCount ? correctCount / scoredCount : 0);
   let resultsEnd = resultsStart + RESULTS_HOLD_MS;
   if (outroCue) {

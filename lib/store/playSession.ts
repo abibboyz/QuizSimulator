@@ -1,6 +1,6 @@
 "use client";
 
-import { isUnscoredImage, unscoredResult } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage, unscoredResult } from "@/lib/answerPresentation";
 import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
@@ -17,6 +17,8 @@ export interface AnswerRecord {
   selectedIds: string[];
   correct: boolean;
   unscored?: boolean;
+  /** A single-answer question: celebrated, never scored (also carries `unscored`). */
+  single?: boolean;
   points: number;
   msTaken: number;
   timedOut: boolean;
@@ -144,11 +146,13 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     const question = order[index];
     if (!question) return;
 
-    const correct = !timedOut && isCorrect(question, selected);
+    // A single answer always celebrates — tapped or timed out — and is never scored.
+    const single = isSingleAnswer(question);
+    const correct = single || (!timedOut && isCorrect(question, selected));
     const limit = timerFor(quiz, question);
     const timeLeftFraction = limit ? Math.max(0, 1 - msTaken / (limit * 1000)) : null;
 
-    const unscored = isUnscoredImage(question);
+    const unscored = isUnscoredImage(question) || single;
     const result = unscored ? unscoredResult(state.streak) : scoreQuestion({
       correct,
       base: basePointsFor(quiz, question),
@@ -166,7 +170,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       lastResult: result,
       answers: [
         ...state.answers,
-        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut, ...(unscored ? { unscored: true } : {}) },
+        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut, ...(unscored ? { unscored: true } : {}), ...(single ? { single: true } : {}) },
       ],
     });
   },

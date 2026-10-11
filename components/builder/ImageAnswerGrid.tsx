@@ -66,7 +66,10 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
   );
 
   const commit = (options: Option[]) => {
-    const withCorrect = latest.current.question.kind === "image-choice" || options.some((option) => option.correct)
+    // A lone image is a single-answer slide: its tick is locked on.
+    const withCorrect = options.length === 1
+      ? [{ ...options[0], correct: true }]
+      : latest.current.question.kind === "image-choice" || options.some((option) => option.correct)
       ? options
       : options.map((option, index) => ({ ...option, correct: index === 0 }));
     const current = latest.current;
@@ -142,7 +145,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 
   const remove = (id: string) => {
     const options = latest.current.question.options;
-    if (options.length <= 2) return;
+    if (options.length <= 1) return;
     commit(options.filter((option) => option.id !== id));
   };
 
@@ -199,7 +202,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · {question.options.some((option) => option.correct) ? "one correct" : "no correct answer"}</span>
+          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · {count === 1 ? "Single answer · always celebrated, not scored" : question.options.some((option) => option.correct) ? "one correct" : "no correct answer"}</span>
         </span>
         <span className="flex items-center gap-1">
           {action}
@@ -225,7 +228,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
           </button>
         </span>
       </div>
-      {question.kind === "image-choice" && <button type="button" aria-pressed={!question.options.some((option) => option.correct)}
+      {question.kind === "image-choice" && count > 1 && <button type="button" aria-pressed={!question.options.some((option) => option.correct)}
         className="focus-ring rounded-lg border border-ink-700 px-3 py-1.5 text-xs text-ink-300" disabled={busy}
         onClick={() => commit(latest.current.question.options.map((option) => ({ ...option, correct: false })))}>No correct answer · timed image slide</button>}
       <p className="text-[11px] text-ink-500">
@@ -300,7 +303,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
           <button
             type="button"
             onClick={() => remove(selected.id)}
-            disabled={busy || count <= 2}
+            disabled={busy || count <= 1}
             className="focus-ring shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-ink-500 hover:text-bad disabled:opacity-25"
             aria-label="Remove selected image"
           >

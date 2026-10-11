@@ -131,6 +131,14 @@ test("validateQuiz: a Reveal question needs image answers and exactly one correc
   noPicture.options = noPicture.options.map((option) => ({ ...option, media: undefined }));
   assert.ok(validateQuiz(quiz([noPicture])).some((i) => /at least 2 answers with images/.test(i.message)));
 
+  // Single answer: one pictured answer is enough; without its picture it says so.
+  const single = revealQuestion();
+  single.options = [single.options[0]];
+  assert.deepEqual(validateQuiz(quiz([single])), []);
+  single.options = [{ ...single.options[0], media: undefined }];
+  assert.ok(validateQuiz(quiz([single])).some((i) => /needs a picture for its answer/.test(i.message)));
+  assert.ok(validateQuiz(quiz([{ ...single, options: [] }])).some((i) => /needs at least 1 answer\./.test(i.message)));
+
   const twoCorrect = revealQuestion();
   twoCorrect.options[1] = { ...twoCorrect.options[1], correct: true };
   assert.ok(validateQuiz(quiz([twoCorrect])).some((i) => /exactly one correct/.test(i.message)));
