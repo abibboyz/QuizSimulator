@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { contrastRatio } from "@/lib/themes";
 
 /** Below this, text stops being comfortably readable (WCAG AA for body text). */
@@ -21,6 +23,8 @@ interface Props {
   contrastAgainst?: string[];
   /** Drops the reset button to a hover affordance, for tight rows. */
   compact?: boolean;
+  /** Optional quick picks, offered in a small palette next to the picker (with "Reset to default"). */
+  presets?: string[];
 }
 
 /**
@@ -30,7 +34,7 @@ interface Props {
  * Unset is a real state, not the same as "happens to equal the default": it
  * means the element follows the theme, so switching age band re-colours it.
  */
-export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst, compact }: Props) {
+export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst, compact, presets }: Props) {
   const effective = value ?? fallback;
 
   const failing = (contrastAgainst ?? []).filter((bg) => {
@@ -80,6 +84,88 @@ export function ColorSwatch({ value, onChange, fallback, label, contrastAgainst,
           compact ? "h-6 w-5" : "h-5 w-7"
         } ${value === undefined ? "border-ink-600 opacity-60" : "border-ink-400"}`}
       />
+
+      {presets && presets.length > 0 && <PresetPalette label={label} value={value} presets={presets} onChange={onChange} />}
+    </span>
+  );
+}
+
+/** A ▾ button opening quick colour picks plus an explicit "Reset to default". */
+function PresetPalette({ label, value, presets, onChange }: { label: string; value: string | undefined; presets: string[]; onChange: (value: string | undefined) => void }) {
+  // Fixed-position, clamped to the viewport, so a scrolling builder column never clips it.
+  const [open, setOpen] = useState<{ left: number; top: number } | null>(null);
+  const root = useRef<HTMLSpanElement>(null);
+  const popover = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!root.current?.contains(target) && !popover.current?.contains(target)) setOpen(null);
+    };
+    const esc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(null);
+    };
+    const dismiss = () => setOpen(null);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", esc);
+    window.addEventListener("resize", dismiss);
+    document.addEventListener("scroll", dismiss, true);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", dismiss);
+      document.removeEventListener("scroll", dismiss, true);
+    };
+  }, [open]);
+  const chosen = value?.toLowerCase();
+  return (
+    <span ref={root} className="relative inline-flex" onPointerDown={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        aria-label={`${label} presets`}
+        aria-expanded={!!open}
+        onClick={(event) => {
+          if (open) return setOpen(null);
+          const rect = event.currentTarget.getBoundingClientRect();
+          const width = 160;
+          setOpen({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: rect.bottom + 4 });
+        }}
+        className="focus-ring rounded px-0.5 text-[10px] leading-none text-ink-400 hover:text-ink-200"
+      >
+        ▾
+      </button>
+      {open && createPortal(
+        <span ref={popover} role="dialog" aria-label={`${label} presets`} className="fixed z-50 w-40 space-y-2 rounded-xl border border-ink-700 bg-ink-900 p-2 shadow-xl" style={open}>
+          <span className="grid grid-cols-6 gap-1">
+            {Array.from(new Set(presets.map((c) => c.toLowerCase()))).map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Use ${color}`}
+                aria-pressed={chosen === color}
+                onClick={() => {
+                  onChange(color);
+                  setOpen(null);
+                }}
+                className={`focus-ring h-5 w-5 rounded ${chosen === color ? "ring-2 ring-white" : "border border-ink-700"}`}
+                style={{ background: color }}
+              />
+            ))}
+          </span>
+          <button
+            type="button"
+            disabled={value === undefined}
+            onClick={() => {
+              onChange(undefined);
+              setOpen(null);
+            }}
+            className="focus-ring w-full rounded-lg border border-ink-700 px-2 py-1 text-[11px] font-semibold text-ink-200 hover:bg-ink-800 disabled:opacity-40"
+          >
+            Reset to default
+          </button>
+        </span>,
+        document.body,
+      )}
     </span>
   );
 }

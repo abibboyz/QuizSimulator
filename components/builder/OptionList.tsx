@@ -22,7 +22,7 @@ import type { ReactNode } from "react";
 import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
 import { readableTextOn } from "@/lib/themes";
-import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
+import { answerColorPresets, optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Input } from "@/components/ui/Field";
 import { ImageAnswerGrid } from "@/components/builder/ImageAnswerGrid";
@@ -230,6 +230,7 @@ function OptionRow({
         fallback={optionColor(index, { band: ageBand, colors })}
         onChange={onColor}
         compact
+        presets={answerColorPresets(ageBand)}
       />
 
       <button

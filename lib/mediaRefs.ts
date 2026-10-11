@@ -11,6 +11,11 @@ export function mediaKey(ref: MediaRef): string {
   return ref.kind === "stored" ? `s:${ref.id}` : `u:${ref.url}`;
 }
 
+/** Letter-fill pictures of the prompt and answer text styles. Kept even while the preset is Plain, so switching back keeps the picture. */
+function textStyleImages(theme: Quiz["theme"] | undefined): MediaRef[] {
+  return [theme?.promptTextStyle?.image, theme?.answerTextStyle?.image].filter((ref): ref is MediaRef => !!ref);
+}
+
 function cueImages(set: CueSet | undefined): MediaRef[] {
   if (!set) return [];
   return Object.values(set).flatMap((cue) => (cue?.media ? [cue.media] : []));
@@ -24,6 +29,7 @@ function cueImages(set: CueSet | undefined): MediaRef[] {
 export function imageRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
   if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
+  refs.push(...textStyleImages(quiz.theme));
   if (quiz.settings?.progressMascotMedia) refs.push(quiz.settings.progressMascotMedia);
   refs.push(...cueImages(quiz.settings?.cues));
   for (const q of quiz.questions) {
@@ -54,6 +60,7 @@ export function imageRefs(quiz: Quiz): MediaRef[] {
 export function collectRefs(quiz: Quiz): MediaRef[] {
   const refs: MediaRef[] = [];
   if (quiz.theme?.bgImage) refs.push(quiz.theme.bgImage);
+  refs.push(...textStyleImages(quiz.theme));
   for (const q of quiz.questions) {
     if (q.promptStyle?.box?.image) refs.push(q.promptStyle.box.image);
     if (q.background?.image) refs.push(q.background.image);
@@ -112,7 +119,13 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
 
   return {
     ...quiz,
-    theme: { ...quiz.theme, bgImage: swap(quiz.theme?.bgImage) },
+    theme: {
+      ...quiz.theme,
+      bgImage: swap(quiz.theme?.bgImage),
+      // Only themes that have a text style get the key — older quizzes come back byte-identical.
+      ...(quiz.theme?.promptTextStyle ? { promptTextStyle: { ...quiz.theme.promptTextStyle, image: swap(quiz.theme.promptTextStyle.image) } } : {}),
+      ...(quiz.theme?.answerTextStyle ? { answerTextStyle: { ...quiz.theme.answerTextStyle, image: swap(quiz.theme.answerTextStyle.image) } } : {}),
+    },
     settings: {
       ...quiz.settings,
       cues: mapCueSet(quiz.settings?.cues, swap) ?? {},

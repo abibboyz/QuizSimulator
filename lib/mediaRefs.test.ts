@@ -145,3 +145,22 @@ test("prompt box images stay available for play, export, and question copies", (
   assert.deepEqual(remapMedia(quiz, remap).questions[0].promptStyle?.box?.image, ref("prompt-box-copy"));
   assert.equal(schemaVersionFor(quiz), 5);
 });
+
+test("text-style letter fills are collected, loaded for export and remapped; old themes gain no keys", () => {
+  const quiz = oldQuiz();
+  quiz.theme = { ...quiz.theme, promptTextStyle: { preset: "candy", image: ref("fill-q") }, answerTextStyle: { preset: "plain", image: ref("fill-a") } };
+  for (const refs of [collectRefs(quiz), imageRefs(quiz)]) {
+    assert.ok(refs.some((media) => media.kind === "stored" && media.id === "fill-q"));
+    assert.ok(refs.some((media) => media.kind === "stored" && media.id === "fill-a"));
+  }
+  const copy = remapMedia(quiz, new Map([["fill-q", "fill-q2"], ["fill-a", "fill-a2"]]));
+  assert.deepEqual(copy.theme.promptTextStyle, { preset: "candy", image: ref("fill-q2") });
+  assert.deepEqual(copy.theme.answerTextStyle, { preset: "plain", image: ref("fill-a2") });
+  assert.equal(schemaVersionFor(quiz), 7);
+  const plainOnly = oldQuiz();
+  plainOnly.theme = { ...plainOnly.theme, promptTextStyle: { preset: "plain" } };
+  assert.equal(schemaVersionFor(plainOnly), 1);
+  const untouched = remapMedia(oldQuiz(), new Map());
+  assert.equal("promptTextStyle" in untouched.theme, false);
+  assert.equal("answerTextStyle" in untouched.theme, false);
+});

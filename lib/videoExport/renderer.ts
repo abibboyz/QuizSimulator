@@ -72,6 +72,8 @@ import {
 import { assemblyPieces, isPhotoAssemblyStyle, morphedPoints, pieceProgress, poseAt, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 import { frameSource } from "@/lib/videoExport/animatedImage";
+import { answerChrome, boxlessFrame, FEEDBACK_BAR, tintLettering } from "@/lib/answerChrome";
+import { cartoonFamily, cartoonFont, paintStyledLines, resolveTextStyle, styledWrapWidth, wrapWords, type ResolvedTextStyle } from "@/lib/textStyle";
 
 /* ---------------------------------------------------------------- framing */
 
@@ -136,6 +138,8 @@ interface TextTile {
   showMark: boolean;
   lines: string[];
   h: number;
+  /** Width of the text column (styled lettering paints into it). */
+  textW: number;
 }
 
 /* ================================================================ renderer */
@@ -830,7 +834,9 @@ export class FrameRenderer {
     return { w: width, h: shared.height * scale, draw: (x, y) => {
       this.ctx.save(); this.ctx.translate(x, y); this.ctx.scale(scale, scale);
       const picture = q.promptStyle?.box?.image ? this.image(q.promptStyle.box.image) : null;
-      shared.draw(sinceMount, typed, picture ? { ...picture, source: frameSource(picture, this.t) } : undefined);
+      const fillMedia = resolveTextStyle(this.quiz.theme.promptTextStyle)?.image;
+      const fill = fillMedia ? this.image(fillMedia) : null;
+      shared.draw(sinceMount, typed, picture ? { ...picture, source: frameSource(picture, this.t) } : undefined, fill ? { ...fill, source: frameSource(fill, this.t) } : undefined);
       this.ctx.restore();
     } };
   }
@@ -1157,21 +1163,27 @@ export class FrameRenderer {
     const typography = answerTextStyle(theme, q);
     const size = (typography.fontSize ?? 18) * CW / PROMPT_DESIGN_WIDTH;
     const family = fontFamily(typography.font ?? theme.font, typography.font ? typography.customFont : theme.customFont, this.assets.fonts);
-    const font = `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    // Styled lettering (lib/textStyle) swaps in its own face and wraps inside its padding; Plain is untouched.
+    const lettering = this.lettering();
+    const font = lettering
+      ? cartoonFont(size, this.cartoonFace)
+      : `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
     const lh = size * 1.5;
     const markerFont = this.font(600, 24);
 
     const tiles: TextTile[] = q.options.map((option, i) => {
-      const marker = optionMarker(i, { band, marker: theme.optionMarker, override: option.icon });
+      const marker = answerChrome(theme).hideMarkers ? "" : optionMarker(i, { band, marker: theme.optionMarker, override: option.icon });
       const pickAt = this.pickedAt(run, option.id);
       const isPicked = pickAt !== null && t >= pickAt;
       const showMark = revealed && (option.correct || isPicked);
       const markerW = marker ? this.measure(marker, markerFont) : 0;
       const markW = showMark ? this.measure(option.correct ? "✓" : "✕", markerFont) : 0;
       const textW = colW - 32 - (marker ? markerW + 12 : 0) - (option.media ? 68 : 0) - (showMark ? markW + 12 : 0);
-      const lines = this.wrap(option.text, font, Math.max(20, textW));
+      const lines = lettering
+        ? wrapWords(option.text, (s) => this.measure(s, font), styledWrapWidth(Math.max(20, textW), size, lettering))
+        : this.wrap(option.text, font, Math.max(20, textW));
       const inner = Math.max(marker ? 32 : 0, option.media ? 56 : 0, lines.length * lh, showMark ? 32 : 0);
-      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(80, inner + 32) };
+      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(80, inner + 32), textW: Math.max(20, textW) };
     });
 
     const rows: TextTile[][] = [];
@@ -1246,18 +1258,36 @@ export class FrameRenderer {
     const tin = this.tilePose(run, i, t);
     const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
+    // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
+    const boxless = answerChrome(theme).hideBoxes;
+    const frame = boxless
+      ? boxlessFrame({ revealed, rp, pickP, correct: option.correct, picked: tile.isPicked }, { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad }, mixColor)
+      : null;
+    const bar = frame?.bar;
+    const tileText = frame?.text ?? textColor;
 
     this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, x, y, w, h, () => this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
-      if (glow > 0) this.glowShadow(x, y, w, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
-      if (ring > 0) this.fillRing(x, y, w, h, r, 4, `rgba(255,255,255,${ring})`);
-      this.fillRR(x, y, w, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
+      if (!boxless) {
+        if (glow > 0) this.glowShadow(x, y, w, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
+        if (ring > 0) this.fillRing(x, y, w, h, r, 4, `rgba(255,255,255,${ring})`);
+        this.fillRR(x, y, w, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
+      } else if (bar && bar.alpha > 0) {
+        ctx.save();
+        ctx.globalAlpha *= bar.alpha;
+        if (bar.glow) {
+          ctx.shadowColor = bar.color;
+          ctx.shadowBlur = FEEDBACK_BAR.glow;
+        }
+        this.fillRR(x + FEEDBACK_BAR.inset, y + h - FEEDBACK_BAR.bottom - FEEDBACK_BAR.height, w - FEEDBACK_BAR.inset * 2, FEEDBACK_BAR.height, FEEDBACK_BAR.height / 2, bar.color);
+        ctx.restore();
+      }
 
       let cx = x + 16;
       const cy = y + h / 2;
       if (tile.marker) {
         ctx.save();
         ctx.globalAlpha *= 0.9;
-        this.drawLine(tile.marker, cx, cy - 16, 32, markerFont, textColor, "left");
+        this.drawLine(tile.marker, cx, cy - 16, 32, markerFont, tileText, "left");
         ctx.restore();
         cx += tile.markerW + 12;
       }
@@ -1275,9 +1305,22 @@ export class FrameRenderer {
         cx += 68;
       }
       const textTop = cy - (tile.lines.length * lh) / 2;
-      tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, textColor, "left", 0, !!typography.underline));
+      const lettering = this.lettering();
+      if (lettering) {
+        const m = this.metrics(font);
+        ctx.font = font;
+        ctx.letterSpacing = "0px";
+        const px = lh / 1.5;
+        // `saturate-50` on a faded tile also greys the lettering in the DOM.
+        if (faded && rp > 0) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
+        const tileLettering = boxless ? tintLettering(lettering, option.color) : lettering;
+        paintStyledLines(ctx, tile.lines, { x: cx, width: tile.textW, top: textTop, lineHeight: lh, px, align: "left", ascent: m.ascent, descent: m.descent }, tileLettering, i, this.letteringPicture(lettering));
+        ctx.filter = "none";
+      } else {
+        tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, tileText, "left", 0, !!typography.underline));
+      }
       if (tile.showMark) {
-        this.drawLine(option.correct ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, textColor, "right");
+        this.drawLine(option.correct ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, tileText, "right");
       }
     }), i);
   }
@@ -1295,7 +1338,10 @@ export class FrameRenderer {
     const capLh = size * 1.5;
     const numFont = this.font(600, 14);
     const family = fontFamily(typography.font ?? this.quiz.theme.font, typography.font ? typography.customFont : this.quiz.theme.customFont, this.assets.fonts);
-    const capFont = `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    const lettering = this.lettering();
+    const capFont = lettering
+      ? cartoonFont(size, this.cartoonFace)
+      : `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
     const unscored = isUnscoredImage(q);
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
@@ -1305,7 +1351,11 @@ export class FrameRenderer {
     const uncover = revealSettings ? revealProgress(sinceReveal, revealSettings.durationMs) : 0;
 
     const tiles = q.options.map((option, i) => {
-      const caption = option.text.trim() ? this.wrap(option.text, capFont, colW) : [];
+      const caption = !option.text.trim()
+        ? []
+        : lettering
+          ? wrapWords(option.text, (s) => this.measure(s, capFont), styledWrapWidth(colW, size, lettering))
+          : this.wrap(option.text, capFont, colW);
       return { option, i, caption, h: boxH + (caption.length ? 4 + caption.length * capLh : 0) };
     });
     const rows: (typeof tiles)[] = [];
@@ -1412,7 +1462,12 @@ export class FrameRenderer {
                 this.drawLine(mark, tx + colW - 4 - mw / 2, ry + 4, 14, markFont, "#ffffff", "center");
               }
 
-              caption.forEach((line, li) =>
+              if (lettering) {
+                const m = this.metrics(capFont);
+                ctx.font = capFont;
+                ctx.letterSpacing = "0px";
+                paintStyledLines(ctx, caption, { x: tx, width: colW, top: ry + boxH + 4, lineHeight: capLh, px: size, align: "center", ascent: m.ascent, descent: m.descent }, tintLettering(lettering, option.color), i, this.letteringPicture(lettering));
+              } else caption.forEach((line, li) =>
                 this.drawLine(
                   line,
                   tx + colW / 2,
@@ -2406,6 +2461,22 @@ export class FrameRenderer {
     ctx.fillStyle = color;
     ctx.fill();
     ctx.restore();
+  }
+
+  /** Answer lettering (null = Plain). */
+  private lettering(): ResolvedTextStyle | null {
+    if (this.answerLettering === undefined) this.answerLettering = resolveTextStyle(this.quiz.theme.answerTextStyle);
+    return this.answerLettering;
+  }
+  private answerLettering: ResolvedTextStyle | null | undefined = undefined;
+  private get cartoonFace(): string {
+    return (this.cartoonFamilyCache ??= cartoonFamily());
+  }
+  private cartoonFamilyCache: string | null = null;
+
+  private letteringPicture(style: ResolvedTextStyle) {
+    const img = style.image ? this.image(style.image) : null;
+    return img ? { ...img, source: frameSource(img, this.t) } : null;
   }
 
   private image(ref: MediaRef): LoadedImage | null {

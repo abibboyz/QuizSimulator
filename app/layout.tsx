@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Cinzel_Decorative, Fredoka, Geist, Geist_Mono, Outfit } from "next/font/google";
+import { Cinzel_Decorative, Fredoka, Geist, Geist_Mono, Outfit, Titan_One } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/pwa/ServiceWorkerRegistrar";
 
@@ -13,6 +13,9 @@ const pageDisplay = Cinzel_Decorative({
   subsets: ["latin"],
   weight: "900",
 });
+
+// Bubbly 3D text styles (lib/textStyle). Self-hosted by next/font at build time — no runtime requests. SIL OFL 1.1.
+const cartoon = Titan_One({ variable: "--font-cartoon", subsets: ["latin"], weight: "400" });
 
 export const metadata: Metadata = {
   title: "Quiz Simulator",
@@ -44,7 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${pageSans.variable} ${pageDisplay.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${pageSans.variable} ${pageDisplay.variable} ${cartoon.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         {children}

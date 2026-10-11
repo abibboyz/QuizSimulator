@@ -95,6 +95,11 @@ export function optionPalette(band?: AgeBand): OptionStyle[] {
   return band ? getAgeBand(band).optionPalette : OPTION_STYLES;
 }
 
+/** Quick picks for a per-answer colour: the band's own palette, then a few bright / neutral extras. */
+export function answerColorPresets(band?: AgeBand): string[] {
+  return [...optionPalette(band).map((slot) => slot.bg), "#ffffff", "#ffd23f", "#ff5fa2", "#38bdf8", "#7c3aed", "#111827"];
+}
+
 export function optionStyle(index: number, band?: AgeBand): OptionStyle {
   const styles = optionPalette(band);
   return styles[index % styles.length];

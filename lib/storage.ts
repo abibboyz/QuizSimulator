@@ -20,6 +20,7 @@ import { collectRefs, questionMediaRefs, remapMedia } from "@/lib/mediaRefs";
 import { readQuestionClipboard } from "@/lib/questionClipboardState";
 import { normalizeRevealQuestion } from "@/lib/reveal";
 import { withProgressBarDefault } from "@/lib/progress";
+import { withTextStyles } from "@/lib/textStyle";
 
 const DB_NAME = "quiz-simulator";
 const DB_VERSION = 1;
@@ -68,7 +69,7 @@ function db(): Promise<IDBPDatabase<QuizDB>> {
 function hydrate(quiz: Quiz): Quiz {
   return {
     ...quiz,
-    theme: { ...DEFAULT_THEME, ...quiz.theme },
+    theme: withTextStyles({ ...DEFAULT_THEME, ...quiz.theme }),
     settings: withProgressBarDefault({ ...DEFAULT_SETTINGS, ...quiz.settings }),
     questions: quiz.questions.map(normalizeKind),
   };

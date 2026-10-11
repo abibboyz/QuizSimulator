@@ -3,6 +3,7 @@ import { layoutPrompt, promptFontSize, promptGraphemes, promptLetterSpacing, wor
 import { promptAnimationElapsed, promptLetterScale, promptParagraphLines, promptPathPose, promptSegmentPose, promptSegmentProgress, promptSegments } from "./promptDesign.ts";
 import { themeInk } from "./themeInk.ts";
 import { withAlpha } from "./color.ts";
+import { cartoonFamily, cartoonFont, paintStyledText, resolveTextStyle, textStylePadding, type StylePicture } from "./textStyle.ts";
 
 /** One design coordinate system, scaled as a whole on every surface. */
 export const PROMPT_DESIGN_WIDTH = 728;
@@ -20,11 +21,14 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
   const frame = style.box?.shape && style.box.shape !== "none" ? style.box : undefined;
   const padding = frame?.padding ?? (frame ? 16 : 0);
   const artName = wordArtStyleOf(style.wordArt);
+  // Quiz-wide bubbly lettering. A question's own Word Art is more specific and wins.
+  const cartoon = artName ? null : resolveTextStyle(theme.promptTextStyle);
+  const cartoonFace = cartoon ? cartoonFamily() : "";
   const defaults = artName ? wordArtInk(theme.accent, theme.surface, artName) : null;
   const art = defaults ? { ...defaults, ...Object.fromEntries(Object.entries(style.wordArtColors ?? {}).filter(([, value]) => value !== undefined)) } : null;
   const ink = themeInk(theme);
   const color = question.prompt ? art?.fill ?? theme.promptColor ?? ink[100] : ink[500];
-  const font = (px: number) => `${style.italic ? "italic " : ""}${style.bold === false ? 400 : 700} ${px}px ${family}`;
+  const font = (px: number) => cartoon ? cartoonFont(px, cartoonFace) : `${style.italic ? "italic " : ""}${style.bold === false ? 400 : 700} ${px}px ${family}`;
   const measure = (sample: string, px = size) => {
     ctx.font = font(px);
     ctx.letterSpacing = "0px";
@@ -33,7 +37,10 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
   // Leave room for decorations inside the canvas instead of cropping shadows.
   const ring = art ? Math.max(1, Math.round(size * 0.06 * art.strokeWidth)) : 0;
   const drop = art && art.drop ? Math.max(2, Math.round(size * 0.12 * art.drop)) : 0;
-  const inset = Math.max(2, ring + (art ? size * art.blur + drop * art.layers : 0));
+  const cartoonPad = cartoon ? textStylePadding(size, cartoon) : null;
+  const inset = cartoonPad
+    ? Math.max(2, Math.ceil(Math.max(cartoonPad.right, cartoonPad.bottom)))
+    : Math.max(2, ring + (art ? size * art.blur + drop * art.layers : 0));
   const outer = frame?.shadow ? 30 : frame?.shape === "speech" ? 14 : 2;
   const boxWidth = frame?.shape === "circle" ? Math.min(PROMPT_DESIGN_WIDTH - outer * 2, Math.max(160, size * 5)) : PROMPT_DESIGN_WIDTH - outer * 2;
   const available = Math.max(16, boxWidth - 2 * (padding + inset));
@@ -149,11 +156,16 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
     return g;
   }
 
-  function drawText(sample: string, x: number, y: number, px: number, fill: string | CanvasGradient) {
+  function drawText(sample: string, x: number, y: number, px: number, fill: string | CanvasGradient, colorIndex = 0, fillImage?: StylePicture) {
     ctx.font = font(px); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.letterSpacing = `${spacing}px`;
     const metrics = ctx.measureText(sample);
     const baseline = y + (metrics.fontBoundingBoxAscent ?? px * 0.8) / 2 - (metrics.fontBoundingBoxDescent ?? px * 0.2) / 2;
+    if (cartoon) {
+      paintStyledText(ctx, sample, x, baseline, px, cartoon, colorIndex, fillImage);
+      ctx.letterSpacing = "0px";
+      return;
+    }
     if (art) {
       // Same eight-offset outline and layered shadows as main's Word Art CSS.
       const rim = Math.max(1, Math.round(px * 0.06 * art.strokeWidth));
@@ -175,7 +187,7 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
     ctx.letterSpacing = "0px";
   }
 
-  return { width: PROMPT_DESIGN_WIDTH, height, draw(elapsed = Infinity, typed = Infinity, picture?: PromptPicture) {
+  return { width: PROMPT_DESIGN_WIDTH, height, draw(elapsed = Infinity, typed = Infinity, picture?: PromptPicture, fillImage?: PromptPicture) {
     ctx.save();
     const centered = (PROMPT_DESIGN_WIDTH - boxWidth) / 2 - outer;
     ctx.translate(centered, 0);
@@ -199,7 +211,7 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
         if (glyph.index >= typed) return;
         withAnimation(glyph.index, glyph.x - glyph.width / 2, glyph.y, glyph.width, () => {
           ctx.save(); ctx.translate(glyph.x, glyph.y); ctx.rotate(glyph.angle);
-          drawText(glyph.text, -glyph.width / 2, 0, glyph.size, fill); ctx.restore();
+          drawText(glyph.text, -glyph.width / 2, 0, glyph.size, fill, glyph.index, fillImage); ctx.restore();
         });
       });
     } else {
@@ -215,7 +227,7 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
           const prefix = chars.slice(0, from - line.start).join("");
           const part = chars.slice(from - line.start, to - line.start).join("");
           const x = left + measure(prefix) + promptGraphemes(prefix).length * spacing;
-          withAnimation(from, x, y, measure(part), () => drawText(part, x, y, size, fill));
+          withAnimation(from, x, y, measure(part), () => drawText(part, x, y, size, fill, row, fillImage));
         });
       });
     }

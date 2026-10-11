@@ -26,6 +26,8 @@ Open http://localhost:3000. A sample quiz is seeded on first visit so there's so
 - Images on questions *and* on individual answers — drag one in, click to browse, or **paste straight from the clipboard**
 - Four layouts per question: grid, list, image-first, big type
 - Theme each quiz: five palettes, custom accent and stage colours, three fonts, and five animated backgrounds (aurora, particles, floating shapes, starfield, none)
+- Bubbly 3D cartoon lettering for the prompt and the answers, set separately (Theme → Text → Lettering style): Bubble Pink, Sunny Yellow, Orange Pop, Sky Blue, Candy, or Custom (two gradient colours, outline, depth, white rim), optionally filled with one of your images. Plain is the default. Uses [Titan One](https://fonts.google.com/specimen/Titan+One) (SIL Open Font License 1.1), self-hosted at build time by `next/font`, so it makes no runtime requests and works offline
+- Answer chrome (Theme → Answers): Hide bullets, Hide answer boxes, and a colour per answer from the question editor
 - **Background image with GIF support** — drop in a picture or an animated GIF, choose fill/fit/tile, and dial in a dim level so the question stays readable. Animated files (GIF, APNG, animated WebP) are stored untouched so they keep moving; everything else is downscaled
 - Live preview that renders the real play stage, so what you design is what plays
 - **Motion & sound cues** — quiz-wide defaults plus per-question overrides, with optional custom cue audio
