@@ -18,6 +18,7 @@ import { QuestionEditor } from "@/components/builder/QuestionEditor";
 import { ThemePanel } from "@/components/builder/ThemePanel";
 import { SettingsPanel } from "@/components/builder/SettingsPanel";
 import { PreviewPane } from "@/components/builder/PreviewPane";
+import { DEFAULT_PREVIEW_FRAME, type PreviewFrame } from "@/lib/previewFrame";
 import { AnimationsPanel } from "@/components/builder/AnimationsPanel";
 
 type Tab = "preview" | "theme" | "settings" | "animate";
@@ -42,6 +43,8 @@ function EditView() {
   const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("preview");
+  // Kept here rather than in PreviewPane so switching tabs doesn't reset it.
+  const [previewFrame, setPreviewFrame] = useState<PreviewFrame>(DEFAULT_PREVIEW_FRAME);
   const [saveState, setSaveState] = useState<SaveState>("clean");
   const [hasCopiedQuestion, setHasCopiedQuestion] = useState(false);
   const [clipboardBusy, setClipboardBusy] = useState(false);
@@ -361,7 +364,14 @@ function EditView() {
           <div className="glass rounded-2xl p-4">
             {tab === "preview" &&
               (active ? (
-                <PreviewPane quiz={quiz} question={active} index={activeIndex} onChange={updateQuestion} />
+                <PreviewPane
+                  quiz={quiz}
+                  question={active}
+                  index={activeIndex}
+                  onChange={updateQuestion}
+                  frame={previewFrame}
+                  onFrameChange={setPreviewFrame}
+                />
               ) : (
                 <p className="text-sm text-ink-400">Nothing to preview yet.</p>
               ))}

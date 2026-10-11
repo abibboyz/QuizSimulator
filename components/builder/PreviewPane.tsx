@@ -10,24 +10,61 @@ import { hidesImageBoxes } from "@/lib/imageChoice";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
+import { FramedPreview } from "@/components/builder/FramedPreview";
+import { DEFAULT_PREVIEW_FRAME, framingFor, PREVIEW_FRAMES, type PreviewFrame } from "@/lib/previewFrame";
 
 interface Props {
   quiz: Quiz;
   question: Question;
   index: number;
   onChange: (question: Question) => void;
+  /** Builder (default, the original editable preview), or Web 16:9 / Mobile 9:16 as it plays and exports. */
+  frame?: PreviewFrame;
+  onFrameChange?: (frame: PreviewFrame) => void;
 }
 
 /**
  * Renders the real QuestionStage at preview scale, so what you see here is
  * exactly what plays — including the theme and background you picked.
  */
-export function PreviewPane({ quiz, question, index, onChange }: Props) {
+export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_PREVIEW_FRAME, onFrameChange }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [promptReplay, setPromptReplay] = useState(0);
   const [completedRevealQuestion, setCompletedRevealQuestion] = useState<string | null>(null);
   const theme = questionTheme(quiz.theme, question);
   const preset = getPreset(theme.preset);
+  const framing = framingFor(frame);
+
+  const frameSwitch = onFrameChange && (
+    <div role="radiogroup" aria-label="Preview framing" className="flex gap-0.5 rounded-xl border border-ink-700 bg-ink-900/60 p-0.5">
+      {PREVIEW_FRAMES.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="radio"
+          aria-checked={frame === option.id}
+          title={option.hint}
+          onClick={() => onFrameChange(option.id)}
+          className={`focus-ring flex-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${
+            frame === option.id ? "text-ink-950" : "text-ink-400 hover:text-ink-200"
+          }`}
+          style={frame === option.id ? { background: "var(--accent)" } : undefined}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (framing) {
+    return (
+      <div className="space-y-2">
+        <span className="block text-xs font-semibold uppercase tracking-widest text-ink-400">Live preview</span>
+        {frameSwitch}
+        <FramedPreview quiz={quiz} index={index} framing={framing} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -48,6 +85,7 @@ export function PreviewPane({ quiz, question, index, onChange }: Props) {
         </button>}
         </div>
       </div>
+      {frameSwitch}
 
       <div
         className="relative overflow-hidden rounded-2xl border border-ink-700"
