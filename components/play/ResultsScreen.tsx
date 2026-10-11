@@ -109,7 +109,7 @@ export function ResultsScreen({
                     <span className="text-ink-400">{i + 1}. </span>
                     {question.prompt || "Untitled question"}
                   </p>
-                  {answer?.unscored && <p className="mt-1 text-sm text-ink-400">Image slide · not scored</p>}
+                  {answer?.unscored && <p className="mt-1 text-sm text-ink-400">{answer.single ? "Shown · not scored" : "Image slide · not scored"}</p>}
                   {!answer?.unscored && !answer?.correct && (
                     <p className="mt-1 text-sm text-ink-300">
                       Correct answer: <span className="font-semibold text-good">{correctText}</span>

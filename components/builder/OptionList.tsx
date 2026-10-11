@@ -21,6 +21,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { ReactNode } from "react";
 import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
+import { isSingleAnswer } from "@/lib/answerPresentation";
 import { readableTextOn } from "@/lib/themes";
 import { answerColorPresets, optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
@@ -71,10 +72,14 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
     onChange({ ...question, options: question.options.map((o) => ({ ...o, correct: o.id === id })) });
   };
 
+  // Down to one answer (never for true/false): a lone answer is a single-answer
+  // slide and is always saved correct.
   const remove = (id: string) => {
-    if (question.options.length <= 2) return;
-    onChange({ ...question, options: question.options.filter((o) => o.id !== id) });
+    if (fixed || question.options.length <= 1) return;
+    const options = question.options.filter((o) => o.id !== id);
+    onChange({ ...question, options: options.length === 1 ? [{ ...options[0], correct: true }] : options });
   };
+  const single = isSingleAnswer(question);
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -96,7 +101,8 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
       textColor={theme.optionTextColor}
       colors={theme.optionColors}
       sortable={!fixed}
-      canRemove={!fixed && question.options.length > 2}
+      canRemove={!fixed && question.options.length > 1}
+      locked={single}
       onText={(text) => update(option.id, { text })}
       onIcon={(icon) => update(option.id, { icon: icon.trim() ? icon : undefined })}
       onColor={(color) => update(option.id, { color })}
@@ -110,7 +116,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Answers {multi && <span className="text-ink-500">· mark every correct one</span>}
+          Answers {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : multi && <span className="text-ink-500">· mark every correct one</span>}
         </span>
         <span className="flex items-center gap-1">
           {action}
@@ -156,6 +162,8 @@ interface RowProps {
   colors?: string[];
   sortable: boolean;
   canRemove: boolean;
+  /** Single answer: the tick is fixed on. */
+  locked?: boolean;
   onText: (text: string) => void;
   onIcon: (icon: string) => void;
   onColor: (color: string | undefined) => void;
@@ -174,6 +182,7 @@ function OptionRow({
   colors,
   sortable,
   canRemove,
+  locked = false,
   onText,
   onIcon,
   onColor,
@@ -238,7 +247,8 @@ function OptionRow({
         role={multi ? "checkbox" : "radio"}
         aria-checked={option.correct}
         onClick={onMarkCorrect}
-        title={option.correct ? "Correct answer" : "Mark as correct"}
+        disabled={locked}
+        title={locked ? "Single answer · always correct" : option.correct ? "Correct answer" : "Mark as correct"}
         className={`focus-ring grid h-7 w-7 shrink-0 place-items-center text-sm font-bold transition ${
           multi ? "rounded-md" : "rounded-full"
         } ${option.correct ? "bg-good text-ink-950" : "border border-ink-600 text-transparent hover:border-good/60"}`}

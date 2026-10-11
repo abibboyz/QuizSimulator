@@ -1,5 +1,5 @@
 import { createPromptDrawing, PROMPT_DESIGN_WIDTH } from "../promptRenderer.ts";
-import { answerTextStyle, isUnscoredImage } from "../answerPresentation.ts";
+import { answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, showsFeedback } from "../answerPresentation.ts";
 /**
  * Draws one frame of a solo run onto a canvas, from nothing but a timestamp.
  *
@@ -25,10 +25,10 @@ import { promptAlign, promptFontStack, promptGraphemes, promptHasEmoji, splitEmo
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
 import { questionTheme, promptPosition } from "@/lib/questionPresentation";
-import type { CelebrationAnimation, Cue, MediaRef, Option, Quiz } from "@/types/quiz";
+import type { CelebrationAnimation, Cue, MediaRef, Option, Question, Quiz } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns } from "@/lib/imageChoice";
+import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns, imageChoiceTile } from "@/lib/imageChoice";
 import { litSteps, mascotOf, METER_STEPS, progressThickness, pulseMs, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar, timerMascotGeometry, timerProgressStyle } from "@/lib/progress";
 import { accuracyLabel } from "@/lib/scoring";
 import { autoAdvanceMessage } from "@/lib/autoAdvance";
@@ -544,7 +544,7 @@ export class FrameRenderer {
     // "mt-8" button row (with Submit / Next when they'd show) and the hint line.
     const revealedNow = t >= current.revealAt;
     const showsButton =
-      (revealedNow && this.quiz.settings.revealAfterEach) || (!revealedNow && current.question.kind === "multi-select");
+      (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && current.question.kind === "multi-select" && !isSingleAnswer(current.question));
     const buttonRow = 32 + (showsButton ? 48 : 0);
     const barShown = current.timeoutBar && t >= current.revealAt + celebrationDelayMs(current.question);
     const bottom = barShown ? 42 : 32;
@@ -648,7 +648,7 @@ export class FrameRenderer {
     if (style === "mascot" && currentRun?.limitSeconds !== null) return null;
 
     const outcomes = settings.revealAfterEach
-      ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isUnscoredImage(r.question) ? null : r.correct)
+      ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isScored(r.question) ? r.correct : null)
       : [];
     const answered = outcomes.length;
     const { value: reached, shown } = this.reachedAt(t);
@@ -854,7 +854,7 @@ export class FrameRenderer {
     const main = `QUESTION ${run.index + 1} OF ${this.timeline.questions.length}`;
     const extra = !showProgressHeader
       ? ""
-      : q.kind === "multi-select"
+      : q.kind === "multi-select" && !isSingleAnswer(q)
         ? "· PICK ALL THAT APPLY"
         : q.kind === "image-choice"
           ? isUnscoredImage(q) ? "· LOOK AND DECIDE" : "· PICK AN IMAGE"
@@ -1157,7 +1157,7 @@ export class FrameRenderer {
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
     // grid-cols-1, or sm:grid-cols-2 unless narrow / list layout
-    const cols = this.narrow || q.layout === "list" ? 1 : this.sm ? 2 : 1;
+    const cols = this.narrow || q.layout === "list" || isSingleAnswer(q) ? 1 : this.sm ? 2 : 1;
     const gap = this.md ? 16 : 12;
     const colW = (CW - gap * (cols - 1)) / cols;
     const typography = answerTextStyle(theme, q);
@@ -1330,7 +1330,7 @@ export class FrameRenderer {
     const q = run.question;
     const cols = imageChoiceColumns(q.options.length);
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
-    const colW = (CW - gap * (cols - 1)) / cols;
+    const { w: colW, offset: colX } = imageChoiceTile(q.options.length, CW, gap);
     const boxH = (colW * 2) / 3; // aspect-[3/2]
     const hideImageBoxes = hidesImageBoxes(this.quiz.settings, q);
     const typography = answerTextStyle(this.quiz.theme, q);
@@ -1380,7 +1380,7 @@ export class FrameRenderer {
         let ry = y;
         rows.forEach((row, r) => {
           row.forEach(({ option, i, caption }, c) => {
-            const tx = x + c * (colW + gap);
+            const tx = x + colX + c * (colW + gap);
             const pickAt = this.pickedAt(run, option.id);
             const isPicked = pickAt !== null && t >= pickAt;
             const showCorrect = revealed && option.correct;
@@ -1626,7 +1626,7 @@ export class FrameRenderer {
         .filter((o) => o.correct)
         .map((o) => o.text || "(image)")
         .join(", ");
-      const extra = isUnscoredImage(q) ? ["Image slide · not scored"] : run.correct
+      const extra = isUnscoredImage(q) ? ["Image slide · not scored"] : isSingleAnswer(q) ? ["Shown · not scored"] : run.correct
         ? []
         : this.wrap(`${label}${correctText}${run.timedOut ? " · ran out of time" : ""}`, smallFont, textW);
       const h = 32 + Math.max(28, lines.length * 24 + (extra.length ? 4 + extra.length * 20 : 0));
@@ -1655,7 +1655,7 @@ export class FrameRenderer {
             iy += 1;
           }
           const ok = item.run.correct;
-          const unscored = isUnscoredImage(item.run.question);
+          const unscored = !isScored(item.run.question);
           const color = unscored ? this.ink[400] : ok ? this.good : this.bad;
           ctx.beginPath();
           ctx.arc(x + 34, iy + 32, 14, 0, Math.PI * 2);
@@ -1697,12 +1697,20 @@ export class FrameRenderer {
    * Questions that leave the celebration off draw nothing here. The card pops
    * in, then the chosen motion plays; confetti is scheduled on the timeline.
    */
+  /** Columns of the answer grid a celebration flies in from; a single answer is one full-width tile. */
+  private answerColumns(question: Question): number {
+    const n = question.options.length;
+    if (isSingleAnswer(question)) return 1;
+    if (question.kind === "image-choice" || question.kind === "reveal") return Math.max(1, imageChoiceColumns(n));
+    return this.narrow || question.layout === "list" ? 1 : Math.min(2, n);
+  }
+
   private drawCelebration(t: number) {
-    if (!this.quiz.settings.revealAfterEach) return;
     const scene = sceneAt(this.timeline, t);
     if (scene.kind !== "stage") return;
     const run = this.timeline.questions[scene.index];
     if (!run || t < run.revealAt || t >= run.exitAt) return;
+    if (!showsFeedback(this.quiz.settings, run.question)) return;
     if (isUnscoredImage(run.question)) return;
     const view = celebrationView(run.question);
     if (!view) return;
@@ -1727,12 +1735,7 @@ export class FrameRenderer {
       const answerTravel = animatesCelebrationFromAnswer(run.question) && view.images.length > 0;
       if (answerTravel) {
         const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
-        const imageGrid = run.question.kind === "image-choice" || run.question.kind === "reveal";
-        const columns = imageGrid
-          ? Math.max(1, imageChoiceColumns(run.question.options.length))
-          : this.narrow || run.question.layout === "list"
-            ? 1
-            : Math.min(2, run.question.options.length);
+        const columns = this.answerColumns(run.question);
         const rows = Math.max(1, Math.ceil(run.question.options.length / columns));
         const column = correctIndex % columns;
         const row = Math.floor(correctIndex / columns);
@@ -1803,12 +1806,7 @@ export class FrameRenderer {
     }
 
     const correctIndex = Math.max(0, run.question.options.findIndex((option) => option.correct));
-    const imageGrid = run.question.kind === "image-choice" || run.question.kind === "reveal";
-    const columns = imageGrid
-      ? Math.max(1, imageChoiceColumns(run.question.options.length))
-      : this.narrow || run.question.layout === "list"
-        ? 1
-        : Math.min(2, run.question.options.length);
+    const columns = this.answerColumns(run.question);
     const rows = Math.max(1, Math.ceil(run.question.options.length / columns));
     const column = correctIndex % columns;
     const row = Math.floor(correctIndex / columns);

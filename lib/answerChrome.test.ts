@@ -48,7 +48,7 @@ test("per-answer colour becomes the lettering accent; unset leaves the preset al
 });
 
 test("schema: per-answer colours (an existing field) never bump the version", () => {
-  const q = (opt: object) => ({ id: "q", kind: "image-choice", prompt: "", layout: "grid", options: [{ id: "o", text: "", correct: true, ...opt }] }) as unknown as Quiz["questions"][number];
+  const q = (opt: object) => ({ id: "q", kind: "image-choice", prompt: "", layout: "grid", options: [{ id: "o", text: "", correct: true, ...opt }, { id: "p", text: "", correct: false }] }) as unknown as Quiz["questions"][number];
   const theme = {} as Quiz["theme"];
   const settings = {} as Quiz["settings"];
   assert.ok(schemaVersionFor({ theme, settings, questions: [q({ color: "#ff0000" })] }) < 7);
