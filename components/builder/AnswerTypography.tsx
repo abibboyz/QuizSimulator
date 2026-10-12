@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { AnswerTextStyle, Theme } from "@/types/quiz";
 import { FONT_GROUPS } from "@/lib/themes";
-import { answerTextStyle } from "@/lib/answerPresentation";
+import { answerTextStyle, withAnswerBoxScale } from "@/lib/answerPresentation";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 
 export function AnswerTypography({ value, theme, global = false, onChange }: {
@@ -36,8 +36,15 @@ export function AnswerTypography({ value, theme, global = false, onChange }: {
           onClick={() => patch({ [key]: !active })}>{key === "bold" ? "B" : key === "italic" ? "I" : "U"}</button>;
       })}
       <ColorSwatch label={`${label} text colour`} value={value?.color} fallback={effective.color ?? "#ffffff"} onChange={(color) => patch({ color })} />
+      <label className="text-xs text-ink-300">Box size · {Math.round((value?.boxScale ?? 1) * 100)}%
+        <input aria-label={`${label} text box size`} className="ml-2 w-28 align-middle accent-[var(--accent)]" type="range" min={5} max={250} step={5}
+          value={Math.round((value?.boxScale ?? 1) * 100)}
+          onChange={(event) => onChange(withAnswerBoxScale(value, Number(event.target.value) / 100))} />
+      </label>
+
       <button type="button" className="focus-ring rounded-lg px-2 py-1 text-xs text-ink-400 underline" onClick={() => onChange(undefined)}>{global ? "Reset typography" : "Use quiz defaults"}</button>
     </div>
+    <p className="mt-2 text-[11px] text-ink-500">Box size is the answer card on the question. Drag the dot on a preview answer to resize it there.</p>
     {value?.font === "custom" && <input aria-label={`${label} custom font`} placeholder="Installed font name" value={value.customFont ?? ""} className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-900 p-2 text-sm" onChange={(e) => patch({ customFont: e.target.value })} />}
   </details>;
 }

@@ -26,6 +26,30 @@ export function showsFeedback(settings: Pick<QuizSettings, "revealAfterEach">, q
   return settings.revealAfterEach || isSingleAnswer(question);
 }
 
+export const ANSWER_BOX_SCALE_MIN = 0.05;
+export const ANSWER_BOX_SCALE_MAX = 2.5;
+
+/** Unset or 1 is today's answer card. Other values are clamped. */
+export function answerBoxScale(style?: Pick<AnswerTextStyle, "boxScale">): number {
+  const n = style?.boxScale;
+  if (typeof n !== "number" || !Number.isFinite(n) || Math.abs(n - 1) < 0.001) return 1;
+  return Math.min(ANSWER_BOX_SCALE_MAX, Math.max(ANSWER_BOX_SCALE_MIN, n));
+}
+
+/**
+ * Stores a dragged or chosen answer-card size. 1 drops the field so an
+ * untouched card matches a card that was resized and put back.
+ */
+export function withAnswerBoxScale(style: AnswerTextStyle | undefined, scale: number): AnswerTextStyle | undefined {
+  const next = answerBoxScale({ boxScale: scale });
+  if (next === 1) {
+    if (!style || style.boxScale === undefined) return style;
+    const { boxScale: _drop, ...rest } = style;
+    return Object.keys(rest).length ? rest : undefined;
+  }
+  return { ...style, boxScale: Math.round(next * 100) / 100 };
+}
+
 /** Undefined fields inherit; false explicitly turns off an inherited style. */
 export function answerTextStyle(theme: Pick<Theme, "answerStyle" | "optionTextColor">, question?: Pick<Question, "answerStyle">): AnswerTextStyle {
   const style: AnswerTextStyle = { color: theme.optionTextColor };

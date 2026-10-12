@@ -3,10 +3,12 @@
 import { isUnscoredImage } from "@/lib/answerPresentation";
 import { questionTheme } from "@/lib/questionPresentation";
 import { useState } from "react";
-import type { Question, Quiz } from "@/types/quiz";
+import type { Question, Quiz, QuizSettings } from "@/types/quiz";
+import { timerPlacementFor, withTimerPlacement } from "@/lib/timerPlacement";
 import { getPreset, themeVars } from "@/lib/themes";
 import { showsProgressBar } from "@/lib/progress";
 import { hidesImageBoxes } from "@/lib/imageChoice";
+import { withAnswerBoxScale } from "@/lib/answerPresentation";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 import { QuestionStage } from "@/components/play/QuestionStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
@@ -21,13 +23,14 @@ interface Props {
   /** Builder (default, the original editable preview), or Web 16:9 / Mobile 9:16 as it plays and exports. */
   frame?: PreviewFrame;
   onFrameChange?: (frame: PreviewFrame) => void;
+  onChangeSettings?: (patch: Partial<QuizSettings>) => void;
 }
 
 /**
  * Renders the real QuestionStage at preview scale, so what you see here is
  * exactly what plays — including the theme and background you picked.
  */
-export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_PREVIEW_FRAME, onFrameChange }: Props) {
+export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_PREVIEW_FRAME, onFrameChange, onChangeSettings }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [promptReplay, setPromptReplay] = useState(0);
   const [completedRevealQuestion, setCompletedRevealQuestion] = useState<string | null>(null);
@@ -57,11 +60,29 @@ export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_P
   );
 
   if (framing) {
+    const view = framing === "vertical" ? "mobile" : "web";
+    const placed = timerPlacementFor(quiz.settings, view);
     return (
       <div className="space-y-2">
-        <span className="block text-xs font-semibold uppercase tracking-widest text-ink-400">Live preview</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="block text-xs font-semibold uppercase tracking-widest text-ink-400">Live preview</span>
+          {placed && (
+            <button
+              type="button"
+              onClick={() => onChangeSettings?.({ timerPlacement: withTimerPlacement(quiz.settings.timerPlacement, view, null) })}
+              className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
+            >
+              Reset timer
+            </button>
+          )}
+        </div>
         {frameSwitch}
-        <FramedPreview quiz={quiz} index={index} framing={framing} />
+        <FramedPreview
+          quiz={quiz}
+          index={index}
+          framing={framing}
+          onTimerPlace={(point) => onChangeSettings?.({ timerPlacement: withTimerPlacement(quiz.settings.timerPlacement, view, point) })}
+        />
       </div>
     );
   }
@@ -117,6 +138,16 @@ export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_P
             promptReplay={promptReplay}
             theme={theme}
             onPositionChange={(promptPlacement) => onChange({ ...question, promptPlacement })}
+            onAnswerBoxScale={(scale) => {
+              const answerStyle = withAnswerBoxScale(question.answerStyle, scale);
+              if (answerStyle?.boxScale === question.answerStyle?.boxScale) return;
+              if (!answerStyle) {
+                const { answerStyle: _drop, ...rest } = question;
+                onChange(rest);
+                return;
+              }
+              onChange({ ...question, answerStyle });
+            }}
           />
         </div>
         {revealed && !isUnscoredImage(question) && (question.kind !== "reveal" || completedRevealQuestion === question.id) && (

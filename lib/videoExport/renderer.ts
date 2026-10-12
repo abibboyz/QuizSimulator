@@ -1,5 +1,5 @@
-import { createPromptDrawing, PROMPT_DESIGN_WIDTH } from "../promptRenderer.ts";
-import { answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, showsFeedback } from "../answerPresentation.ts";
+import { createPromptDrawing, joinerDesignWidth, PROMPT_DESIGN_WIDTH } from "../promptRenderer.ts";
+import { answerBoxScale, answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, showsFeedback } from "../answerPresentation.ts";
 /**
  * Draws one frame of a solo run onto a canvas, from nothing but a timestamp.
  *
@@ -20,16 +20,17 @@ import { answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, showsFeedba
 
 import { mediaKey } from "@/lib/mediaRefs";
 import { stageEdge, stageVignette, themeInk } from "@/lib/themeInk";
-import { promptAlign, promptFontStack, promptGraphemes, promptHasEmoji, splitEmojiRuns } from "@/lib/promptText";
+import { promptAlign, promptFontSize, promptFontStack, promptGraphemes, promptHasEmoji, splitEmojiRuns } from "@/lib/promptText";
 
 import { resolveLoops, answerLoop, loopOrigin, loopPose } from "@/lib/loopMotion";
 import type { LoopMotion } from "@/types/quiz";
 import { questionTheme, promptPosition } from "@/lib/questionPresentation";
-import type { CelebrationAnimation, Cue, MediaRef, Option, Question, Quiz } from "@/types/quiz";
+import type { CelebrationAnimation, Cue, MediaRef, Option, Question, Quiz, TimerPlacement } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns, imageChoiceTile } from "@/lib/imageChoice";
+import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageChoiceColumns, imageColumnLayout, imageJoinerColumnGaps, imageJoinerLabel, imageJoinerStyled } from "@/lib/imageChoice";
 import { litSteps, mascotOf, METER_STEPS, progressThickness, pulseMs, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar, timerMascotGeometry, timerProgressStyle } from "@/lib/progress";
+import { clampTimerOrigin, timerPlacementFor, timerScale, timerScaleForEdge, type TimerView } from "@/lib/timerPlacement";
 import { accuracyLabel } from "@/lib/scoring";
 import { autoAdvanceMessage } from "@/lib/autoAdvance";
 import { basePointsFor } from "@/lib/store/playSession";
@@ -174,6 +175,10 @@ export class FrameRenderer {
   private readonly reachedSteps: { at: number; value: number }[] = [];
   /** Timeline time of the frame being drawn, in milliseconds. Animated pictures read it. */
   private t = 0;
+  /** Drag preview. Null means use the saved placement, or the header when that is unset. */
+  private dragPoint: TimerPlacement | null = null;
+  /** Last drawn timer, in framing pixels, so the preview can grab it. */
+  private timerRect: { x: number; y: number; w: number; h: number } | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -220,6 +225,7 @@ export class FrameRenderer {
   render(t: number) {
     const { ctx } = this;
     this.t = t;
+    this.timerRect = null;
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
@@ -574,7 +580,66 @@ export class FrameRenderer {
     ctx.restore();
 
     if (barShown) this.drawTimeoutBar(current, t, x0, qpH + stage.h + buttonRow + 16, CW);
+    // Outside the question swap, still inside the fit, so a dragged timer stays
+    // put on the video frame and scales with the rest of that frame.
+    this.drawFreeTimer(shown, t, fit, top);
     ctx.restore();
+  }
+
+  /** Framing pixels of the timer on the last drawn question, or null when this frame has no timer. */
+  timerFrameRect(): { x: number; y: number; w: number; h: number } | null {
+    return this.timerRect;
+  }
+
+  timerContains(frameX: number, frameY: number, slop = 0): boolean {
+    const rect = this.timerRect;
+    if (!rect) return false;
+    return frameX >= rect.x - slop && frameY >= rect.y - slop && frameX <= rect.x + rect.w + slop && frameY <= rect.y + rect.h + slop;
+  }
+
+  /** The right edge, where a drag changes the timer's length instead of moving it. */
+  timerAtEnd(frameX: number, frameY: number, slop = 0): boolean {
+    const rect = this.timerRect;
+    if (!rect || rect.w <= 0) return false;
+    const band = Math.min(rect.w * 0.34, Math.max(18, slop * 0.65));
+    const withinY = frameY >= rect.y - slop && frameY <= rect.y + rect.h + slop;
+    return withinY && frameX >= rect.x + rect.w - band && frameX <= rect.x + rect.w + slop;
+  }
+
+  /** Keeps a length already chosen while the timer is dragged to a new spot. */
+  private withLength(point: TimerPlacement): TimerPlacement {
+    const scale = timerScale(this.placedTimerPoint()?.scale);
+    return scale === 1 ? point : { ...point, scale };
+  }
+
+  /**
+   * Parks the timer so its top-left is this framing point. Returns the percent
+   * to save. Null when this frame has no timer to move.
+   */
+  moveTimer(originX: number, originY: number): TimerPlacement | null {
+    const rect = this.timerRect;
+    if (!rect || this.W <= 0 || this.H <= 0) return null;
+    const point = this.withLength(clampTimerOrigin((originX / this.W) * 100, (originY / this.H) * 100, rect.w, rect.h, this.W, this.H));
+    this.dragPoint = point;
+    return point;
+  }
+
+  /**
+   * Stretches the timer so its right edge follows `edgeX`. The left edge stays.
+   * Null when this frame has no timer, or the drag never left the original length
+   * of a timer that is still in the header.
+   */
+  resizeTimer(edgeX: number): TimerPlacement | null {
+    const rect = this.timerRect;
+    if (!rect || !(rect.w > 0) || this.W <= 0 || this.H <= 0) return null;
+    const existing = this.placedTimerPoint();
+    const scale = timerScale(existing?.scale);
+    const next = timerScaleForEdge(edgeX, rect.x, rect.y, rect.w / scale, rect.h / scale, this.W, this.H);
+    if (!existing && next === 1) return null;
+    const parked = existing ?? { x: (rect.x / this.W) * 100, y: (rect.y / this.H) * 100 };
+    const point: TimerPlacement = next === 1 ? { x: parked.x, y: parked.y } : { x: parked.x, y: parked.y, scale: next };
+    this.dragPoint = point;
+    return point;
   }
 
   /** AutoAdvanceBar. */
@@ -819,6 +884,17 @@ export class FrameRenderer {
   }
 
   private readonly promptDrawings = new Map<string, ReturnType<typeof createPromptDrawing>>();
+  private readonly joinerDrawings = new Map<string, ReturnType<typeof createPromptDrawing>>();
+
+  private joinerDrawing(text: string, style: NonNullable<Question["imageJoinerStyle"]>, family: string) {
+    const key = `${family}\0${text}\0${JSON.stringify(style)}`;
+    let drawing = this.joinerDrawings.get(key);
+    if (!drawing) {
+      drawing = createPromptDrawing(this.ctx, { prompt: text, promptStyle: style }, this.quiz.theme, promptFontStack(family), { designWidth: joinerDesignWidth(text, style) });
+      this.joinerDrawings.set(key, drawing);
+    }
+    return drawing;
+  }
 
   private styledPromptBox(run: QuestionRun, sinceMount: number, width: number): Box {
     const q = run.question;
@@ -846,7 +922,8 @@ export class FrameRenderer {
     const q = run.question;
     const showProgressHeader = showsProgressBar(this.quiz.settings);
 
-    const meter = run.limitSeconds !== null ? this.meterBox(run, t) : null;
+    // A dragged timer is drawn on the frame instead, so the header keeps only the label.
+    const meter = this.placedTimerPoint() === null && run.limitSeconds !== null ? this.meterBox(run, t) : null;
     const groupW = meter?.w ?? 0;
     const groupH = meter?.h ?? 0;
 
@@ -878,12 +955,57 @@ export class FrameRenderer {
 
         const gx = x + CW - groupW;
         const cy = y + groupH / 2;
-        if (meter) meter.draw(gx, cy - meter.h / 2);
+        if (meter) {
+          const my = cy - meter.h / 2;
+          this.noteTimerRect(gx, my, meter.w, meter.h);
+          meter.draw(gx, my);
+        }
       },
     };
   }
 
   /* --------------------------------------------------------------- timer */
+
+  private timerView(): TimerView {
+    return this.narrow ? "mobile" : "web";
+  }
+
+  /** Saved or in-progress spot. Null keeps the timer in the header. */
+  private placedTimerPoint(): TimerPlacement | null {
+    return this.dragPoint ?? timerPlacementFor(this.quiz.settings, this.timerView());
+  }
+
+  /** Records the timer in framing pixels, accounting for the current transform. */
+  private noteTimerRect(x: number, y: number, w: number, h: number) {
+    const m = this.ctx.getTransform();
+    const s = this.scale || 1;
+    const project = (px: number, py: number) => ({
+      x: (m.a * px + m.c * py + m.e) / s,
+      y: (m.b * px + m.d * py + m.f) / s,
+    });
+    const origin = project(x, y);
+    const end = project(x + w, y + h);
+    this.timerRect = { x: origin.x, y: origin.y, w: end.x - origin.x, h: end.y - origin.y };
+  }
+
+  /**
+   * Draws a dragged timer at a percent of the full video frame. `fit` and `top`
+   * are the stage transform, so the timer stays the same size as the header one.
+   */
+  private drawFreeTimer(run: QuestionRun, t: number, fit: number, top: number) {
+    const point = this.placedTimerPoint();
+    if (!point || run.limitSeconds === null || fit <= 0) return;
+    const meter = this.meterBox(run, t, 64 * timerScale(point.scale));
+    const frameW = meter.w * fit;
+    const frameH = meter.h * fit;
+    const placed = clampTimerOrigin(point.x, point.y, frameW, frameH, this.W, this.H);
+    const frameX = (placed.x / 100) * this.W;
+    const frameY = (placed.y / 100) * this.H;
+    const userX = this.W / 2 + (frameX - this.W / 2) / fit;
+    const userY = (frameY - top) / fit;
+    this.noteTimerRect(userX, userY, meter.w, meter.h);
+    meter.draw(userX, userY);
+  }
 
   private meterState(run: QuestionRun, t: number) {
     const limitMs = (run.limitSeconds ?? 0) * 1000;
@@ -921,10 +1043,9 @@ export class FrameRenderer {
     return F(t) - F(run.mountAt);
   }
 
-  /** ProgressMeter at size 64. */
-  private meterBox(run: QuestionRun, t: number): Box {
+  /** ProgressMeter. Size 64 is the original length; a dragged end point scales it. */
+  private meterBox(run: QuestionRun, t: number, size = 64): Box {
     const { ctx } = this;
-    const size = 64;
     const style = timerProgressStyle(this.quiz.settings);
     const showNumber = this.quiz.settings.showTimerNumber !== false;
     const pulse = this.quiz.settings.progressPulse;
@@ -1161,6 +1282,7 @@ export class FrameRenderer {
     const gap = this.md ? 16 : 12;
     const colW = (CW - gap * (cols - 1)) / cols;
     const typography = answerTextStyle(theme, q);
+    const boxScale = answerBoxScale(typography);
     const size = (typography.fontSize ?? 18) * CW / PROMPT_DESIGN_WIDTH;
     const family = fontFamily(typography.font ?? theme.font, typography.font ? typography.customFont : theme.customFont, this.assets.fonts);
     // Styled lettering (lib/textStyle) swaps in its own face and wraps inside its padding; Plain is untouched.
@@ -1178,12 +1300,12 @@ export class FrameRenderer {
       const showMark = revealed && (option.correct || isPicked);
       const markerW = marker ? this.measure(marker, markerFont) : 0;
       const markW = showMark ? this.measure(option.correct ? "✓" : "✕", markerFont) : 0;
-      const textW = colW - 32 - (marker ? markerW + 12 : 0) - (option.media ? 68 : 0) - (showMark ? markW + 12 : 0);
+      const textW = colW - 32 * boxScale - (marker ? markerW + 12 : 0) - (option.media ? 56 * boxScale + 12 : 0) - (showMark ? markW + 12 : 0);
       const lines = lettering
         ? wrapWords(option.text, (s) => this.measure(s, font), styledWrapWidth(Math.max(20, textW), size, lettering))
         : this.wrap(option.text, font, Math.max(20, textW));
-      const inner = Math.max(marker ? 32 : 0, option.media ? 56 : 0, lines.length * lh, showMark ? 32 : 0);
-      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(80, inner + 32), textW: Math.max(20, textW) };
+      const inner = Math.max(marker ? 32 : 0, option.media ? 56 * boxScale : 0, lines.length * lh, showMark ? 32 : 0);
+      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(80 * boxScale, inner + 32 * boxScale), textW: Math.max(20, textW) };
     });
 
     const rows: TextTile[][] = [];
@@ -1259,18 +1381,20 @@ export class FrameRenderer {
     const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
     // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
-    const boxless = answerChrome(theme).hideBoxes;
+    const boxless = answerChrome(theme).hideBoxes || run.question.hideAnswerBoxes === true || option.hideBox === true;
     const frame = boxless
       ? boxlessFrame({ revealed, rp, pickP, correct: option.correct, picked: tile.isPicked }, { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad }, mixColor)
       : null;
     const bar = frame?.bar;
     const tileText = frame?.text ?? textColor;
+    const tileW = option.boxWidth ? w * option.boxWidth : w;
+    const tileX = option.boxWidth ? x + (w - tileW) / 2 : x;
 
-    this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, x, y, w, h, () => this.withPose(tin, x + w / 2, y + h / 2, opacity, () => {
+    this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, tileX, y, tileW, h, () => this.withPose(tin, tileX + tileW / 2, y + h / 2, opacity, () => {
       if (!boxless) {
-        if (glow > 0) this.glowShadow(x, y, w, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
-        if (ring > 0) this.fillRing(x, y, w, h, r, 4, `rgba(255,255,255,${ring})`);
-        this.fillRR(x, y, w, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
+        if (glow > 0) this.glowShadow(tileX, y, tileW, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
+        if (ring > 0) this.fillRing(tileX, y, tileW, h, r, 4, `rgba(255,255,255,${ring})`);
+        this.fillRR(tileX, y, tileW, h, r, faded ? saturateColor(fill, lerp(1, 0.5, rp)) : fill);
       } else if (bar && bar.alpha > 0) {
         ctx.save();
         ctx.globalAlpha *= bar.alpha;
@@ -1278,11 +1402,13 @@ export class FrameRenderer {
           ctx.shadowColor = bar.color;
           ctx.shadowBlur = FEEDBACK_BAR.glow;
         }
-        this.fillRR(x + FEEDBACK_BAR.inset, y + h - FEEDBACK_BAR.bottom - FEEDBACK_BAR.height, w - FEEDBACK_BAR.inset * 2, FEEDBACK_BAR.height, FEEDBACK_BAR.height / 2, bar.color);
+        this.fillRR(tileX + FEEDBACK_BAR.inset, y + h - FEEDBACK_BAR.bottom - FEEDBACK_BAR.height, tileW - FEEDBACK_BAR.inset * 2, FEEDBACK_BAR.height, FEEDBACK_BAR.height / 2, bar.color);
         ctx.restore();
       }
 
-      let cx = x + 16;
+      const boxScale = answerBoxScale(answerTextStyle(theme, run.question));
+      const thumb = 56 * boxScale;
+      let cx = tileX + 16 * boxScale;
       const cy = y + h / 2;
       if (tile.marker) {
         ctx.save();
@@ -1294,15 +1420,15 @@ export class FrameRenderer {
       if (option.media) {
         const img = this.image(option.media);
         ctx.save();
-        this.rr(cx, cy - 28, 56, 56, hidesImageBoxes(this.quiz.settings, run.question) ? 0 : 8);
+        this.rr(cx, cy - thumb / 2, thumb, thumb, hidesImageBoxes(this.quiz.settings, run.question) ? 0 : 8);
         ctx.clip();
-        if (img) this.drawCover(img, cx, cy - 28, 56, 56);
+        if (img) this.drawCover(img, cx, cy - thumb / 2, thumb, thumb);
         else {
           ctx.fillStyle = this.ink[800];
-          ctx.fillRect(cx, cy - 28, 56, 56);
+          ctx.fillRect(cx, cy - thumb / 2, thumb, thumb);
         }
         ctx.restore();
-        cx += 68;
+        cx += thumb + 12;
       }
       const textTop = cy - (tile.lines.length * lh) / 2;
       const lettering = this.lettering();
@@ -1330,10 +1456,10 @@ export class FrameRenderer {
     const q = run.question;
     const cols = imageChoiceColumns(q.options.length);
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
-    const { w: colW, offset: colX } = imageChoiceTile(q.options.length, CW, gap);
-    const boxH = (colW * 2) / 3; // aspect-[3/2]
     const hideImageBoxes = hidesImageBoxes(this.quiz.settings, q);
     const typography = answerTextStyle(this.quiz.theme, q);
+    const boxScale = answerBoxScale(typography);
+    const hideCaptionBg = typography.hideImageTextBackground === true;
     const size = (typography.fontSize ?? 14) * CW / PROMPT_DESIGN_WIDTH;
     const capLh = size * 1.5;
     const numFont = this.font(600, 14);
@@ -1342,6 +1468,24 @@ export class FrameRenderer {
     const capFont = lettering
       ? cartoonFont(size, this.cartoonFace)
       : `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    const joinerStyle = imageJoinerStyled(q.imageJoinerStyle) ? q.imageJoinerStyle : undefined;
+    const joinerFamily = fontFamily(
+      joinerStyle?.font ?? typography.font ?? this.quiz.theme.font,
+      joinerStyle?.font ? joinerStyle.customFont : typography.font ? typography.customFont : this.quiz.theme.customFont,
+      this.assets.fonts,
+    );
+    const joinerSize = (joinerStyle ? promptFontSize(joinerStyle, 30) : (typography.fontSize ?? 18)) * CW / PROMPT_DESIGN_WIDTH;
+    const joinerFont = this.font(800, joinerSize, family);
+    // No words: columnGaps is null and the layout is the ordinary even gap.
+    // A shown word is its own width plus the tile gap on each side.
+    const colGaps = imageJoinerColumnGaps(q.options.length, CW, gap, q.imageJoiners, (text) => {
+      if (!joinerStyle) return this.measure(text, joinerFont);
+      const drawing = this.joinerDrawing(text, joinerStyle, joinerFamily);
+      return drawing.width * (joinerSize / promptFontSize(joinerStyle, 30));
+    });
+    const columns = imageColumnLayout(q.options.length, CW, gap, colGaps);
+    const colW = columns.colW;
+    const boxH = (colW * 2) / 3; // aspect-[3/2]
     const unscored = isUnscoredImage(q);
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
@@ -1356,7 +1500,7 @@ export class FrameRenderer {
         : lettering
           ? wrapWords(option.text, (s) => this.measure(s, capFont), styledWrapWidth(colW, size, lettering))
           : this.wrap(option.text, capFont, colW);
-      return { option, i, caption, h: boxH + (caption.length ? 4 + caption.length * capLh : 0) };
+      return { option, i, caption, h: boxH + (caption.length ? 4 + caption.length * capLh + (boxScale === 1 ? 0 : 8 * boxScale) : 0) };
     });
     const rows: (typeof tiles)[] = [];
     for (let i = 0; i < tiles.length; i += cols) rows.push(tiles.slice(i, i + cols));
@@ -1380,7 +1524,7 @@ export class FrameRenderer {
         let ry = y;
         rows.forEach((row, r) => {
           row.forEach(({ option, i, caption }, c) => {
-            const tx = x + colX + c * (colW + gap);
+            const tx = x + columns.left(c);
             const pickAt = this.pickedAt(run, option.id);
             const isPicked = pickAt !== null && t >= pickAt;
             const showCorrect = revealed && option.correct;
@@ -1462,6 +1606,10 @@ export class FrameRenderer {
                 this.drawLine(mark, tx + colW - 4 - mw / 2, ry + 4, 14, markFont, "#ffffff", "center");
               }
 
+              if (boxScale !== 1 && caption.length && !hideCaptionBg) {
+                this.fillRR(tx, ry + boxH + 4, colW, caption.length * capLh + 8 * boxScale, 8, "rgba(0,0,0,0.55)");
+              }
+
               if (lettering) {
                 const m = this.metrics(capFont);
                 ctx.font = capFont;
@@ -1482,6 +1630,38 @@ export class FrameRenderer {
               );
             }), i);
           });
+          if (colGaps) {
+            row.forEach(({ i }, c) => {
+              if (c >= row.length - 1) return;
+              const label = imageJoinerLabel(q.imageJoiners, i);
+              const gapW = colGaps[c] ?? 0;
+              if (!label || !(gapW > 0)) return;
+              const gx = x + columns.left(c) + colW;
+              if (joinerStyle) {
+                const drawing = this.joinerDrawing(label, joinerStyle, joinerFamily);
+                const contentW = drawing.width * (joinerSize / promptFontSize(joinerStyle, 30));
+                const scale = contentW / drawing.width;
+                const picture = joinerStyle.box?.backgroundStyle === "image" && joinerStyle.box.image && joinerStyle.box.hideBackground !== true
+                  ? this.image(joinerStyle.box.image)
+                  : null;
+                const fillMedia = resolveTextStyle(this.quiz.theme.promptTextStyle)?.image;
+                const fill = fillMedia ? this.image(fillMedia) : null;
+                ctx.save();
+                ctx.translate(gx + (gapW - contentW) / 2, ry + (boxH - drawing.height * scale) / 2);
+                ctx.scale(scale, scale);
+                drawing.draw(
+                  t - run.mountAt,
+                  Infinity,
+                  picture ? { ...picture, source: frameSource(picture, this.t) } : undefined,
+                  fill ? { ...fill, source: frameSource(fill, this.t) } : undefined,
+                );
+                ctx.restore();
+                return;
+              }
+              const lh = joinerSize * 1.15;
+              this.drawLine(label, gx + gapW / 2, ry + (boxH - lh) / 2, lh, joinerFont, typography.color ?? this.promptColor, "center");
+            });
+          }
           ry += rowH[r] + gap;
         });
         if (revealCapLines.length && revealSettings && revealCapFont) {

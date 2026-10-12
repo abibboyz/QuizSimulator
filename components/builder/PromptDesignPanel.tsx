@@ -15,12 +15,21 @@ const FILL_EFFECTS = ["solid", "gradient", "metallic", "chalk"] as const;
 const UNITS = ["all", "letter", "word", "sentence", "paragraph"] as const;
 const EFFECTS = ["appear", "fade", "rise", "drop", "slide-left", "slide-right", "zoom", "pop", "flip", "bounce", "float", "pulse"] as const;
 
-export function PromptDesignPanel({ question, theme, onChange }: { question: Question; theme: Theme; onChange: (question: Question) => void }) {
-  const style = question.promptStyle ?? {};
+export function PromptDesignPanel({ question, theme, onChange, target = "prompt" }: {
+  question: Question;
+  theme: Theme;
+  onChange: (question: Question) => void;
+  /** `joiner` writes the between-image design and leaves the question prompt alone. */
+  target?: "prompt" | "joiner";
+}) {
+  const style = (target === "joiner" ? question.imageJoinerStyle : question.promptStyle) ?? {};
   const box = style.box ?? { shape: "none" as const };
   const animation = style.textAnimation;
   const art = wordArtInk(theme.accent, theme.surface, wordArtStyleOf(style.wordArt) ?? "classic");
-  const patch = (change: Partial<Style>) => onChange({ ...question, promptStyle: { ...style, ...change } });
+  const patch = (change: Partial<Style>) => {
+    const next = { ...style, ...change };
+    onChange(target === "joiner" ? { ...question, imageJoinerStyle: next } : { ...question, promptStyle: next });
+  };
   const patchBox = (change: Partial<NonNullable<Style["box"]>>) => patch({ box: { ...box, ...change } });
   const patchAnimation = (change: Partial<NonNullable<Style["textAnimation"]>>) => patch({ textAnimation: { unit: "all", effect: "fade", durationMs: 450, delayMs: 0, staggerMs: 180, ...animation, ...change } });
 
@@ -73,6 +82,17 @@ export function PromptDesignPanel({ question, theme, onChange }: { question: Que
         })}
       </div>
       {box.shape !== "none" && <>
+      <label className="text-xs text-ink-300 sm:col-span-2">Box width · {Math.round((box.width ?? 1) * 100)}%
+        <input className="mt-2 w-full accent-[var(--accent)]" type="range" min={35} max={100} aria-label="Text box width" value={Math.round((box.width ?? 1) * 100)} onChange={(event) => {
+          const pct = Number(event.target.value);
+          patchBox({ width: pct >= 100 ? undefined : pct / 100 });
+        }} />
+        <span className="mt-1 block text-[11px] text-ink-400">The question shows this width. 100% is the full text column.</span>
+      </label>
+      <label className="flex items-center gap-2 text-xs text-ink-300 sm:col-span-2">
+        <input type="checkbox" checked={box.hideBackground === true} onChange={(event) => patchBox({ hideBackground: event.target.checked ? true : undefined })} />
+        Hide background
+      </label>
       <label className="text-xs text-ink-300 sm:col-span-2">Shape fill
         <select className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 p-2 text-sm" value={box.backgroundStyle ?? "solid"} onChange={(event) => patchBox({ backgroundStyle: event.target.value as NonNullable<Style["box"]>["backgroundStyle"] })}>
           <option value="solid">Solid colour</option><option value="gradient">Gradient</option><option value="texture">Subtle texture</option><option value="image">Image</option>

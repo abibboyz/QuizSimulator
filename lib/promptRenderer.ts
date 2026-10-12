@@ -11,9 +11,29 @@ type Context = CanvasRenderingContext2D;
 export interface PromptPicture { source: CanvasImageSource; width: number; height: number }
 interface Glyph { text: string; index: number; x: number; y: number; size: number; angle: number; width: number }
 
+/**
+ * Design-pixel width of a between-image word. The box hugs the glyphs instead
+ * of the full prompt column. `box.width` still shrinks the frame inside it.
+ */
+export function joinerDesignWidth(text: string, style: Question["promptStyle"] | undefined): number {
+  const size = promptFontSize(style, 30);
+  const chars = Math.max(1, promptGraphemes(text).length);
+  const frame = style?.box?.shape && style.box.shape !== "none" ? style.box : undefined;
+  const pad = frame ? (frame.padding ?? 16) * 2 : 4;
+  const outer = frame?.shadow ? 60 : frame?.shape === "speech" ? 28 : 8;
+  return Math.max(48, Math.ceil(chars * size * 0.62 + size + pad + outer));
+}
+
 /** Browser and video both paint this layout, including frames, paths and animation. */
-export function createPromptDrawing(ctx: Context, question: Pick<Question, "prompt" | "promptStyle">, theme: Theme, family: string) {
+export function createPromptDrawing(
+  ctx: Context,
+  question: Pick<Question, "prompt" | "promptStyle">,
+  theme: Theme,
+  family: string,
+  options?: { designWidth?: number },
+) {
   const style = question.promptStyle ?? {};
+  const canvasWidth = options?.designWidth && options.designWidth > 16 ? options.designWidth : PROMPT_DESIGN_WIDTH;
   const text = question.prompt || "Untitled question";
   const size = promptFontSize(style, 30);
   const spacing = promptLetterSpacing(style, 30);
@@ -27,7 +47,7 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
   const defaults = artName ? wordArtInk(theme.accent, theme.surface, artName) : null;
   const art = defaults ? { ...defaults, ...Object.fromEntries(Object.entries(style.wordArtColors ?? {}).filter(([, value]) => value !== undefined)) } : null;
   const ink = themeInk(theme);
-  const color = question.prompt ? art?.fill ?? theme.promptColor ?? ink[100] : ink[500];
+  const color = question.prompt ? (style.color ?? art?.fill ?? theme.promptColor ?? ink[100]) : ink[500];
   const font = (px: number) => cartoon ? cartoonFont(px, cartoonFace) : `${style.italic ? "italic " : ""}${style.bold === false ? 400 : 700} ${px}px ${family}`;
   const measure = (sample: string, px = size) => {
     ctx.font = font(px);
@@ -42,7 +62,9 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
     ? Math.max(2, Math.ceil(Math.max(cartoonPad.right, cartoonPad.bottom)))
     : Math.max(2, ring + (art ? size * art.blur + drop * art.layers : 0));
   const outer = frame?.shadow ? 30 : frame?.shape === "speech" ? 14 : 2;
-  const boxWidth = frame?.shape === "circle" ? Math.min(PROMPT_DESIGN_WIDTH - outer * 2, Math.max(160, size * 5)) : PROMPT_DESIGN_WIDTH - outer * 2;
+  const widthScale = frame?.width !== undefined && Number.isFinite(frame.width) ? Math.min(1, Math.max(0.35, frame.width)) : 1;
+  const naturalWidth = frame?.shape === "circle" ? Math.min(canvasWidth - outer * 2, Math.max(160, size * 5)) : canvasWidth - outer * 2;
+  const boxWidth = widthScale === 1 ? naturalWidth : naturalWidth * widthScale;
   const available = Math.max(16, boxWidth - 2 * (padding + inset));
   const shape = style.textShape ?? "straight";
   const shaped = shape !== "straight" || (style.letterShape && style.letterShape !== "uniform");
@@ -109,39 +131,43 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
     };
     traceFrame();
     const fill = withAlpha(frame.fill ?? theme.surface, frame.opacity ?? 0.85);
-    ctx.fillStyle = fill;
-    if (frame.backgroundStyle === "gradient") {
-      const angle = (frame.gradientAngle ?? 135) * Math.PI / 180;
-      const dx = Math.sin(angle) * w / 2, dy = -Math.cos(angle) * h / 2;
-      const gradient = ctx.createLinearGradient(x + w / 2 - dx, y + h / 2 - dy, x + w / 2 + dx, y + h / 2 + dy);
-      gradient.addColorStop(0, fill); gradient.addColorStop(1, withAlpha(frame.gradientTo ?? theme.accent, frame.opacity ?? 0.85));
-      ctx.fillStyle = gradient;
-    }
-    ctx.save();
-    if (frame.shadow) { ctx.shadowColor = "#00000059"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 12; }
-    ctx.fill(); ctx.restore();
-    if (frame.backgroundStyle === "image" && picture) {
-      ctx.save(); ctx.clip();
-      const scale = Math.max(w / picture.width, h / picture.height);
-      ctx.drawImage(picture.source, x + (w - picture.width * scale) / 2, y + (h - picture.height * scale) / 2, picture.width * scale, picture.height * scale);
-      ctx.fillStyle = fill; ctx.fill(); ctx.restore();
-    }
-    if (frame.backgroundStyle === "texture") {
-      ctx.save(); ctx.clip(); ctx.strokeStyle = "#ffffff10"; ctx.lineWidth = 2;
-      for (let offset = -h; offset < w + h; offset += 7) {
-        ctx.beginPath(); ctx.moveTo(x + offset, y); ctx.lineTo(x + offset + h, y + h); ctx.stroke();
+    const hideFill = frame.hideBackground === true;
+    if (!hideFill) {
+      ctx.fillStyle = fill;
+      if (frame.backgroundStyle === "gradient") {
+        const angle = (frame.gradientAngle ?? 135) * Math.PI / 180;
+        const dx = Math.sin(angle) * w / 2, dy = -Math.cos(angle) * h / 2;
+        const gradient = ctx.createLinearGradient(x + w / 2 - dx, y + h / 2 - dy, x + w / 2 + dx, y + h / 2 + dy);
+        gradient.addColorStop(0, fill); gradient.addColorStop(1, withAlpha(frame.gradientTo ?? theme.accent, frame.opacity ?? 0.85));
+        ctx.fillStyle = gradient;
       }
-      ctx.restore();
-      // Restore the frame path after drawing the texture's stripes.
-      traceFrame();
+      ctx.save();
+      if (frame.shadow) { ctx.shadowColor = "#00000059"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 12; }
+      ctx.fill(); ctx.restore();
+      if (frame.backgroundStyle === "image" && picture) {
+        ctx.save(); ctx.clip();
+        const scale = Math.max(w / picture.width, h / picture.height);
+        ctx.drawImage(picture.source, x + (w - picture.width * scale) / 2, y + (h - picture.height * scale) / 2, picture.width * scale, picture.height * scale);
+        ctx.fillStyle = fill; ctx.fill(); ctx.restore();
+      }
+      if (frame.backgroundStyle === "texture") {
+        ctx.save(); ctx.clip(); ctx.strokeStyle = "#ffffff10"; ctx.lineWidth = 2;
+        for (let offset = -h; offset < w + h; offset += 7) {
+          ctx.beginPath(); ctx.moveTo(x + offset, y); ctx.lineTo(x + offset + h, y + h); ctx.stroke();
+        }
+        ctx.restore();
+        // Restore the frame path after drawing the texture's stripes.
+        traceFrame();
+      }
     }
     if ((frame.borderWidth ?? 2) > 0) {
+      if (hideFill) traceFrame();
       ctx.strokeStyle = frame.border ?? withAlpha(theme.accent, 0.7); ctx.lineWidth = frame.borderWidth ?? 2;
       ctx.setLineDash(frame.borderStyle === "dashed" ? [10, 6] : frame.borderStyle === "dotted" ? [2, 5] : []); ctx.stroke(); ctx.setLineDash([]);
     }
     if (frame.shape === "speech") {
       ctx.beginPath(); ctx.moveTo(x + w * 0.25 - 8, y + h - 1); ctx.lineTo(x + w * 0.25, y + h + 10); ctx.lineTo(x + w * 0.25 + 8, y + h - 1);
-      ctx.fillStyle = fill; ctx.fill();
+      if (!hideFill) { ctx.fillStyle = fill; ctx.fill(); }
       if ((frame.borderWidth ?? 2) > 0) ctx.stroke();
     }
   }
@@ -187,9 +213,9 @@ export function createPromptDrawing(ctx: Context, question: Pick<Question, "prom
     ctx.letterSpacing = "0px";
   }
 
-  return { width: PROMPT_DESIGN_WIDTH, height, draw(elapsed = Infinity, typed = Infinity, picture?: PromptPicture, fillImage?: PromptPicture) {
+  return { width: canvasWidth, height, draw(elapsed = Infinity, typed = Infinity, picture?: PromptPicture, fillImage?: PromptPicture) {
     ctx.save();
-    const centered = (PROMPT_DESIGN_WIDTH - boxWidth) / 2 - outer;
+    const centered = (canvasWidth - boxWidth) / 2 - outer;
     ctx.translate(centered, 0);
     paintFrame(picture);
     ctx.translate(outer + padding + inset, outer + (boxHeight - textHeight) / 2);

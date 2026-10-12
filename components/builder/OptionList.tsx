@@ -107,6 +107,8 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
       onIcon={(icon) => update(option.id, { icon: icon.trim() ? icon : undefined })}
       onColor={(color) => update(option.id, { color })}
       onMedia={(media) => update(option.id, { media })}
+      onBoxWidth={(boxWidth) => update(option.id, { boxWidth })}
+      onHideBox={(hideBox) => update(option.id, { hideBox })}
       onMarkCorrect={() => markCorrect(option.id)}
       onRemove={() => remove(option.id)}
     />
@@ -168,6 +170,8 @@ interface RowProps {
   onIcon: (icon: string) => void;
   onColor: (color: string | undefined) => void;
   onMedia: (media?: Option["media"]) => void;
+  onBoxWidth: (boxWidth?: number) => void;
+  onHideBox: (hideBox?: boolean) => void;
   onMarkCorrect: () => void;
   onRemove: () => void;
 }
@@ -187,6 +191,8 @@ function OptionRow({
   onIcon,
   onColor,
   onMedia,
+  onBoxWidth,
+  onHideBox,
   onMarkCorrect,
   onRemove,
 }: RowProps) {
@@ -260,8 +266,59 @@ function OptionRow({
         value={option.text}
         onChange={(event) => onText(event.target.value)}
         placeholder={`Answer ${index + 1}`}
-        className="flex-1"
+        className={`flex-1 transition-all ${option.hideBox ? "border-dashed border-ink-600 bg-transparent" : ""}`}
+        style={{
+          maxWidth: option.boxWidth ? `${Math.round(option.boxWidth * 100)}%` : undefined,
+        }}
       />
+
+      {/* Resizer: controls answer box length / width */}
+      <div
+        className="flex shrink-0 items-center rounded-lg border border-ink-700/80 bg-ink-950/60 p-0.5 text-xs text-ink-300"
+        title="Resize answer box length (width). Click − or + to adjust, or click % to cycle presets (100%, 80%, 60%, 40%)."
+      >
+        <button
+          type="button"
+          onClick={() => {
+            const current = option.boxWidth ?? 1;
+            const next = Math.max(0.35, Math.round((current - 0.1) * 10) / 10);
+            onBoxWidth(next >= 0.99 ? undefined : next);
+          }}
+          disabled={(option.boxWidth ?? 1) <= 0.35}
+          className="focus-ring rounded px-1.5 py-0.5 font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-100 disabled:opacity-25"
+          title="Make answer box shorter (narrower length: -10%)"
+          aria-label={`Make answer ${index + 1} shorter`}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const current = option.boxWidth ?? 1;
+            const next = current <= 0.45 ? undefined : current <= 0.65 ? 0.4 : current <= 0.85 ? 0.6 : 0.8;
+            onBoxWidth(next);
+          }}
+          className="focus-ring px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink-300 hover:text-ink-100"
+          title={`Answer box length: ${Math.round((option.boxWidth ?? 1) * 100)}%. Click to cycle presets (100%, 80%, 60%, 40%).`}
+          aria-label={`Current answer ${index + 1} length: ${Math.round((option.boxWidth ?? 1) * 100)}%`}
+        >
+          ↔ {Math.round((option.boxWidth ?? 1) * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const current = option.boxWidth ?? 1;
+            const next = Math.min(1, Math.round((current + 0.1) * 10) / 10);
+            onBoxWidth(next >= 0.99 ? undefined : next);
+          }}
+          disabled={(option.boxWidth ?? 1) >= 1}
+          className="focus-ring rounded px-1.5 py-0.5 font-bold text-ink-400 hover:bg-ink-800 hover:text-ink-100 disabled:opacity-25"
+          title="Make answer box longer (wider length: +10%)"
+          aria-label={`Make answer ${index + 1} longer`}
+        >
+          +
+        </button>
+      </div>
 
       <MediaDropZone media={option.media} onChange={onMedia} compact />
 
@@ -273,6 +330,28 @@ function OptionRow({
         aria-label={`Delete answer ${index + 1}`}
       >
         ✕
+      </button>
+
+      {/* Hide box background (make box transparent) */}
+      <button
+        type="button"
+        onClick={() => onHideBox(option.hideBox ? undefined : true)}
+        className={`focus-ring shrink-0 rounded-lg border p-1.5 transition ${
+          option.hideBox
+            ? "border-[var(--accent-line,#6366f1)] bg-[var(--accent-soft,rgba(99,102,241,0.15))] text-ink-100 shadow-sm"
+            : "border-ink-700 bg-ink-800/40 text-ink-400 hover:border-ink-600 hover:text-ink-200"
+        }`}
+        aria-label={`Make answer ${index + 1} box transparent`}
+        title={
+          option.hideBox
+            ? "Box background is hidden (transparent). Click to restore solid card background."
+            : "Make box transparent (hide box background). Click to make answer card transparent."
+        }
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray={option.hideBox ? "3 3" : undefined} />
+          {option.hideBox && <line x1="3" y1="21" x2="21" y2="3" strokeWidth={1.5} />}
+        </svg>
       </button>
     </div>
   );

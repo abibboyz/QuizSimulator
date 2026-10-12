@@ -16,8 +16,8 @@ export const DEFAULT_PREVIEW_FRAME: PreviewFrame = "builder";
 
 export const PREVIEW_FRAMES: { id: PreviewFrame; label: string; hint: string }[] = [
   { id: "builder", label: "Builder", hint: "Editable preview: drag the prompt, toggle the answer" },
-  { id: "web", label: "Web 16:9", hint: "Exactly what plays and exports in web / horizontal" },
-  { id: "mobile", label: "Mobile 9:16", hint: "Exactly what plays and exports in mobile / vertical" },
+  { id: "web", label: "Web 16:9", hint: "Drag the timer to move it, or drag the end dot to change its length. Leave it and it stays at the top right." },
+  { id: "mobile", label: "Mobile 9:16", hint: "Drag the timer to move it, or drag the end dot to change its length. Leave it and it stays at the top right." },
 ];
 
 export function framingFor(frame: PreviewFrame): Framing | null {

@@ -18,7 +18,7 @@ import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 import { AnimationSection } from "@/components/builder/AnimationSection";
 import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
 import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
-import { hidesImageBoxes } from "@/lib/imageChoice";
+import { hidesImageBoxes, imageJoinerSlots, withImageJoiner, withImageJoinersFilled } from "@/lib/imageChoice";
 
 const PROMPT_EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -299,20 +299,23 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
       />
 
       {(question.kind === "image-choice" || question.kind === "reveal") && (
-        <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
-          <Input
-            type="number"
-            min={0}
-            max={48}
-            value={question.optionGap ?? 12}
-            onChange={(event) => {
-              const raw = Number(event.target.value);
-              const clamped = Number.isFinite(raw) ? Math.min(48, Math.max(0, Math.round(raw))) : 12;
-              onChange({ ...question, optionGap: clamped });
-            }}
-            aria-label="Gap between image tiles in pixels"
-          />
-        </Field>
+        <>
+          <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
+            <Input
+              type="number"
+              min={0}
+              max={48}
+              value={question.optionGap ?? 12}
+              onChange={(event) => {
+                const raw = Number(event.target.value);
+                const clamped = Number.isFinite(raw) ? Math.min(48, Math.max(0, Math.round(raw))) : 12;
+                onChange({ ...question, optionGap: clamped });
+              }}
+              aria-label="Gap between image tiles in pixels"
+            />
+          </Field>
+          {question.options.length >= 2 && <ImageBetweenFields key={question.id} question={question} theme={theme} onChange={onChange} />}
+        </>
       )}
 
       <Field
@@ -551,7 +554,108 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
   );
 }
 
-function PromptFontSizeInput({ value, onChange }: { value: number; onChange: (size: number) => void }) {
+const BETWEEN_WORDS = ["VS", "OR", "AND"];
+
+function applyJoiners(question: Question, imageJoiners: string[] | undefined): Question {
+  if (!imageJoiners) {
+    if (!question.imageJoiners) return question;
+    const { imageJoiners: _removed, ...rest } = question;
+    return rest;
+  }
+  return { ...question, imageJoiners };
+}
+
+function patchJoinerStyle(question: Question, change: Partial<NonNullable<Question["imageJoinerStyle"]>>): Question {
+  return { ...question, imageJoinerStyle: { ...question.imageJoinerStyle, ...change } };
+}
+
+function ImageBetweenFields({ question, theme, onChange }: { question: Question; theme: Theme; onChange: (question: Question) => void }) {
+  const [designOpen, setDesignOpen] = useState(false);
+  const slots = imageJoinerSlots(question.options.length);
+  if (slots.length === 0) return null;
+  const style = question.imageJoinerStyle;
+  const filled = (word: string) => slots.every((index) => (question.imageJoiners?.[index] ?? "") === word);
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">Text between images</span>
+        <span className="flex gap-1">
+          {BETWEEN_WORDS.map((word) => (
+            <button
+              key={word}
+              type="button"
+              aria-pressed={filled(word)}
+              onClick={() =>
+                onChange(applyJoiners(question, filled(word) ? undefined : withImageJoinersFilled(question.options.length, word)))
+              }
+              className={`focus-ring rounded-lg px-2 py-1 text-xs font-semibold ${
+                filled(word) ? "bg-ink-100 text-ink-950" : "text-ink-300 hover:bg-ink-800"
+              }`}
+            >
+              {word}
+            </button>
+          ))}
+        </span>
+      </div>
+      <p className="mb-2 text-xs text-ink-500">
+        Shown between pictures on the same row. A tile gap of 12 leaves 12px on the left of the word and 12px on the right. Leave a gap blank and it stays a single gap.
+      </p>
+      <div className="mb-2 flex flex-wrap items-center gap-2" role="group" aria-label="Between-image text design">
+        {([["bold", "B"], ["italic", "I"], ["underline", "U"]] as const).map(([key, label]) => {
+          const active = style?.[key] ?? (key === "bold");
+          return <button key={key} type="button" aria-label={`Between-image ${key}`} aria-pressed={active}
+            className={`focus-ring rounded-lg border px-3 py-1.5 text-sm text-ink-100 ${active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
+            style={{ fontWeight: key === "bold" ? 700 : undefined, fontStyle: key === "italic" ? "italic" : undefined, textDecoration: key === "underline" ? "underline" : undefined }}
+            onClick={() => onChange(patchJoinerStyle(question, { [key]: !active }))}>{label}</button>;
+        })}
+        <PromptFontSizeInput key={`${question.id}-joiner-${style?.fontSize ?? 24}`} value={style?.fontSize ?? 24} label="Between-image font size in pixels"
+          onChange={(fontSize) => onChange(patchJoinerStyle(question, { fontSize }))} />
+        {(["left", "center", "right"] as const).map((align) => {
+          const active = promptAlign(style) === align;
+          const mark = align === "left" ? "L" : align === "right" ? "R" : "C";
+          return <button key={align} type="button" aria-label={`Between-image align ${align}`} aria-pressed={active}
+            className={`focus-ring rounded-lg border px-3 py-1.5 text-sm text-ink-100 ${active ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
+            onClick={() => onChange(patchJoinerStyle(question, { align: align === "center" ? undefined : align }))}>{mark}</button>;
+        })}
+        <ColorSwatch label="Between-image text colour" value={style?.color} fallback={theme.promptColor ?? themeInk(theme)[100]}
+          onChange={(color) => onChange(patchJoinerStyle(question, { color }))} />
+        <button type="button" aria-expanded={designOpen}
+          className={`focus-ring rounded-lg border px-3 py-1.5 text-sm font-semibold text-ink-100 ${designOpen ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-ink-700"}`}
+          onClick={() => setDesignOpen((open) => !open)}>✦ Text design</button>
+        <Select aria-label="Between-image font" className="w-auto" value={style?.font ?? ""}
+          onChange={(event) => onChange(patchJoinerStyle(question, { font: (event.target.value || undefined) as FontChoice | undefined, customFont: undefined }))}>
+          <option value="">Use answer font</option>
+          {FONT_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.choices.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}</optgroup>)}
+        </Select>
+        {style && <button type="button" className="focus-ring rounded-lg px-2 py-1 text-xs text-ink-400 underline" onClick={() => {
+          const { imageJoinerStyle: _drop, ...rest } = question;
+          onChange(rest);
+        }}>Clear design</button>}
+      </div>
+      {style?.font === "custom" && <Input className="mb-2" aria-label="Between-image custom font" placeholder="Installed font name"
+        value={style.customFont ?? ""} onChange={(event) => onChange(patchJoinerStyle(question, { customFont: event.target.value }))} />}
+      {designOpen && <div className="mb-3"><PromptDesignPanel question={question} theme={theme} target="joiner" onChange={onChange} /></div>}
+      <div className={`grid gap-2 sm:grid-cols-2 ${slots.length > 6 ? "max-h-64 overflow-y-auto pr-1" : ""}`}>
+        {slots.map((index) => (
+          <label key={index} className="block">
+            <span className="mb-1 block text-xs text-ink-400">
+              Between image {index + 1} and {index + 2}
+            </span>
+            <Input
+              value={question.imageJoiners?.[index] ?? ""}
+              onChange={(event) => onChange(applyJoiners(question, withImageJoiner(question, index, event.target.value)))}
+              placeholder="VS, or, This or That"
+              aria-label={`Text between image ${index + 1} and ${index + 2}`}
+              autoComplete="off"
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PromptFontSizeInput({ value, onChange, label = "Prompt font size in pixels" }: { value: number; onChange: (size: number) => void; label?: string }) {
   const [draft, setDraft] = useState(String(value));
 
   const commit = () => {
@@ -573,7 +677,7 @@ function PromptFontSizeInput({ value, onChange }: { value: number; onChange: (si
       max={150}
       step={1}
       inputMode="numeric"
-      aria-label="Prompt font size in pixels"
+      aria-label={label}
       title="Prompt font size, 12 to 150 pixels"
       className="focus-ring w-20 rounded-lg border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100"
       value={draft}

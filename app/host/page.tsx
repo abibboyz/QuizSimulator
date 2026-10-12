@@ -20,6 +20,8 @@ import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { showsProgressBar, timerProgressStyle } from "@/lib/progress";
+import { timerPlacementFor, timerScale } from "@/lib/timerPlacement";
+import { FreeTimer } from "@/components/play/FreeTimer";
 import { showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
@@ -202,7 +204,7 @@ interface HostQuestionProps {
   /** Just the meter's slice of settings — the rest already arrives unpacked. */
   meter: Pick<
     QuizSettings,
-    "progressStyle" | "progressPulse" | "progressColor" | "progressTrackColor" | "progressThickness" | "showTimerNumber" | "progressMascot" | "progressMascotMedia" | "progressMascotMotion" | "quizProgressStyle" | "showProgressBar" | "autoAdvanceBarStyle" | "autoAdvanceColor" | "autoAdvanceTrackColor"
+    "progressStyle" | "progressPulse" | "progressColor" | "progressTrackColor" | "progressThickness" | "showTimerNumber" | "progressMascot" | "progressMascotMedia" | "progressMascotMotion" | "quizProgressStyle" | "showProgressBar" | "autoAdvanceBarStyle" | "autoAdvanceColor" | "autoAdvanceTrackColor" | "timerPlacement"
   >;
   canBack: boolean;
   isLast: boolean;
@@ -324,8 +326,11 @@ function HostQuestion({
     return () => window.removeEventListener("keydown", onKey);
   }, [revealed, reveal, advance, onBack, unscored]);
 
+  const placedTimer = timerPlacementFor(meter, "web");
+  const timerFraction = remainingMs !== null && limitSeconds ? remainingMs / (limitSeconds * 1000) : 0;
+
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2" style={{ justifyContent: "safe center" }}>
         {/* Host mode doesn't score, so there are no per-question outcomes to
             colour in — the meter shows position only. */}
@@ -340,13 +345,13 @@ function HostQuestion({
           trackColor={meter.progressTrackColor}
           thickness={meter.progressThickness}
         />}
-        {remainingMs !== null && limitSeconds !== null && (
+        {remainingMs !== null && limitSeconds !== null && !placedTimer && (
           <div className="mb-4 flex min-h-24 items-center justify-end">
             <ProgressMeter
               key={question.id}
-              fraction={remainingMs / (limitSeconds * 1000)}
+              fraction={timerFraction}
               secondsLeft={Math.ceil(remainingMs / 1000)}
-              urgent={remainingMs / (limitSeconds * 1000) <= 0.25}
+              urgent={timerFraction <= 0.25}
               style={timerProgressStyle(meter)}
               pulse={meter.progressPulse}
               mascot={meter.progressMascot}
@@ -360,6 +365,27 @@ function HostQuestion({
               size={96}
             />
           </div>
+        )}
+        {remainingMs !== null && limitSeconds !== null && placedTimer && (
+          <FreeTimer x={placedTimer.x} y={placedTimer.y}>
+            <ProgressMeter
+              key={question.id}
+              fraction={timerFraction}
+              secondsLeft={Math.ceil(remainingMs / 1000)}
+              urgent={timerFraction <= 0.25}
+              style={timerProgressStyle(meter)}
+              pulse={meter.progressPulse}
+              mascot={meter.progressMascot}
+              mascotMedia={meter.progressMascotMedia}
+              mascotMotion={meter.progressMascotMotion}
+              color={meter.progressColor}
+              trackColor={meter.progressTrackColor}
+              thickness={meter.progressThickness}
+              showNumber={meter.showTimerNumber !== false}
+              celebrate={revealed && !unscored}
+              size={96 * timerScale(placedTimer.scale)}
+            />
+          </FreeTimer>
         )}
         <QuestionStage
           loopSettings={loopSettings}

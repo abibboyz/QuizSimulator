@@ -10,6 +10,8 @@ import { createQuestion, duplicateQuestion } from "@/lib/factory";
 import { exportQuizFile } from "@/lib/transfer";
 import { copyQuestion, pasteQuestion } from "@/lib/questionClipboard";
 import { QUESTION_CLIPBOARD_KEY, readQuestionClipboard } from "@/lib/questionClipboardState";
+import { copyQuestionSettings, pasteQuestionSettings } from "@/lib/questionSettingsClipboard";
+import { QUESTION_SETTINGS_KEY, readQuestionSettings } from "@/lib/questionSettingsClipboardState";
 import { ExportVideoButton } from "@/components/export/ExportVideoButton";
 import { themeVars } from "@/lib/themes";
 import { Button } from "@/components/ui/Button";
@@ -47,6 +49,7 @@ function EditView() {
   const [previewFrame, setPreviewFrame] = useState<PreviewFrame>(DEFAULT_PREVIEW_FRAME);
   const [saveState, setSaveState] = useState<SaveState>("clean");
   const [hasCopiedQuestion, setHasCopiedQuestion] = useState(false);
+  const [hasTextSettings, setHasTextSettings] = useState(false);
   const [clipboardBusy, setClipboardBusy] = useState(false);
   const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
   const [clipboardError, setClipboardError] = useState(false);
@@ -78,10 +81,11 @@ function EditView() {
     const refresh = () => {
       const copied = readQuestionClipboard();
       setHasCopiedQuestion(!!copied && copied.sourceQuizId !== quizId);
+      setHasTextSettings(readQuestionSettings() !== null);
     };
     refresh();
     const onStorage = (event: StorageEvent) => {
-      if (event.key === QUESTION_CLIPBOARD_KEY) refresh();
+      if (event.key === QUESTION_CLIPBOARD_KEY || event.key === QUESTION_SETTINGS_KEY) refresh();
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", refresh);
@@ -187,6 +191,48 @@ function EditView() {
       setClipboardBusy(false);
     }
   }, [quiz, activeId, clipboardBusy]);
+
+  const copySettings = useCallback(async (id: string) => {
+    if (!quiz || clipboardBusy) return;
+    const source = quiz.questions.find((question) => question.id === id);
+    if (!source) return;
+    setClipboardBusy(true);
+    setClipboardMessage(null);
+    try {
+      await copyQuestionSettings(quiz.id, source);
+      setHasTextSettings(true);
+      setClipboardError(false);
+      setClipboardMessage("Copied question settings. Paste them onto any question with P.");
+    } catch (error) {
+      setClipboardError(true);
+      setClipboardMessage(error instanceof Error ? error.message : "Could not copy question settings.");
+    } finally {
+      setClipboardBusy(false);
+    }
+  }, [quiz, clipboardBusy]);
+
+  const pasteSettings = useCallback(async (targetId?: string) => {
+    const questionId = targetId ?? activeId;
+    if (!quiz || clipboardBusy || !questionId) return;
+    const target = quiz.questions.find((question) => question.id === questionId);
+    if (!target) return;
+    setClipboardBusy(true);
+    setClipboardMessage(null);
+    try {
+      const next = await pasteQuestionSettings(target);
+      if (next) {
+        updateQuestion(next);
+        setActiveId(target.id);
+        setClipboardError(false);
+        setClipboardMessage("Question settings pasted.");
+      }
+    } catch (error) {
+      setClipboardError(true);
+      setClipboardMessage(error instanceof Error ? error.message : "Could not paste settings.");
+    } finally {
+      setClipboardBusy(false);
+    }
+  }, [quiz, activeId, clipboardBusy, updateQuestion]);
 
   const remove = useCallback(
     (id: string) =>
@@ -300,9 +346,12 @@ function EditView() {
             questions={quiz.questions}
             activeId={active?.id ?? null}
             invalidIds={invalidIds}
+            hasSettingsClipboard={hasTextSettings}
             onSelect={setActiveId}
             onReorder={(questions) => patchQuiz({ questions })}
             onCopy={(id) => { void copy(id); }}
+            onCopySettings={(id) => { void copySettings(id); }}
+            onPasteSettings={(id) => { void pasteSettings(id); }}
             onDuplicate={duplicate}
             onDelete={remove}
           />
@@ -327,6 +376,11 @@ function EditView() {
           {hasCopiedQuestion && (
             <Button variant="primary" size="sm" className="w-full" disabled={clipboardBusy} onClick={() => { void paste(); }}>
               📋 Paste copied question
+            </Button>
+          )}
+          {hasTextSettings && (
+            <Button variant="outline" size="sm" className="w-full" disabled={clipboardBusy || !active} onClick={() => { void pasteSettings(); }}>
+              P Paste settings
             </Button>
           )}
           {clipboardMessage && <p role="status" className={`text-xs ${clipboardError ? "text-bad" : "text-ink-300"}`}>{clipboardMessage}</p>}
@@ -374,6 +428,7 @@ function EditView() {
                   onChange={updateQuestion}
                   frame={previewFrame}
                   onFrameChange={setPreviewFrame}
+                  onChangeSettings={patchSettings}
                 />
               ) : (
                 <p className="text-sm text-ink-400">Nothing to preview yet.</p>
