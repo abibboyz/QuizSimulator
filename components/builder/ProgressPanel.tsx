@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { QuizSettings } from "@/types/quiz";
 import { MASCOTS, PROGRESS_PULSES, PROGRESS_STYLES, QUIZ_PROGRESS_STYLES, showsProgressBar, timerProgressStyle } from "@/lib/progress";
+import { timerPlacementFor, withTimerPlacement } from "@/lib/timerPlacement";
 import { Field, Input, Select, Toggle } from "@/components/ui/Field";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
@@ -105,6 +106,32 @@ export function ProgressPanel({ settings, accent, onChange }: Props) {
         checked={settings.showTimerNumber !== false}
         onChange={(showTimerNumber) => onChange({ showTimerNumber })}
       />
+
+      <p className="text-xs text-ink-500">
+        Drag the timer in the Web or Mobile preview to place it on the video. Drag the dot on its end to make it longer or shorter. Each view keeps its own spot and length. If you never drag it, it stays at the top right, at its original length.
+      </p>
+      {(timerPlacementFor(settings, "web") || timerPlacementFor(settings, "mobile")) && (
+        <div className="flex flex-wrap gap-2">
+          {timerPlacementFor(settings, "web") && (
+            <button
+              type="button"
+              onClick={() => onChange({ timerPlacement: withTimerPlacement(settings.timerPlacement, "web", null) })}
+              className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
+            >
+              Reset web timer
+            </button>
+          )}
+          {timerPlacementFor(settings, "mobile") && (
+            <button
+              type="button"
+              onClick={() => onChange({ timerPlacement: withTimerPlacement(settings.timerPlacement, "mobile", null) })}
+              className="focus-ring rounded-lg px-2 py-1 text-xs font-semibold text-ink-300 hover:bg-ink-800"
+            >
+              Reset mobile timer
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3 border-t border-ink-800 pt-3">
         <div>

@@ -23,7 +23,18 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Option, Question } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
-import { DEFAULT_IMAGE_GAP, MAX_IMAGE_OPTIONS, imageChoiceGridStyle } from "@/lib/imageChoice";
+import {
+  DEFAULT_IMAGE_GAP,
+  MAX_IMAGE_OPTIONS,
+  imageChoiceColumns,
+  imageChoiceGridStyle,
+  imageChoiceJoinedGridStyle,
+  imageJoinerGridPlace,
+  imageJoinerLabel,
+  imageJoinersActive,
+  imageJoinerSlots,
+  imageTileGridPlace,
+} from "@/lib/imageChoice";
 import { MediaError, imagesFromTransfer, putImage } from "@/lib/media";
 import { MediaImage } from "@/components/ui/MediaImage";
 
@@ -53,6 +64,8 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 
   const count = question.options.length;
   const gap = question.optionGap ?? DEFAULT_IMAGE_GAP;
+  const joined = imageJoinersActive(count, question.imageJoiners);
+  const columns = imageChoiceColumns(count);
   const selected = question.options.find((option) => option.id === selectedId) ?? question.options[0];
   const atCap = count >= MAX_IMAGE_OPTIONS;
 
@@ -260,12 +273,18 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
           modifiers={[restrictToParentElement]}
         >
           <SortableContext items={question.options.map((option) => option.id)} strategy={rectSortingStrategy}>
-            <div role="group" aria-label="Image answers" className="w-full" style={imageChoiceGridStyle(count, gap)}>
+            <div
+              role="group"
+              aria-label="Image answers"
+              className="w-full"
+              style={joined ? imageChoiceJoinedGridStyle(count, gap) : imageChoiceGridStyle(count, gap)}
+            >
               {question.options.map((option, index) => (
                 <ImageTile
                   key={option.id}
                   option={option}
                   index={index}
+                  place={joined ? imageTileGridPlace(index, columns) : undefined}
                   selected={option.id === selected?.id}
                   disabled={busy}
                   onSelect={() => {
@@ -285,6 +304,22 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
                   }
                 />
               ))}
+              {joined &&
+                imageJoinerSlots(count).map((index) => {
+                  const text = imageJoinerLabel(question.imageJoiners, index);
+                  if (!text) return null;
+                  const place = imageJoinerGridPlace(index, columns);
+                  return (
+                    <div
+                      key={`between-${index}`}
+                      aria-hidden
+                      className="pointer-events-none flex items-center justify-center self-center"
+                      style={{ gridColumn: place.gridColumn, gridRow: place.gridRow, minWidth: 0 }}
+                    >
+                      <span className="max-w-[9rem] truncate px-1 text-center text-xs font-extrabold text-ink-100">{text}</span>
+                    </div>
+                  );
+                })}
             </div>
           </SortableContext>
         </DndContext>
@@ -320,6 +355,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 function ImageTile({
   option,
   index,
+  place,
   selected,
   disabled,
   onSelect,
@@ -328,6 +364,7 @@ function ImageTile({
 }: {
   option: Option;
   index: number;
+  place?: { gridColumn: number; gridRow: number };
   selected: boolean;
   disabled: boolean;
   onSelect: () => void;
@@ -339,7 +376,11 @@ function ImageTile({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        ...(place ? { gridColumn: place.gridColumn, gridRow: place.gridRow, minWidth: 0 } : null),
+      }}
       className={`flex w-full flex-col items-center rounded-xl border p-1 ${
         option.correct
           ? "border-good ring-2 ring-good"

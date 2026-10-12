@@ -18,6 +18,7 @@ import { DEFAULT_SETTINGS, newId } from "@/lib/factory";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { collectRefs, questionMediaRefs, remapMedia } from "@/lib/mediaRefs";
 import { readQuestionClipboard } from "@/lib/questionClipboardState";
+import { readQuestionTextSettings } from "@/lib/questionSettingsClipboardState";
 import { normalizeRevealQuestion } from "@/lib/reveal";
 import { withProgressBarDefault } from "@/lib/progress";
 import { withTextStyles } from "@/lib/textStyle";
@@ -173,6 +174,9 @@ export async function collectGarbage(): Promise<number> {
       if (ref.kind === "stored") live.add(ref.id);
     }
   }
+  const textSettings = readQuestionTextSettings();
+  const textImage = textSettings?.promptStyle?.box?.image;
+  if (textImage?.kind === "stored") live.add(textImage.id);
 
   const ids = await database.getAllKeys("media");
   const orphans = ids.filter((id) => !live.has(id));
@@ -193,6 +197,9 @@ export async function releaseCopiedQuestionMedia(question: Question): Promise<vo
   if (copied) {
     for (const ref of questionMediaRefs(copied.question)) if (ref.kind === "stored") live.add(ref.id);
   }
+  const textSettings = readQuestionTextSettings();
+  const textImage = textSettings?.promptStyle?.box?.image;
+  if (textImage?.kind === "stored") live.add(textImage.id);
   await Promise.all([...ids].filter((id) => !live.has(id)).map((id) => database.delete("media", id)));
 }
 

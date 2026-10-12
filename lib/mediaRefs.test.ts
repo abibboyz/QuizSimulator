@@ -146,6 +146,20 @@ test("prompt box images stay available for play, export, and question copies", (
   assert.equal(schemaVersionFor(quiz), 5);
 });
 
+test("between-image text box pictures are kept for play, export, and question copies", () => {
+  const question: Question = {
+    ...oldQuestion,
+    imageJoinerStyle: { box: { shape: "pill", backgroundStyle: "image", image: ref("joiner-box") } },
+  };
+  const quiz = { ...oldQuiz(), questions: [question] };
+  for (const refs of [collectRefs(quiz), imageRefs(quiz), questionMediaRefs(question)]) {
+    assert.ok(refs.some((media) => media.kind === "stored" && media.id === "joiner-box"));
+  }
+  const remap = new Map([["joiner-box", "joiner-box-copy"]]);
+  assert.deepEqual(remapQuestionMedia(question, remap).imageJoinerStyle?.box?.image, ref("joiner-box-copy"));
+  assert.deepEqual(remapMedia(quiz, remap).questions[0].imageJoinerStyle?.box?.image, ref("joiner-box-copy"));
+});
+
 test("text-style letter fills are collected, loaded for export and remapped; old themes gain no keys", () => {
   const quiz = oldQuiz();
   quiz.theme = { ...quiz.theme, promptTextStyle: { preset: "candy", image: ref("fill-q") }, answerTextStyle: { preset: "plain", image: ref("fill-a") } };

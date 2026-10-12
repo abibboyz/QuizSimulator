@@ -17,6 +17,8 @@ import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
 import { showsProgressBar, timerProgressStyle } from "@/lib/progress";
+import { timerPlacementFor, timerScale } from "@/lib/timerPlacement";
+import { FreeTimer } from "@/components/play/FreeTimer";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
@@ -470,10 +472,12 @@ function PlayView() {
 
           {/* The countdown belongs to the question run, not to any particular
               question layout. Keeping it outside QuestionStage prevents
-              Choice, T/F, Multi and Reveal mounts from affecting movement. */}
-          <div className="mb-4 flex min-h-16 items-center justify-end gap-4">
-            <MuteButton />
-            {limit !== null && (
+              Choice, T/F, Multi and Reveal mounts from affecting movement.
+              An undragged timer stays in this row. A dragged one uses the spot
+              saved for this view, the same spot as the video. */}
+          {(() => {
+            const placed = timerPlacementFor(quiz.settings, mobile ? "mobile" : "web");
+            const timer = limit !== null && (
               <ProgressMeter
                 key={runKey}
                 fraction={countdown.fraction}
@@ -489,10 +493,23 @@ function PlayView() {
                 thickness={quiz.settings.progressThickness}
                 showNumber={quiz.settings.showTimerNumber !== false}
                 celebrate={justCorrect}
-                size={64}
+                size={64 * timerScale(placed?.scale)}
               />
-            )}
-          </div>
+            );
+            return (
+              <>
+                <div className={placed ? "mb-4 flex items-center justify-end gap-4" : "mb-4 flex min-h-16 items-center justify-end gap-4"}>
+                  <MuteButton />
+                  {!placed && timer}
+                </div>
+                {placed && timer && (
+                  <FreeTimer x={placed.x} y={placed.y}>
+                    {timer}
+                  </FreeTimer>
+                )}
+              </>
+            );
+          })()}
 
           {/* Keyed by question so each one genuinely mounts — without this React
               reuses the DOM across questions and no entrance can fire. */}

@@ -47,6 +47,8 @@ interface Props {
    */
   motion?: ResolvedMotion;
   onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
+  /** Builder preview: drag the answer-box dot. */
+  onAnswerBoxScale?: (scale: number) => void;
   onRevealComplete?: () => void;
   promptReplay?: number;
   /**
@@ -83,6 +85,7 @@ export function QuestionStage({
   theme,
   motion,
   onPositionChange,
+  onAnswerBoxScale,
   onRevealComplete,
   promptReplay = 0,
   showCount = true,
@@ -245,6 +248,7 @@ export function QuestionStage({
         sinceMount={sinceMount}
         sinceExit={sinceExit}
         onRevealComplete={onRevealComplete}
+        onAnswerBoxScale={onAnswerBoxScale}
       />
 
       {revealed && !isUnscoredImage(question) &&

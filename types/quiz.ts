@@ -324,6 +324,10 @@ export interface Option {
    * `Theme.optionColors`, and then to the palette for its position.
    */
   color?: string;
+  /** Fraction of the column width for this answer card (0.35 to 1). Unset means full width (1). */
+  boxWidth?: number;
+  /** Hide the card background for this answer (makes the answer box transparent). */
+  hideBox?: boolean;
 }
 
 /** What to draw in the little badge on each answer tile. */
@@ -337,6 +341,16 @@ export interface AnswerTextStyle {
   italic?: boolean;
   underline?: boolean;
   color?: string;
+  /**
+   * Size of the answer cards and image-caption boxes. Unset or 1 keeps
+   * today's boxes. The question itself draws this size.
+   */
+  boxScale?: number;
+  /**
+   * No fill behind image captions. Unset keeps today's captions, which have
+   * no plate. `false` turns off a quiz-wide hide.
+   */
+  hideImageTextBackground?: boolean;
 }
 
 export interface Question {
@@ -344,6 +358,8 @@ export interface Question {
   answerStyle?: AnswerTextStyle;
   /** Overrides the quiz-wide image-box setting for this question. */
   hideImageBoxes?: boolean;
+  /** Overrides the quiz-wide hideAnswerBoxes setting for this question. */
+  hideAnswerBoxes?: boolean;
   loopMotion?: LoopMotionSet;
   id: string;
   kind: QuestionKind;
@@ -359,6 +375,11 @@ export interface Question {
     fontSize?: number;
     /** Unset stays centered, which is how existing prompts are drawn. */
     align?: "left" | "center" | "right";
+    /**
+     * Letter colour. Unset keeps the quiz prompt colour. Between-image words
+     * use this so one word can be coloured without recolouring every question.
+     */
+    color?: string;
     /**
      * Word art treatment. `true` is the original accent outline. A style name
      * picks one of the varieties. Unset is ordinary prompt text.
@@ -381,6 +402,10 @@ export interface Question {
       opacity?: number;
       padding?: number;
       shadow?: boolean;
+      /** Fraction of the text column, from 0.35 to 1. Unset is the full width. */
+      width?: number;
+      /** Skip the fill, gradient and picture. The words and outline stay. */
+      hideBackground?: boolean;
     };
     /** Path followed by prompt letters. */
     textShape?: "straight" | "arc-up" | "arc-down" | "circle" | "wave" | "s-curve" | "zigzag" | "spiral";
@@ -416,6 +441,17 @@ export interface Question {
    * other kinds). Unset means 12.
    */
   optionGap?: number;
+  /**
+   * Words between side-by-side pictures on image and reveal questions.
+   * The index is the picture on the left. Missing, or every gap blank, keeps
+   * the ordinary grid. Ignored unless the question has at least two pictures.
+   */
+  imageJoiners?: string[];
+  /**
+   * One design for every between-image word on this question. Missing keeps
+   * the bold prompt-coloured label. The words themselves stay in `imageJoiners`.
+   */
+  imageJoinerStyle?: Question["promptStyle"];
   /** Overrides the quiz-level timer. `null` means untimed. */
   timerSeconds?: number | null;
   /** Overrides the quiz-level base points. */
@@ -533,6 +569,18 @@ export interface Theme {
   wrongColor?: string;
 }
 
+/** Where and how long the question timer is on one video frame. */
+export interface TimerPlacement {
+  /** Top-left, 0–100 of the frame. */
+  x: number;
+  y: number;
+  /**
+   * Length relative to the original timer. 1, or unset, is the original size.
+   * Dragging the end point raises it.
+   */
+  scale?: number;
+}
+
 export interface QuizSettings {
   loopMotion?: LoopMotionSet;
   /** `null` means untimed. */
@@ -577,6 +625,15 @@ export interface QuizSettings {
   progressPulse: ProgressPulse;
   /** Quiz-wide numeric countdown visibility. Unset keeps the original visible number. */
   showTimerNumber?: boolean;
+  /**
+   * Where the question timer sits on the fixed video frame, and how long it is.
+   * Web is the 16:9 export and web play; mobile is the 9:16 export and mobile play.
+   * Unset for a view keeps the timer in the top-right header at its original length.
+   */
+  timerPlacement?: {
+    web?: TimerPlacement;
+    mobile?: TimerPlacement;
+  };
   /** Custom meter fill. Unset follows the theme accent. */
   progressColor?: string;
   /** Custom empty-track colour. Unset uses a translucent white track. */

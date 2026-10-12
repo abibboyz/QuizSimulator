@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { answerTextStyle, isUnscoredImage } from "./answerPresentation.ts";
+import { answerBoxScale, answerTextStyle, isUnscoredImage, withAnswerBoxScale } from "./answerPresentation.ts";
 import { createQuestion, createQuiz } from "./factory.ts";
 import { usePlaySession } from "./store/playSession.ts";
 import { buildTimeline } from "./videoExport/timeline.ts";
@@ -25,6 +25,18 @@ test("answer overrides inherit missing fields and can disable global bold and it
   });
   assert.equal(answerTextStyle(theme, { answerStyle: { fontSize: undefined } }).fontSize, 36);
   assert.equal(answerTextStyle(theme).color, "#123456");
+});
+
+test("answer box scale stays 1 until it is changed, and 1 clears the field", () => {
+  assert.equal(answerBoxScale(undefined), 1);
+  assert.equal(answerBoxScale({ boxScale: 1 }), 1);
+  assert.equal(answerBoxScale({ boxScale: 4 }), 2.5);
+  assert.equal(answerBoxScale({ boxScale: 0.1 }), 0.1);
+  assert.equal(answerBoxScale({ boxScale: 0.01 }), 0.05);
+  assert.equal(withAnswerBoxScale(undefined, 1), undefined);
+  assert.equal(withAnswerBoxScale({ fontSize: 20, boxScale: 1.4 }, 1)?.boxScale, undefined);
+  assert.equal(withAnswerBoxScale({ fontSize: 20 }, 1.4)?.fontSize, 20);
+  assert.equal(withAnswerBoxScale(undefined, 1.25)?.boxScale, 1.25);
 });
 
 test("only image-choice accepts zero correct answers; choosing a correct image restores scoring", () => {

@@ -25,9 +25,12 @@ interface Props {
   questions: Question[];
   activeId: string | null;
   invalidIds: Set<string>;
+  hasSettingsClipboard?: boolean;
   onSelect: (id: string) => void;
   onReorder: (questions: Question[]) => void;
   onCopy: (id: string) => void;
+  onCopySettings: (id: string) => void;
+  onPasteSettings?: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -40,7 +43,19 @@ const KIND_LABEL: Record<Question["kind"], string> = {
   reveal: "Reveal",
 };
 
-export function QuestionList({ questions, activeId, invalidIds, onSelect, onReorder, onCopy, onDuplicate, onDelete }: Props) {
+export function QuestionList({
+  questions,
+  activeId,
+  invalidIds,
+  hasSettingsClipboard = false,
+  onSelect,
+  onReorder,
+  onCopy,
+  onCopySettings,
+  onPasteSettings,
+  onDuplicate,
+  onDelete,
+}: Props) {
   const sensors = useSensors(
     // A small distance threshold keeps a click on the row from starting a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -72,12 +87,15 @@ export function QuestionList({ questions, activeId, invalidIds, onSelect, onReor
               index={index}
               active={question.id === activeId}
               invalid={invalidIds.has(question.id)}
+              hasSettingsClipboard={hasSettingsClipboard}
               canDelete={questions.length > 1}
               canMoveUp={index > 0}
               canMoveDown={index < questions.length - 1}
               onSelect={() => onSelect(question.id)}
               onMove={(direction) => onReorder(arrayMove(questions, index, index + direction))}
               onCopy={() => onCopy(question.id)}
+              onCopySettings={() => onCopySettings(question.id)}
+              onPasteSettings={() => onPasteSettings?.(question.id)}
               onDuplicate={() => onDuplicate(question.id)}
               onDelete={() => onDelete(question.id)}
             />
@@ -93,6 +111,7 @@ interface RowProps {
   index: number;
   active: boolean;
   invalid: boolean;
+  hasSettingsClipboard: boolean;
   canDelete: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -100,6 +119,8 @@ interface RowProps {
   /** -1 moves the question up, +1 moves it down. */
   onMove: (direction: -1 | 1) => void;
   onCopy: () => void;
+  onCopySettings: () => void;
+  onPasteSettings: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
@@ -109,12 +130,15 @@ function QuestionRow({
   index,
   active,
   invalid,
+  hasSettingsClipboard,
   canDelete,
   canMoveUp,
   canMoveDown,
   onSelect,
   onMove,
   onCopy,
+  onCopySettings,
+  onPasteSettings,
   onDuplicate,
   onDelete,
 }: RowProps) {
@@ -166,6 +190,26 @@ function QuestionRow({
       >
         📋
       </button>
+      <button
+        type="button"
+        onClick={onCopySettings}
+        className="focus-ring shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-ink-400 hover:bg-ink-800 hover:text-ink-200"
+        aria-label={`Copy question ${index + 1} settings`}
+        title="Copy question settings"
+      >
+        C
+      </button>
+      <button
+        type="button"
+        onClick={onPasteSettings}
+        disabled={!hasSettingsClipboard}
+        className="focus-ring shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-ink-400 hover:bg-ink-800 hover:text-ink-200 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-400 disabled:cursor-not-allowed"
+        aria-label={`Paste settings into question ${index + 1}`}
+        title={hasSettingsClipboard ? `Paste settings into question ${index + 1}` : "Paste settings (copy settings with C first)"}
+      >
+        P
+      </button>
+
 
       {/*
         Drag is the fast path, but arrow buttons keep reordering possible on
