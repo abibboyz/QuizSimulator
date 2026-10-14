@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { usePresence } from "motion/react";
 import type { Question, QuizSettings, Theme } from "@/types/quiz";
 import { LoopMotion } from "@/components/play/LoopMotion";
+import { FitStage } from "@/components/play/FitStage";
 import { resolveLoops } from "@/lib/loopMotion";
 import { PromptCanvas } from "@/components/play/PromptCanvas";
 import { isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
@@ -111,7 +112,7 @@ export function QuestionStage({
   const regionStyle = (placement: typeof questionLayout) => placement ? {
     position: "absolute" as const,
     left: `${placement.x}%`, top: `${placement.y}%`, width: `${placement.width}%`, height: `${placement.height}%`,
-    overflow: "auto", display: "grid", alignContent: "center", zIndex: 2,
+    overflow: !narrow && mode !== "preview" ? "hidden" : "auto", display: "grid", alignContent: "center", zIndex: 2,
   } : undefined;
 
   // Stage animation clocks. With default motion both spans are 0, so neither
@@ -172,6 +173,7 @@ export function QuestionStage({
       </div>}
 
       <div className={questionLayout ? "grid content-center overflow-auto" : "contents"} style={regionStyle(questionLayout)}>
+      <FitStage disabled={!questionLayout || narrow || mode === "preview"} width={856} minHeight={0} className="absolute inset-0">
       {imageLeads && !overlay && (
         <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"} style={questionStyle}>
           <LoopMotion value={loops.question} preview={mode === "preview"}>
@@ -249,9 +251,12 @@ export function QuestionStage({
       )}
 
       {bottom && <div style={questionStyle}>{promptNode}</div>}
+      </FitStage>
       </div>
 
-      <div className={answersLayout ? "grid content-center overflow-auto" : "contents"} style={regionStyle(answersLayout)}><AnswerGrid
+      <div className={answersLayout ? "grid content-center overflow-auto" : "contents"} style={regionStyle(answersLayout)}>
+      <FitStage disabled={!answersLayout || narrow || mode === "preview"} width={856} minHeight={0} className="absolute inset-0">
+      <AnswerGrid
         loops={loops}
         hideImageBoxes={hideImageBoxes}
         question={question}
@@ -288,6 +293,7 @@ export function QuestionStage({
           // per question, so the card never remounts (and re-pops) mid-run.
           return exitSpan > 0 ? <div style={explanationStyle}>{card}</div> : card;
         })()}
+      </FitStage>
       </div>
     </div>
   );

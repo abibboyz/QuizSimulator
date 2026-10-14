@@ -15,6 +15,7 @@ import { resolveReveal } from "@/lib/reveal";
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { FitStage } from "@/components/play/FitStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
@@ -134,7 +135,7 @@ function HostView() {
       {/*
         Fixed to the viewport rather than min-height: on a 720p projector the
         controls must never be pushed below the fold where the host can't reach
-        them. Anything too tall scrolls inside the stage instead.
+        them. The question scales inside the remaining space instead of scrolling.
       */}
       <div className="flex h-dvh flex-col overflow-hidden">
         <header className="flex shrink-0 items-center gap-3 px-5 py-3 text-sm">
@@ -331,7 +332,8 @@ function HostQuestion({
 
   return (
     <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2" style={{ justifyContent: "safe center" }}>
+      <FitStage className="flex-1">
+      <div className="relative mx-auto flex min-h-[720px] w-[896px] flex-col justify-center py-8">
         {/* Host mode doesn't score, so there are no per-question outcomes to
             colour in — the meter shows position only. */}
         {showsProgressBar(meter) && !(limitSeconds !== null && meter.quizProgressStyle === "mascot") && <QuizProgress
@@ -403,6 +405,7 @@ function HostQuestion({
           motion={motion}
         />
       </div>
+      </FitStage>
 
       <div className="mt-4 flex shrink-0 flex-wrap items-center justify-center gap-3">
         <Button variant="outline" onClick={onBack} disabled={!canBack}>

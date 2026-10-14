@@ -16,10 +16,9 @@ function quizOf(n: number) {
   return quiz;
 }
 
-test("the builder preview stays the default; web and mobile map to the export framings", () => {
-  assert.equal(DEFAULT_PREVIEW_FRAME, "builder");
-  assert.equal(PREVIEW_FRAMES[0].id, "builder");
-  assert.equal(framingFor("builder"), null);
+test("only web and mobile previews are available, defaulting to web", () => {
+  assert.equal(DEFAULT_PREVIEW_FRAME, "web");
+  assert.deepEqual(PREVIEW_FRAMES.map((frame) => frame.id), ["web", "mobile"]);
   assert.equal(framingFor("web"), "horizontal");
   assert.equal(framingFor("mobile"), "vertical");
 });

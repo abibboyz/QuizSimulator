@@ -1,6 +1,5 @@
 /**
- * Builder preview framing. "builder" is the original scaled-down QuestionStage
- * (draggable prompt, Show answer). "web" and "mobile" draw the video export's
+ * Preview framing. "web" and "mobile" draw the video export's
  * own FrameRenderer live at the export's 16:9 / 9:16 viewports, so the preview
  * is the same pixels the export produces for that orientation.
  *
@@ -10,18 +9,17 @@
 import type { Framing } from "@/lib/videoExport/renderer";
 import type { Timeline } from "@/lib/videoExport/timeline";
 
-export type PreviewFrame = "builder" | "web" | "mobile";
+export type PreviewFrame = "web" | "mobile";
 
-export const DEFAULT_PREVIEW_FRAME: PreviewFrame = "builder";
+export const DEFAULT_PREVIEW_FRAME: PreviewFrame = "web";
 
 export const PREVIEW_FRAMES: { id: PreviewFrame; label: string; hint: string }[] = [
-  { id: "builder", label: "Builder", hint: "Editable preview: drag the prompt, toggle the answer" },
   { id: "web", label: "Web 16:9", hint: "Drag the timer to move it, or drag the end dot to change its length. Leave it and it stays at the top right." },
   { id: "mobile", label: "Mobile 9:16", hint: "Drag the timer to move it, or drag the end dot to change its length. Leave it and it stays at the top right." },
 ];
 
-export function framingFor(frame: PreviewFrame): Framing | null {
-  return frame === "web" ? "horizontal" : frame === "mobile" ? "vertical" : null;
+export function framingFor(frame: PreviewFrame): Framing {
+  return frame === "mobile" ? "vertical" : "horizontal";
 }
 
 /** What the framed preview loops: one question (by authored index) or the results screen. */

@@ -13,6 +13,7 @@ import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, pri
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { QuestionStage } from "@/components/play/QuestionStage";
+import { FitStage } from "@/components/play/FitStage";
 import { CelebrationCard } from "@/components/play/CelebrationCard";
 import { ProgressMeter } from "@/components/play/ProgressMeter";
 import { QuizProgress } from "@/components/play/QuizProgress";
@@ -453,7 +454,8 @@ function PlayView() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <div className={`relative mx-auto flex min-h-dvh w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
+        <FitStage disabled={mobile} className="h-dvh w-full">
+        <div className={`relative mx-auto flex ${mobile ? "min-h-dvh" : "min-h-[720px]"} w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
           {/* Outside AnimatePresence: the run's progress shouldn't slide away
               with the question it was measuring. */}
           {showsProgressBar(quiz.settings) && !(limit !== null && quiz.settings.quizProgressStyle === "mascot") && <QuizProgress
@@ -604,6 +606,7 @@ function PlayView() {
             <CelebrationCard question={question} mode="solo" contained={mobile} hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
           )}
         </div>
+        </FitStage>
       )}
 
       {phase === "results" && (

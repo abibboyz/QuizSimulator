@@ -202,7 +202,6 @@ function EditView() {
       await copyQuestionSettings(quiz.id, source);
       setHasTextSettings(true);
       setClipboardError(false);
-      setClipboardMessage("Copied question settings. Paste them onto any question with P.");
     } catch (error) {
       setClipboardError(true);
       setClipboardMessage(error instanceof Error ? error.message : "Could not copy question settings.");
@@ -224,7 +223,6 @@ function EditView() {
         updateQuestion(next);
         setActiveId(target.id);
         setClipboardError(false);
-        setClipboardMessage("Question settings pasted.");
       }
     } catch (error) {
       setClipboardError(true);
@@ -376,11 +374,6 @@ function EditView() {
           {hasCopiedQuestion && (
             <Button variant="primary" size="sm" className="w-full" disabled={clipboardBusy} onClick={() => { void paste(); }}>
               📋 Paste copied question
-            </Button>
-          )}
-          {hasTextSettings && (
-            <Button variant="outline" size="sm" className="w-full" disabled={clipboardBusy || !active} onClick={() => { void pasteSettings(); }}>
-              P Paste settings
             </Button>
           )}
           {clipboardMessage && <p role="status" className={`text-xs ${clipboardError ? "text-bad" : "text-ink-300"}`}>{clipboardMessage}</p>}
