@@ -31,7 +31,7 @@ import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageAreaHeight, imageAreaWidth, imageChoiceColumns, imageColumnLayout, imageJoinerColumnGaps, imageJoinerLabel, imageJoinerStyled } from "@/lib/imageChoice";
 import { litSteps, mascotOf, METER_STEPS, progressThickness, pulseMs, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar, timerMascotGeometry, timerProgressStyle } from "@/lib/progress";
 import { clampTimerOrigin, timerPlacementFor, timerScale, timerScaleForEdge, type TimerView } from "@/lib/timerPlacement";
-import { stagePlacementFor } from "@/lib/stageLayout";
+import { clampStagePlacement, stagePlacementFor } from "@/lib/stageLayout";
 import { accuracyLabel } from "@/lib/scoring";
 import { autoAdvanceMessage } from "@/lib/autoAdvance";
 import { basePointsFor } from "@/lib/store/playSession";
@@ -153,11 +153,16 @@ interface TextTile {
   h: number;
   /** Width of the text column (styled lettering paints into it). */
   textW: number;
+  thumb?: number;
 }
 
 /* ================================================================ renderer */
 
 export class FrameRenderer {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly timeline: Timeline;
+  private readonly quiz: Quiz;
+  private readonly assets: RenderAssets;
   private readonly ctx: Ctx;
   private readonly W: number;
   private readonly H: number;
@@ -192,17 +197,23 @@ export class FrameRenderer {
   /** Last drawn timer, in framing pixels, so the preview can grab it. */
   private timerRect: { x: number; y: number; w: number; h: number } | null = null;
   private stageRects: Partial<Record<StageLayoutItem, { x: number; y: number; w: number; h: number }>> = {};
+  /** Transient builder edits; never mutate the saved quiz or export settings. */
+  private stageDrafts: Partial<Record<StageLayoutItem, StageItemPlacement>> = {};
   private stageFit = 1;
   private stageTop = 0;
   private readonly stageView: TimerView;
 
   constructor(
-    private readonly canvas: HTMLCanvasElement,
-    private readonly timeline: Timeline,
-    private readonly quiz: Quiz,
+    canvas: HTMLCanvasElement,
+    timeline: Timeline,
+    quiz: Quiz,
     framing: Framing,
-    private readonly assets: RenderAssets,
+    assets: RenderAssets,
   ) {
+    this.canvas = canvas;
+    this.timeline = timeline;
+    this.quiz = quiz;
+    this.assets = assets;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("Canvas 2D isn't available in this browser.");
     this.ctx = ctx;
@@ -615,6 +626,11 @@ export class FrameRenderer {
     return { ...this.stageRects };
   }
 
+  previewStagePlacement(item: StageLayoutItem, point: StageItemPlacement | null): void {
+    if (point) this.stageDrafts[item] = clampStagePlacement(point);
+    else delete this.stageDrafts[item];
+  }
+
   timerContains(frameX: number, frameY: number, slop = 0): boolean {
     const rect = this.timerRect;
     if (!rect) return false;
@@ -841,11 +857,11 @@ export class FrameRenderer {
     });
 
     const parts: Box[] = [this.stageHeaderBox(run, t, CW)];
-    const track = (item: StageLayoutItem, box: Box): Box => ({
+    const track = (item: StageLayoutItem, box: Box, adapt?: (height: number) => Box): Box => ({
       w: box.w,
       h: box.h,
       draw: (x, y) => {
-        const placed = stagePlacementFor(this.quiz.settings, q, this.stageView, item);
+        const placed = this.stageDrafts[item] ?? stagePlacementFor(this.quiz.settings, q, this.stageView, item);
         if (!placed) {
           const rect = { x: this.W / 2 + (x - this.W / 2) * this.stageFit, y: this.stageTop + y * this.stageFit, w: box.w * this.stageFit, h: box.h * this.stageFit };
           this.stageRects[item] = unionRect(this.stageRects[item], rect);
@@ -858,11 +874,14 @@ export class FrameRenderer {
         const ly = (frameRect.y - this.stageTop) / this.stageFit;
         const lw = frameRect.w / this.stageFit;
         const lh = frameRect.h / this.stageFit;
-        const scale = Math.min(lw / Math.max(1, box.w), lh / Math.max(1, box.h));
+        // Reflow image regions to the authored aspect ratio before fitting them.
+        // Scaling the original fixed-aspect box alone leaves newly added space unused.
+        const content = adapt ? adapt(box.w * lh / lw) : box;
+        const scale = Math.min(lw / Math.max(1, content.w), lh / Math.max(1, content.h));
         this.ctx.save();
-        this.ctx.translate(lx + (lw - box.w * scale) / 2, ly + (lh - box.h * scale) / 2);
+        this.ctx.translate(lx + (lw - content.w * scale) / 2, ly + (lh - content.h * scale) / 2);
         this.ctx.scale(scale, scale);
-        box.draw(0, 0);
+        content.draw(0, 0);
         this.ctx.restore();
       },
     });
@@ -889,11 +908,19 @@ export class FrameRenderer {
       h: Math.max(rawPromptBox.h, this.H * 0.06 * promptAreaHeight),
       draw: (x, y) => rawPromptBox.draw(x + (CW - rawPromptBox.w) / 2, y + (Math.max(rawPromptBox.h, this.H * 0.06 * promptAreaHeight) - rawPromptBox.h) / 2),
     };
+    const adaptiveQuestion = (height: number): Box => {
+      const hasPrompt = (imageLeads || normalPrompt) && !!q.prompt.trim();
+      const mediaHeight = Math.max(1, height - (hasPrompt ? promptBox.h + 16 : 0));
+      const media = this.mediaBox(q.media, CW, mediaHeight, hidesImageBoxes(this.quiz.settings, q) ? 0 : 16, true);
+      const pieces = [...(hasPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])];
+      if (imageLeads) pieces.reverse();
+      return posed(this.stack(pieces, 16, CW));
+    };
     if (imageLeads && !overlay) {
-      parts.push(track("question", posed(this.stack([...(leadingMedia ? [placed(leadingMedia)] : []), promptBox], 16, CW))));
+      parts.push(track("question", posed(this.stack([...(leadingMedia ? [placed(leadingMedia)] : []), promptBox], 16, CW)), adaptiveQuestion));
     } else if (!overlay && q.media) {
       const media = this.mediaBox(q.media, CW, this.H * 0.22, hidesImageBoxes(this.quiz.settings, q) ? 0 : 16);
-      parts.push(track("question", posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW))));
+      parts.push(track("question", posed(this.stack([...(normalPrompt ? [promptBox] : []), ...(media ? [placed(media)] : [])], 16, CW)), adaptiveQuestion));
     } else if (normalPrompt) {
       parts.push(track("question", posed(promptBox)));
     }
@@ -901,8 +928,7 @@ export class FrameRenderer {
     if (overlay && placement) {
       const bg = q.media ? this.image(q.media) : null;
       const text = posed(this.styledPromptBox(run, sinceMount, CW * 0.8));
-      const height = CW * 9 / 16;
-      parts.push(track("question", { w: CW, h: height, draw: (x, y) => {
+      const overlayBox = (height: number): Box => ({ w: CW, h: height, draw: (x, y) => {
         this.ctx.save();
         this.ctx.beginPath();
         if (this.ctx.roundRect) {
@@ -917,7 +943,8 @@ export class FrameRenderer {
         }
         text.draw(x + (CW - text.w) * promptPosition(placement.x) / 100, y + Math.max(0, height - text.h) * promptPosition(placement.y) / 100);
         this.ctx.restore();
-      } }));
+      } });
+      parts.push(track("question", overlayBox(CW * 9 / 16), overlayBox));
     }
 
     if (placement?.mode === "bottom" && !imageLeads) parts.push(track("question", posed(promptBox)));
@@ -934,7 +961,16 @@ export class FrameRenderer {
         draw: (x, y) => this.withPose(ePose, x + card.w / 2, y + card.h / 2, 1, () => card.draw(x, y)),
       });
     }
-    parts.push(track("answers", this.stack(answerParts, gap, CW)));
+    const adaptiveAnswers = (height: number) => {
+      const extra = answerParts.slice(1);
+      const reserved = extra.reduce((sum, part) => sum + part.h + gap, 0);
+      const available = Math.max(1, height - reserved);
+      const grid = q.kind === "image-choice" || q.kind === "reveal"
+        ? this.imageGridBox(run, t, CW, available)
+        : this.answerGridBox(run, t, CW, available);
+      return this.stack([grid, ...extra], gap, CW);
+    };
+    parts.push(track("answers", this.stack(answerParts, gap, CW), adaptiveAnswers));
 
     return this.stack(parts, gap, CW);
   }
@@ -1328,7 +1364,7 @@ export class FrameRenderer {
   }
 
   /** AnswerGrid for the text kinds (multiple choice, true/false, pick-all). */
-  private answerGridBox(run: QuestionRun, t: number, CW: number): Box {
+  private answerGridBox(run: QuestionRun, t: number, CW: number, targetHeight?: number): Box {
     const q = run.question;
     const theme = this.quiz.theme;
     const band = themeAgeBand(theme);
@@ -1361,12 +1397,16 @@ export class FrameRenderer {
       const showMark = revealed && (option.correct || isPicked);
       const markerW = marker ? this.measure(marker, markerFont) : 0;
       const markW = showMark ? this.measure(option.correct ? "✓" : "✕", markerFont) : 0;
-      const textW = colW - 32 * boxScale - (marker ? markerW + 12 : 0) - (option.media ? 56 * boxScale + 12 : 0) - (showMark ? markW + 12 : 0);
+      const availableW = Math.max(1, colW - 32 * boxScale - (marker ? markerW + 12 : 0) - (showMark ? markW + 12 : 0));
+      const rowCount = Math.max(1, Math.ceil(count / cols));
+      const targetRow = targetHeight === undefined ? undefined : Math.max(1, (targetHeight - gap * (rowCount - 1)) / rowCount);
+      const thumb = targetRow === undefined ? 56 * boxScale : Math.max(1, Math.min(targetRow - 32 * boxScale, availableW * (option.text.trim() ? 0.5 : 1)));
+      const textW = availableW - (option.media ? thumb + 12 : 0);
       const lines = lettering
         ? wrapWords(option.text, (s) => this.measure(s, font), styledWrapWidth(Math.max(20, textW), size, lettering))
         : this.wrap(option.text, font, Math.max(20, textW));
-      const inner = Math.max(marker ? 32 : 0, option.media ? 56 * boxScale : 0, lines.length * lh, showMark ? 32 : 0);
-      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(48, 80 * boxScale * denseScale, inner + 32 * boxScale * denseScale), textW: Math.max(20, textW) };
+      const inner = Math.max(marker ? 32 : 0, option.media ? thumb : 0, lines.length * lh, showMark ? 32 : 0);
+      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(targetRow ?? 0, 48, 80 * boxScale * denseScale, inner + 32 * boxScale * denseScale), textW: Math.max(20, textW), thumb };
     });
 
     const rows: TextTile[][] = [];
@@ -1468,7 +1508,7 @@ export class FrameRenderer {
       }
 
       const boxScale = answerBoxScale(answerTextStyle(theme, run.question));
-      const thumb = 56 * boxScale;
+      const thumb = tile.thumb ?? 56 * boxScale;
       let cx = tileX + 16 * boxScale;
       const cy = y + h / 2;
       if (tile.marker) {
@@ -1483,7 +1523,7 @@ export class FrameRenderer {
         ctx.save();
         this.rr(cx, cy - thumb / 2, thumb, thumb, hidesImageBoxes(this.quiz.settings, run.question) ? 0 : 8);
         ctx.clip();
-        if (img) this.drawCover(img, cx, cy - thumb / 2, thumb, thumb);
+        if (img) this.drawContain(img, cx, cy - thumb / 2, thumb, thumb);
         else {
           ctx.fillStyle = this.ink[800];
           ctx.fillRect(cx, cy - thumb / 2, thumb, thumb);
@@ -1513,9 +1553,9 @@ export class FrameRenderer {
   }
 
   /** AnswerGrid for image-choice: the numbered picture grid. */
-  private imageGridBox(run: QuestionRun, t: number, CW: number): Box {
+  private imageGridBox(run: QuestionRun, t: number, CW: number, targetHeight?: number): Box {
     const q = run.question;
-    const authoredWidth = CW * imageAreaWidth(q);
+    const authoredWidth = targetHeight === undefined ? CW * imageAreaWidth(q) : CW;
     const cols = imageChoiceColumns(q.options.length);
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
     const hideImageBoxes = hidesImageBoxes(this.quiz.settings, q);
@@ -1547,7 +1587,7 @@ export class FrameRenderer {
     });
     const columns = imageColumnLayout(q.options.length, authoredWidth, gap, colGaps);
     const colW = columns.colW;
-    const boxH = (colW * 2) / 3 * imageAreaHeight(q);
+    let boxH = (colW * 2) / 3 * imageAreaHeight(q);
     const unscored = isUnscoredImage(q);
     const revealed = t >= run.revealAt;
     const rp = revealed ? tailwindEase(clamp01((t - run.revealAt) / TILE_STATE_MS)) : 0;
@@ -1566,7 +1606,7 @@ export class FrameRenderer {
     });
     const rows: (typeof tiles)[] = [];
     for (let i = 0; i < tiles.length; i += cols) rows.push(tiles.slice(i, i + cols));
-    const rowH = rows.map((row) => Math.max(...row.map((tile) => tile.h)));
+    let rowH = rows.map((row) => Math.max(...row.map((tile) => tile.h)));
     let revealCapLines: string[] = [];
     let revealCapFont = "";
     // AnswerGrid's caption: `mt-2 font-bold text-xs md:text-sm` in the body font.
@@ -1576,6 +1616,11 @@ export class FrameRenderer {
       revealCapLines = this.wrap(revealSettings.caption, revealCapFont, CW);
     }
     const revealCapH = revealCapLines.length ? 8 + revealCapLines.length * revealCapLh : 0;
+    if (targetHeight !== undefined && rows.length) {
+      const captionHeights = rowH.map((height) => height - boxH);
+      boxH = Math.max(1, (targetHeight - revealCapH - gap * (rows.length - 1) - captionHeights.reduce((sum, height) => sum + height, 0)) / rows.length);
+      rowH = captionHeights.map((height) => height + boxH);
+    }
     const h = rowH.reduce((a, b) => a + b, 0) + gap * Math.max(0, rows.length - 1) + revealCapH;
     const { ctx } = this;
 
@@ -1654,7 +1699,9 @@ export class FrameRenderer {
               } else {
                 const img = option.media ? this.image(option.media) : null;
                 if (faded && rp > 0 && this.filterOK) ctx.filter = `saturate(${lerp(1, 0.5, rp)})`;
-                if (img) this.drawContain(img, tx, ry, colW, boxH);
+                if (img) {
+                  this.drawContain(img, tx, ry, colW, boxH);
+                }
                 else if (!option.media)
                   this.drawLine("?", tx + colW / 2, ry + boxH / 2 - 12, 24, numFont, this.ink[500], "center");
                 ctx.filter = "none";
@@ -2739,15 +2786,15 @@ export class FrameRenderer {
   }
 
   /** An image laid out like the stage's <img>: natural size, shrunk to fit the width and max-height. */
-  private mediaBox(ref: MediaRef | undefined, maxW: number, maxH: number, radius: number): Box | null {
+  private mediaBox(ref: MediaRef | undefined, maxW: number, maxH: number, radius: number, expand = false): Box | null {
     if (!ref) return null;
     const img = this.image(ref);
     const nw = img?.width ?? (ref.kind === "stored" ? ref.w : 0);
     const nh = img?.height ?? (ref.kind === "stored" ? ref.h : 0);
     if (!nw || !nh) return null;
     const k = Math.min(1, maxW / nw, maxH / nh);
-    const w = nw * k;
-    const h = nh * k;
+    const w = expand ? maxW : nw * k;
+    const h = expand ? maxH : nh * k;
     return {
       w,
       h,
@@ -2756,7 +2803,10 @@ export class FrameRenderer {
         ctx.save();
         this.rr(x, y, w, h, radius);
         ctx.clip();
-        if (img) ctx.drawImage(frameSource(img, this.t), x, y, w, h);
+        if (img) {
+          if (expand) this.drawContain(img, x, y, w, h);
+          else ctx.drawImage(frameSource(img, this.t), x, y, w, h);
+        }
         else {
           ctx.fillStyle = this.ink[800];
           ctx.fillRect(x, y, w, h);

@@ -165,7 +165,8 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
     let drawn = Number.NaN;
     const span = segment.end - segment.start;
     const tick = (now: number) => {
-      if (playing) elapsedRef.current += now - last;
+      // Keep the current question and animation frame steady while positioning.
+      if (playing && !layoutDragRef.current && !dragRef.current) elapsedRef.current += now - last;
       last = now;
       const t = loopTime(segment, elapsedRef.current);
       lastTRef.current = t;
@@ -307,6 +308,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     layoutDragRef.current = { item, mode, startX: event.clientX, startY: event.clientY, rect };
+    layoutPendingRef.current = null;
   };
 
   const layoutPointerMove = (event: PointerEvent<HTMLElement>) => {
@@ -324,7 +326,11 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
       : { ...drag.rect, w: Math.min(frame.cssWidth - drag.rect.x, Math.max(minW, drag.rect.w + dx)), h: Math.min(frame.cssHeight - drag.rect.y, Math.max(minH, drag.rect.h + dy)) };
     const point = { x: rect.x / frame.cssWidth * 100, y: rect.y / frame.cssHeight * 100, width: rect.w / frame.cssWidth * 100, height: rect.h / frame.cssHeight * 100 };
     layoutPendingRef.current = { item: drag.item, point };
-    setStageRects((current) => ({ ...current, [drag.item]: rect }));
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.previewStagePlacement(drag.item, point);
+    redraw();
+    setStageRects(renderer.stageItemFrameRects());
   };
 
   const layoutPointerEnd = (event: PointerEvent<HTMLElement>) => {
@@ -333,6 +339,18 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
     layoutDragRef.current = null;
     layoutPendingRef.current = null;
     if (pending) onStagePlace?.(pending.item, pending.point);
+  };
+
+  const layoutPointerCancel = (event: PointerEvent<HTMLElement>) => {
+    event.stopPropagation();
+    const drag = layoutDragRef.current;
+    layoutDragRef.current = null;
+    layoutPendingRef.current = null;
+    if (drag) {
+      rendererRef.current?.previewStagePlacement(drag.item, null);
+      redraw();
+      setStageRects(rendererRef.current?.stageItemFrameRects() ?? {});
+    }
   };
 
   return (
@@ -372,7 +390,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
             data-layout-item={item} data-layout-mode="move"
             className="absolute z-30 cursor-move touch-none border-2 border-dashed border-white/90 bg-white/5 shadow-[0_0_0_1px_rgba(0,0,0,.5)]"
             style={{ left: `${rect.x / frame.cssWidth * 100}%`, top: `${rect.y / frame.cssHeight * 100}%`, width: `${rect.w / frame.cssWidth * 100}%`, height: `${rect.h / frame.cssHeight * 100}%` }}
-            onPointerDown={layoutPointerDown} onPointerMove={layoutPointerMove} onPointerUp={layoutPointerEnd} onPointerCancel={layoutPointerEnd}>
+            onPointerDown={layoutPointerDown} onPointerMove={layoutPointerMove} onPointerUp={layoutPointerEnd} onPointerCancel={layoutPointerCancel} onLostPointerCapture={layoutPointerCancel}>
             <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] font-bold uppercase text-white">{item}</span>
             <span aria-hidden className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 cursor-nwse-resize rounded-full border-2 border-white bg-[var(--accent)]"
               data-layout-item={item} data-layout-mode="resize" onPointerDown={layoutPointerDown} />
