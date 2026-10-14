@@ -326,7 +326,7 @@ function HostQuestion({
     return () => window.removeEventListener("keydown", onKey);
   }, [revealed, reveal, advance, onBack, unscored]);
 
-  const placedTimer = timerPlacementFor(meter, "web");
+  const placedTimer = timerPlacementFor(meter, "web", question);
   const timerFraction = remainingMs !== null && limitSeconds ? remainingMs / (limitSeconds * 1000) : 0;
 
   return (

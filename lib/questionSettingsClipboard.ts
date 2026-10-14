@@ -35,6 +35,10 @@ export function extractQuestionSettings(source: Question): Omit<QuestionSettings
   if (source.promptPlacement) {
     result.promptPlacement = structuredClone(source.promptPlacement);
   }
+  if (source.promptArea) result.promptArea = structuredClone(source.promptArea);
+  if (source.imageArea) result.imageArea = structuredClone(source.imageArea);
+  if (source.stageLayout) result.stageLayout = structuredClone(source.stageLayout);
+  if (source.timerPlacement) result.timerPlacement = structuredClone(source.timerPlacement);
 
   if (source.optionGap !== undefined) {
     result.optionGap = source.optionGap;
@@ -136,6 +140,14 @@ export function applyQuestionSettings(target: Question, settings: QuestionSettin
   } else {
     delete next.promptPlacement;
   }
+  if (settings.promptArea !== undefined) next.promptArea = structuredClone(settings.promptArea);
+  else delete next.promptArea;
+  if (settings.imageArea !== undefined) next.imageArea = structuredClone(settings.imageArea);
+  else delete next.imageArea;
+  if (settings.stageLayout !== undefined) next.stageLayout = structuredClone(settings.stageLayout);
+  else delete next.stageLayout;
+  if (settings.timerPlacement !== undefined) next.timerPlacement = structuredClone(settings.timerPlacement);
+  else delete next.timerPlacement;
 
   if (settings.optionGap !== undefined) {
     next.optionGap = settings.optionGap;

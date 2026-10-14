@@ -476,7 +476,7 @@ function PlayView() {
               An undragged timer stays in this row. A dragged one uses the spot
               saved for this view, the same spot as the video. */}
           {(() => {
-            const placed = timerPlacementFor(quiz.settings, mobile ? "mobile" : "web");
+            const placed = timerPlacementFor(quiz.settings, mobile ? "mobile" : "web", question);
             const timer = limit !== null && (
               <ProgressMeter
                 key={runKey}

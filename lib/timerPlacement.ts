@@ -1,4 +1,4 @@
-import type { QuizSettings, TimerPlacement } from "../types/quiz.ts";
+import type { Question, QuizSettings, TimerPlacement } from "../types/quiz.ts";
 
 export type TimerView = "web" | "mobile";
 
@@ -52,8 +52,9 @@ function placedTimer(point: TimerPlacement | undefined): TimerPlacement | undefi
 export function timerPlacementFor(
   settings: Pick<QuizSettings, "timerPlacement"> | null | undefined,
   view: TimerView,
+  question?: Pick<Question, "timerPlacement">,
 ): TimerPlacement | null {
-  return placedTimer(settings?.timerPlacement?.[view]) ?? null;
+  return placedTimer(question?.timerPlacement?.[view]) ?? placedTimer(settings?.timerPlacement?.[view]) ?? null;
 }
 
 /**

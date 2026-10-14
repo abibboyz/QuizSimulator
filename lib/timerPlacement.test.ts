@@ -46,3 +46,13 @@ test("a placed timer stays inside the frame", () => {
   assert.deepEqual(clampTimerOrigin(-20, 10, 64, 64, 400, 800), { x: 0, y: 10 });
   assert.deepEqual(clampTimerOrigin(50, 50, 500, 900, 400, 800), { x: 0, y: 0 });
 });
+
+test("local timer placement overrides only its view and resets to the quiz default", () => {
+  const settings = { timerPlacement: { web: { x: 20, y: 30, scale: 2 }, mobile: { x: 40, y: 50 } } };
+  const question = { timerPlacement: { web: { x: 60, y: 70, scale: 3 } } };
+  assert.deepEqual(timerPlacementFor(settings, "web", question), question.timerPlacement.web);
+  assert.deepEqual(timerPlacementFor(settings, "mobile", question), settings.timerPlacement.mobile);
+  const reset = { timerPlacement: withTimerPlacement(question.timerPlacement, "web", null) };
+  assert.deepEqual(timerPlacementFor(settings, "web", reset), settings.timerPlacement.web);
+  assert.deepEqual(settings.timerPlacement.web, { x: 20, y: 30, scale: 2 });
+});

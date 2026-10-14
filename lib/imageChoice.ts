@@ -6,6 +6,14 @@ import type { Question, QuizSettings } from "@/types/quiz";
 export const MAX_IMAGE_OPTIONS = 100;
 export const DEFAULT_IMAGE_GAP = 12;
 
+export function imageAreaWidth(question: Pick<Question, "imageArea">): number {
+  return Math.min(1, Math.max(0.35, question.imageArea?.width ?? 1));
+}
+
+export function imageAreaHeight(question: Pick<Question, "imageArea">): number {
+  return Math.min(2.5, Math.max(0.5, question.imageArea?.height ?? 1));
+}
+
 export function hidesImageBoxes(
   settings: Pick<QuizSettings, "hideImageBoxes"> | undefined,
   question?: Pick<Question, "hideImageBoxes">,
@@ -25,15 +33,13 @@ export function imageChoiceColumns(count: number): number {
 }
 
 /**
- * Tile width and left offset inside a grid `width` wide. A lone picture (a
- * single-answer slide) keeps the size of one of a pair, centred, instead of
- * filling the whole row and pushing the page past the screen.
+ * Tile width and left offset inside a grid `width` wide. A lone picture fills
+ * the authored image area; the area itself is responsive and user-sized.
  */
 export function imageChoiceTile(count: number, width: number, gapPx: number): { w: number; offset: number } {
   const cols = imageChoiceColumns(count);
   if (Math.floor(count) <= 1) {
-    const w = (width - gapPx) / 2;
-    return { w, offset: (width - w) / 2 };
+    return { w: width, offset: 0 };
   }
   return { w: (width - gapPx * (cols - 1)) / cols, offset: 0 };
 }
@@ -45,7 +51,7 @@ export function imageChoiceGridStyle(count: number, gapPx: number): {
   justifyContent?: "center";
 } {
   if (Math.floor(count) <= 1) {
-    return { display: "grid", gap: `${gapPx}px`, gridTemplateColumns: `minmax(0, calc((100% - ${gapPx}px) / 2))`, justifyContent: "center" };
+    return { display: "grid", gap: `${gapPx}px`, gridTemplateColumns: "minmax(0, 1fr)" };
   }
   return {
     display: "grid",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import type { Quiz, TimerPlacement } from "@/types/quiz";
+import type { Quiz, StageItemPlacement, StageLayoutItem, TimerPlacement } from "@/types/quiz";
 import { canvasBackingSize } from "@/lib/canvasSize";
 import { imageRefs, mediaKey } from "@/lib/mediaRefs";
 import { loopTime, previewSegment } from "@/lib/previewFrame";
@@ -16,6 +16,8 @@ interface Props {
   framing: Framing;
   /** Saves a dragged timer spot for this framing. A click that does not move saves nothing. */
   onTimerPlace?: (point: TimerPlacement) => void;
+  layoutEditing?: boolean;
+  onStagePlace?: (item: StageLayoutItem, point: StageItemPlacement) => void;
 }
 
 function clock(ms: number): string {
@@ -35,7 +37,7 @@ function clock(ms: number): string {
  * It loops the question being edited, from its stage mounting to the next one
  * mounting (entrance, clock, reveal, hold, exit), or the results screen.
  */
-export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
+export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditing = false, onStagePlace }: Props) {
   const frame = FRAMINGS[framing];
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,6 +49,9 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
   const dragRef = useRef<{ mode: "move"; dx: number; dy: number } | { mode: "resize" } | null>(null);
   const placeHandleRef = useRef<() => void>(() => {});
   const pendingRef = useRef<TimerPlacement | null>(null);
+  const layoutDragRef = useRef<{ item: StageLayoutItem; mode: "move" | "resize"; startX: number; startY: number; rect: { x: number; y: number; w: number; h: number } } | null>(null);
+  const layoutPendingRef = useRef<{ item: StageLayoutItem; point: StageItemPlacement } | null>(null);
+  const [stageRects, setStageRects] = useState<Partial<Record<StageLayoutItem, { x: number; y: number; w: number; h: number }>>>({});
   const onTimerPlaceRef = useRef(onTimerPlace);
   // eslint-disable-next-line react-hooks/refs -- intentional: syncs prop to ref each render so event handlers always see the latest value
   onTimerPlaceRef.current = onTimerPlace;
@@ -180,6 +185,10 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
       }
       if (timeRef.current) timeRef.current.textContent = `${clock(t - segment.start)} / ${clock(span)}`;
       placeHandleRef.current();
+      if (layoutEditing) {
+        const next = renderer.stageItemFrameRects();
+        setStageRects((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+      }
       id = requestAnimationFrame(tick);
     };
     id = requestAnimationFrame(tick);
@@ -187,7 +196,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
       cancelAnimationFrame(id);
       rendererRef.current = null;
     };
-  }, [assets, cssWidth, frame, timeline, quiz, framing, segment, playing]);
+  }, [assets, cssWidth, frame, timeline, quiz, framing, segment, playing, layoutEditing]);
 
   const toFrame = (event: PointerEvent<HTMLDivElement>) => {
     const box = boxRef.current?.getBoundingClientRect();
@@ -216,6 +225,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!layoutEditing) return;
     const renderer = rendererRef.current;
     const point = toFrame(event);
     const slop = grabSlop();
@@ -232,6 +242,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!layoutEditing) return;
     const renderer = rendererRef.current;
     const point = toFrame(event);
     if (!renderer || !point) return;
@@ -262,6 +273,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!layoutEditing || event.target !== event.currentTarget) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
     const renderer = rendererRef.current;
     const rect = renderer?.timerFrameRect();
@@ -283,6 +295,44 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
     if (!placed) return;
     redraw();
     onTimerPlaceRef.current?.(placed);
+  };
+
+  const layoutPointerDown = (event: PointerEvent<HTMLElement>) => {
+    const item = event.currentTarget.dataset.layoutItem as StageLayoutItem | undefined;
+    const mode = event.currentTarget.dataset.layoutMode as "move" | "resize" | undefined;
+    if (!item || !mode) return;
+    const rect = stageRects[item];
+    if (!rect) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    layoutDragRef.current = { item, mode, startX: event.clientX, startY: event.clientY, rect };
+  };
+
+  const layoutPointerMove = (event: PointerEvent<HTMLElement>) => {
+    const drag = layoutDragRef.current;
+    const box = boxRef.current?.getBoundingClientRect();
+    if (!drag || !box) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const dx = (event.clientX - drag.startX) / box.width * frame.cssWidth;
+    const dy = (event.clientY - drag.startY) / box.height * frame.cssHeight;
+    const minW = frame.cssWidth * 0.1;
+    const minH = frame.cssHeight * 0.08;
+    const rect = drag.mode === "move"
+      ? { ...drag.rect, x: Math.min(frame.cssWidth - drag.rect.w, Math.max(0, drag.rect.x + dx)), y: Math.min(frame.cssHeight - drag.rect.h, Math.max(0, drag.rect.y + dy)) }
+      : { ...drag.rect, w: Math.min(frame.cssWidth - drag.rect.x, Math.max(minW, drag.rect.w + dx)), h: Math.min(frame.cssHeight - drag.rect.y, Math.max(minH, drag.rect.h + dy)) };
+    const point = { x: rect.x / frame.cssWidth * 100, y: rect.y / frame.cssHeight * 100, width: rect.w / frame.cssWidth * 100, height: rect.h / frame.cssHeight * 100 };
+    layoutPendingRef.current = { item: drag.item, point };
+    setStageRects((current) => ({ ...current, [drag.item]: rect }));
+  };
+
+  const layoutPointerEnd = (event: PointerEvent<HTMLElement>) => {
+    event.stopPropagation();
+    const pending = layoutPendingRef.current;
+    layoutDragRef.current = null;
+    layoutPendingRef.current = null;
+    if (pending) onStagePlace?.(pending.item, pending.point);
   };
 
   return (
@@ -315,6 +365,19 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
           aria-hidden
           className="pointer-events-none absolute z-20 hidden h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink-950 bg-white shadow"
         />
+        {layoutEditing && (["question", "answers"] as const).map((item) => {
+          const rect = stageRects[item];
+          if (!rect) return null;
+          return <div key={item} role="button" tabIndex={0} aria-label={`Drag ${item} area`}
+            data-layout-item={item} data-layout-mode="move"
+            className="absolute z-30 cursor-move touch-none border-2 border-dashed border-white/90 bg-white/5 shadow-[0_0_0_1px_rgba(0,0,0,.5)]"
+            style={{ left: `${rect.x / frame.cssWidth * 100}%`, top: `${rect.y / frame.cssHeight * 100}%`, width: `${rect.w / frame.cssWidth * 100}%`, height: `${rect.h / frame.cssHeight * 100}%` }}
+            onPointerDown={layoutPointerDown} onPointerMove={layoutPointerMove} onPointerUp={layoutPointerEnd} onPointerCancel={layoutPointerEnd}>
+            <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[9px] font-bold uppercase text-white">{item}</span>
+            <span aria-hidden className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 cursor-nwse-resize rounded-full border-2 border-white bg-[var(--accent)]"
+              data-layout-item={item} data-layout-mode="resize" onPointerDown={layoutPointerDown} />
+          </div>;
+        })}
         {!ready && (
           <p className="absolute inset-0 grid place-items-center text-xs text-ink-500">
             {failed ? "Couldn't load the pictures for this preview." : "Loading preview…"}
@@ -348,7 +411,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace }: Props) {
 
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] text-ink-500">
-          Drag the timer to move it. Drag the dot on its end to make it longer or shorter. That spot and length are used in the {framing === "vertical" ? "mobile" : "web"} video. Leave it and it stays at the top right, at its original length.
+          With layout editing on, drag the timer to move it or its end dot to resize it. The selected scope applies in {framing === "vertical" ? "Mobile" : "Web"} preview, play, and video export.
         </p>
         <button
           type="button"

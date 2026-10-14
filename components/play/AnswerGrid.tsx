@@ -11,6 +11,8 @@ import {
   imageChoiceColumns,
   imageChoiceGridStyle,
   imageChoiceJoinedGridStyle,
+  imageAreaHeight,
+  imageAreaWidth,
   imageJoinerGridPlace,
   imageJoinerLabel,
   imageJoinerStyled,
@@ -61,6 +63,8 @@ interface Props {
   onRevealComplete?: () => void;
   /** Builder preview only. Dragging the answer-box dot stores this scale. */
   onAnswerBoxScale?: (scale: number) => void;
+  /** Builder preview only. Saves responsive image-area width/height. */
+  onImageAreaChange?: (area: NonNullable<Question["imageArea"]>) => void;
 }
 
 /**
@@ -131,6 +135,7 @@ export function AnswerGrid({
   sinceExit = null,
   onRevealComplete,
   onAnswerBoxScale,
+  onImageAreaChange,
 }: Props) {
   const reduced = useReducedMotion();
   const ageBand = themeAgeBand(theme);
@@ -157,6 +162,12 @@ export function AnswerGrid({
   const hideCaptionBg = typography.hideImageTextBackground === true;
   const resizeHandle = mode === "preview" && onAnswerBoxScale
     ? <AnswerBoxHandle scale={boxScale} onScale={onAnswerBoxScale} />
+    : null;
+  const imageWidth = imageAreaWidth(question);
+  const imageHeight = imageAreaHeight(question);
+  const imageAreaStyle = { width: `${imageWidth * 100}%`, marginInline: "auto", containerType: "inline-size" as const };
+  const imageResizeHandles = mode === "preview" && onImageAreaChange
+    ? <ImageAreaHandles width={imageWidth} height={imageHeight} onChange={onImageAreaChange} />
     : null;
   const imageCaption = (option: Question["options"][number], index: number) => {
     if (!option.text.trim()) return null;
@@ -207,7 +218,7 @@ export function AnswerGrid({
 
     return (
       <div className="w-full">
-        <div ref={pictureGridRef} role="group" aria-label="Covered images" className={resizeHandle ? "relative w-full" : "w-full"} style={{ ...(joinersOn ? imageChoiceJoinedGridStyle(count, gap) : imageChoiceGridStyle(count, gap)), containerType: "inline-size" }}>
+        <div ref={pictureGridRef} role="group" aria-label="Covered images" className="relative" style={{ ...(joinersOn ? imageChoiceJoinedGridStyle(count, gap) : imageChoiceGridStyle(count, gap)), ...imageAreaStyle }}>
           {question.options.map((option, index) => {
             const isPicked = selected.includes(option.id);
             const showCorrect = revealed && option.correct;
@@ -235,10 +246,11 @@ export function AnswerGrid({
                 <span
                   data-choice-picture={joinersOn ? "" : undefined}
                   data-reveal-source={option.correct ? `${question.id}:${option.id}` : undefined}
-                  className={`relative block aspect-[3/2] w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
+                  className={`relative block w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
                     !hideImageBoxes && isPicked && !revealed ? "ring-4 ring-white/80" : ""
                   }`}
                   style={{
+                    aspectRatio: `${3 / imageHeight} / 2`,
                     boxShadow: !hideImageBoxes && showCorrect
                       ? `0 0 0 4px ${correctColor}, 0 0 28px -6px ${withAlpha(correctColor, 0.9)}`
                       : !hideImageBoxes && showWrong
@@ -299,7 +311,7 @@ export function AnswerGrid({
               elapsed={sinceMount}
             />
           )}
-          {resizeHandle}
+          {imageResizeHandles}
         </div>
         <RevealCaption
           settings={settings}
@@ -319,7 +331,7 @@ export function AnswerGrid({
     const gap = mode === "preview" ? Math.max(2, Math.round(gapPx / 2)) : gapPx;
 
     return (
-      <div ref={pictureGridRef} role="group" aria-label="Images" className={resizeHandle ? "relative w-full" : "w-full"} style={{ ...(joinersOn ? imageChoiceJoinedGridStyle(count, gap) : imageChoiceGridStyle(count, gap)), containerType: "inline-size" }}>
+      <div ref={pictureGridRef} role="group" aria-label="Images" className="relative" style={{ ...(joinersOn ? imageChoiceJoinedGridStyle(count, gap) : imageChoiceGridStyle(count, gap)), ...imageAreaStyle }}>
         {question.options.map((option, index) => {
           const isPicked = selected.includes(option.id);
           const showCorrect = revealed && option.correct;
@@ -346,10 +358,11 @@ export function AnswerGrid({
               <span
                 data-choice-picture={joinersOn ? "" : undefined}
                 data-reveal-source={option.correct && option.media ? `${question.id}:${option.id}` : undefined}
-                className={`relative block aspect-[3/2] w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
+                className={`relative block w-full overflow-hidden ${hideImageBoxes ? "bg-transparent" : "rounded-md bg-white"} ${
                   !hideImageBoxes && isPicked && !revealed ? "ring-4 ring-white/80" : ""
                 }`}
                 style={{
+                  aspectRatio: `${3 / imageHeight} / 2`,
                   boxShadow: !hideImageBoxes && showCorrect
                     ? `0 0 0 4px ${correctColor}, 0 0 28px -6px ${withAlpha(correctColor, 0.9)}`
                     : !hideImageBoxes && showWrong
@@ -394,17 +407,21 @@ export function AnswerGrid({
             elapsed={sinceMount}
           />
         )}
-        {resizeHandle}
+        {imageResizeHandles}
       </div>
     );
   }
 
-  const columns = narrow || question.layout === "list" || isSingleAnswer(question) ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+  const denseCount = question.options.length;
+  const denseColumns = narrow
+    ? denseCount > 8 ? Math.min(2, denseCount) : 1
+    : question.layout === "list" || isSingleAnswer(question) ? 1
+    : denseCount <= 6 ? 2 : denseCount <= 12 ? 3 : denseCount <= 24 ? 4 : 5;
 
   const gap = mode === "preview" ? "gap-1" : "gap-3 md:gap-4";
 
   return (
-    <div className={`grid w-full ${columns} ${gap}${resizeHandle ? " relative" : ""}`} style={{ containerType: "inline-size", gridAutoRows: "1fr" }} role={question.kind === "multi-select" ? "group" : undefined}>
+    <div className={`grid w-full ${gap}${resizeHandle ? " relative" : ""}`} style={{ containerType: "inline-size", gridAutoRows: "1fr", gridTemplateColumns: `repeat(${denseColumns}, minmax(0, 1fr))` }} role={question.kind === "multi-select" ? "group" : undefined}>
       {question.options.map((option, index) => {
         const bg = optionColor(index, { band: ageBand, colors: theme.optionColors, override: option.color });
         const marker = chrome.hideMarkers ? "" : optionMarker(index, { band: ageBand, marker: theme.optionMarker, override: option.icon });
@@ -632,6 +649,27 @@ function AnswerBoxHandle({ scale, onScale }: { scale: number; onScale: (scale: n
       onPointerCancel={() => { drag.current = null; }}
     />
   );
+}
+
+function ImageAreaHandles({ width, height, onChange }: { width: number; height: number; onChange: (area: NonNullable<Question["imageArea"]>) => void }) {
+  const drag = useRef<{ axis: "x" | "y"; start: number; width: number; height: number } | null>(null);
+  const handle = (axis: "x" | "y", className: string, label: string) => (
+    <button type="button" aria-label={label} title={label}
+      className={`absolute z-30 h-4 w-4 touch-none rounded-full border-2 border-white bg-[var(--accent)] shadow ${className}`}
+      onPointerDown={(event) => {
+        event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { axis, start: axis === "x" ? event.clientX : event.clientY, width, height };
+      }}
+      onPointerMove={(event) => {
+        const current = drag.current; if (!current || current.axis !== axis) return;
+        const delta = (axis === "x" ? event.clientX : event.clientY) - current.start;
+        const nextWidth = axis === "x" ? Math.min(1, Math.max(0.35, current.width + delta / 220)) : current.width;
+        const nextHeight = axis === "y" ? Math.min(2.5, Math.max(0.5, current.height + delta / 80)) : current.height;
+        onChange({ width: Math.round(nextWidth * 20) / 20, height: Math.round(nextHeight * 20) / 20 });
+      }}
+      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />
+  );
+  return <>{handle("x", "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize", "Drag horizontally to resize image area")}{handle("y", "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize", "Drag vertically to resize image area")}</>;
 }
 
 /** Hide answer boxes: the bar that carries picked / correct (glowing) / wrong once there's no card colour. */
