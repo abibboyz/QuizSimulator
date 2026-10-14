@@ -1,5 +1,7 @@
 "use client";
 
+import { LiveStage } from "@/components/play/LiveStage";
+
 import { isSingleAnswer, isUnscoredImage, showsFeedback } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -12,14 +14,6 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, primeSamples } from "@/lib/sound";
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
-import { QuestionStage } from "@/components/play/QuestionStage";
-import { FitStage } from "@/components/play/FitStage";
-import { CelebrationCard } from "@/components/play/CelebrationCard";
-import { ProgressMeter } from "@/components/play/ProgressMeter";
-import { QuizProgress } from "@/components/play/QuizProgress";
-import { showsProgressBar, timerProgressStyle } from "@/lib/progress";
-import { timerPlacementFor, timerScale } from "@/lib/timerPlacement";
-import { FreeTimer } from "@/components/play/FreeTimer";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
 import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
@@ -60,11 +54,6 @@ function PlayView() {
     setView(next);
     window.localStorage.setItem(VIEW_KEY, next);
   };
-
-  /** Phone-width column; on a big screen it gets a device frame so the shape reads as deliberate. */
-  const stageWidth = mobile
-    ? "max-w-[26rem] lg:rounded-[2rem] lg:border lg:border-ink-700/80 lg:bg-ink-950/30 lg:shadow-2xl"
-    : "max-w-4xl";
 
   const [loaded, setLoaded] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -454,73 +443,12 @@ function PlayView() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <FitStage disabled={mobile} className="h-dvh w-full">
-        <div className={`relative mx-auto flex ${mobile ? "min-h-dvh" : "min-h-[720px]"} w-full flex-col justify-center px-5 py-8 ${stageWidth}`}>
-          {/* Outside AnimatePresence: the run's progress shouldn't slide away
-              with the question it was measuring. */}
-          {showsProgressBar(quiz.settings) && !(limit !== null && quiz.settings.quizProgressStyle === "mascot") && <QuizProgress
-            index={index}
-            total={order.length}
-            outcomes={quiz.settings.revealAfterEach ? answers.map((a) => a.unscored ? null : a.correct) : undefined}
-            style={quiz.settings.quizProgressStyle}
-            mascot={quiz.settings.progressMascot}
-            mascotMedia={quiz.settings.progressMascotMedia}
-            mascotMotion={quiz.settings.progressMascotMotion}
-            color={quiz.settings.progressColor}
-            trackColor={quiz.settings.progressTrackColor}
-            thickness={quiz.settings.progressThickness}
-            narrow={mobile}
-          />}
-
-          {/* The countdown belongs to the question run, not to any particular
-              question layout. Keeping it outside QuestionStage prevents
-              Choice, T/F, Multi and Reveal mounts from affecting movement.
-              An undragged timer stays in this row. A dragged one uses the spot
-              saved for this view, the same spot as the video. */}
-          {(() => {
-            const placed = timerPlacementFor(quiz.settings, mobile ? "mobile" : "web", question);
-            const timer = limit !== null && (
-              <ProgressMeter
-                key={runKey}
-                fraction={countdown.fraction}
-                secondsLeft={Math.ceil(countdown.remainingMs / 1000)}
-                urgent={countdown.urgent}
-                style={timerProgressStyle(quiz.settings)}
-                pulse={quiz.settings.progressPulse}
-                mascot={quiz.settings.progressMascot}
-                mascotMedia={quiz.settings.progressMascotMedia}
-                mascotMotion={quiz.settings.progressMascotMotion}
-                color={quiz.settings.progressColor}
-                trackColor={quiz.settings.progressTrackColor}
-                thickness={quiz.settings.progressThickness}
-                showNumber={quiz.settings.showTimerNumber !== false}
-                celebrate={justCorrect}
-                size={64 * timerScale(placed?.scale)}
-              />
-            );
-            return (
-              <>
-                <div className={placed ? "mb-4 flex items-center justify-end gap-4" : "mb-4 flex min-h-16 items-center justify-end gap-4"}>
-                  <MuteButton />
-                  {!placed && timer}
-                </div>
-                {placed && timer && (
-                  <FreeTimer x={placed.x} y={placed.y}>
-                    {timer}
-                  </FreeTimer>
-                )}
-              </>
-            );
-          })()}
-
-          {/* Keyed by question so each one genuinely mounts — without this React
-              reuses the DOM across questions and no entrance can fire. */}
-          {/* The stage-wide swap is the question's `default` animation. A custom
-              question entrance or exit replaces it (QuestionStage runs those);
-              custom exits play out before any swap-out starts. */}
+        <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={question.id}
+              className="h-full"
               initial={reduced || !usesSwapIn(stageMotion) ? false : { opacity: 0, x: QUESTION_SWAP.offsetPx }}
               animate={reduced ? {} : { opacity: 1, x: 0 }}
               exit={
@@ -536,26 +464,28 @@ function PlayView() {
               }
               transition={{ duration: QUESTION_SWAP.durationS, ease: QUESTION_SWAP.ease }}
             >
-              <QuestionStage
-                loopSettings={quiz.settings}
-                question={question}
+              <LiveStage
+                key={runKey}
+                quiz={quiz}
+                order={order}
                 index={index}
-                total={order.length}
+                framing={mobile ? "vertical" : "horizontal"}
                 selected={selected}
                 revealed={phase === "revealed"}
+                remainingMs={countdown.remainingMs}
+                limitSeconds={limit}
+                correct={justCorrect}
+                outcomes={answers.map((answer) => answer.unscored ? null : answer.correct)}
                 interactive={stageLive && !isUnscoredImage(question)}
                 onPick={handlePick}
-                mode="solo"
-                narrow={mobile}
-                showCount={showsProgressBar(quiz.settings)}
-                theme={quiz.theme}
-                motion={stageMotion}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
               />
             </motion.div>
           </AnimatePresence>
 
-          <div className="mt-8 flex justify-center gap-3">
+          </div>
+          <div className="flex shrink-0 justify-center gap-3 px-4 py-2">
+            <MuteButton />
             {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
             {phase === "asking" && question.kind === "multi-select" && !isSingleAnswer(question) && (
               <Button variant="primary" size="lg" disabled={!selected.length} onClick={submitAnswer}>
@@ -582,7 +512,7 @@ function PlayView() {
           )}
           {!autoAdvanceReady && (
             // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
-            <p className="mt-4 text-center text-xs text-ink-500">
+            <p className="shrink-0 px-4 pb-2 text-center text-xs text-ink-500">
               {isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile
                 ? phase === "asking"
                   ? question.kind === "image-choice" || question.kind === "reveal"
@@ -599,16 +529,8 @@ function PlayView() {
             </p>
           )}
 
-          {/* Mobile celebration stays centred in the visible phone frame;
-              web view uses the viewport. Keep it outside the sliding question
-              frame so that transform cannot move its fixed position. */}
-          {phase === "revealed" && showsFeedback(quiz.settings, question) && celebrationReady && !isUnscoredImage(question) && (
-            <CelebrationCard question={question} mode="solo" contained={mobile} hideImageBoxes={hidesImageBoxes(quiz.settings, question)} />
-          )}
         </div>
-        </FitStage>
       )}
-
       {phase === "results" && (
         <ResultsScreen
           quiz={quiz}

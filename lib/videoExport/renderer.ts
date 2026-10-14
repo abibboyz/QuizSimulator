@@ -115,6 +115,8 @@ export interface RenderAssets {
   fonts: FontSet;
 }
 
+export interface AnswerFrameRect { id: string; x: number; y: number; w: number; h: number }
+
 /* ------------------------------------------------------------------ tokens */
 
 const swapEase = cubicBezier(QUESTION_SWAP.ease);
@@ -201,6 +203,9 @@ export class FrameRenderer {
   private stageDrafts: Partial<Record<StageLayoutItem, StageItemPlacement>> = {};
   private stageFit = 1;
   private stageTop = 0;
+  private captureAnswers = false;
+  private liveOutcomes: (boolean | null)[] = [];
+  private answerRects: AnswerFrameRect[] = [];
   private readonly stageView: TimerView;
 
   constructor(
@@ -255,6 +260,7 @@ export class FrameRenderer {
     this.t = t;
     this.timerRect = null;
     this.stageRects = {};
+    this.answerRects = [];
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
@@ -273,6 +279,32 @@ export class FrameRenderer {
       if (t >= cue.start && t < cue.end) this.drawCue(cue, t - cue.start);
     }
     this.drawConfetti(t);
+  }
+
+  /** Same pixels as export, with hit targets for real interactive answers. */
+  renderLive(t: number, outcomes: (boolean | null)[] = []): AnswerFrameRect[] {
+    this.reachedSteps.length = 0;
+    this.buildReachedSteps();
+    this.captureAnswers = true;
+    this.liveOutcomes = outcomes;
+    try {
+      this.render(t);
+      return this.answerRects;
+    } finally {
+      this.captureAnswers = false;
+    }
+  }
+
+  private noteAnswerRect(id: string, x: number, y: number, w: number, h: number) {
+    if (!this.captureAnswers || this.ctx.globalAlpha < 0.01) return;
+    const m = this.ctx.getTransform();
+    const points = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([px, py]) => ({
+      x: (m.a * px + m.c * py + m.e) / this.scale,
+      y: (m.b * px + m.d * py + m.f) / this.scale,
+    }));
+    const left = Math.min(...points.map((point) => point.x));
+    const top = Math.min(...points.map((point) => point.y));
+    this.answerRects.push({ id, x: left, y: top, w: Math.max(...points.map((point) => point.x)) - left, h: Math.max(...points.map((point) => point.y)) - top });
   }
 
   /* ============================================================ background */
@@ -753,7 +785,7 @@ export class FrameRenderer {
     if (style === "mascot" && currentRun?.limitSeconds !== null) return null;
 
     const outcomes = settings.revealAfterEach
-      ? this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isScored(r.question) ? r.correct : null)
+      ? this.captureAnswers ? this.liveOutcomes : this.timeline.questions.filter((r) => r.revealAt <= t).map((r) => isScored(r.question) ? r.correct : null)
       : [];
     const answered = outcomes.length;
     const { value: reached, shown } = this.reachedAt(t);
@@ -1492,6 +1524,7 @@ export class FrameRenderer {
     const tileX = option.boxWidth ? x + (w - tileW) / 2 : x;
 
     this.withLoop(answerLoop(resolveLoops(this.quiz.settings, run.question).answers, option), t - run.mountAt, tileX, y, tileW, h, () => this.withPose(tin, tileX + tileW / 2, y + h / 2, opacity, () => {
+      this.noteAnswerRect(option.id, tileX, y, tileW, h);
       if (!boxless) {
         if (glow > 0) this.glowShadow(tileX, y, tileW, h, r, 6, 40, withAlpha(this.good, 0.9 * glow));
         if (ring > 0) this.fillRing(tileX, y, tileW, h, r, 4, `rgba(255,255,255,${ring})`);
@@ -1643,6 +1676,7 @@ export class FrameRenderer {
             const opacity = faded ? lerp(1, 0.35, rp) : 1;
 
             this.withLoop(answerLoop(resolveLoops(this.quiz.settings, q).answers, option), t - run.mountAt, tx, ry, colW, rowH[r], () => this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
+              this.noteAnswerRect(option.id, tx, ry, colW, rowH[r]);
               const rad = hideImageBoxes ? 0 : 6; // rounded-md
               if (!hideImageBoxes && showCorrect) {
                 this.glowShadow(tx, ry, colW, boxH, rad, 6, 28, withAlpha(this.good, 0.9 * rp));
