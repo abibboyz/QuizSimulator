@@ -1,5 +1,6 @@
 "use client";
 
+import { GAME_KIND_TAGS } from "@/lib/gameTypes";
 import {
   DndContext,
   KeyboardSensor,
@@ -41,6 +42,7 @@ const KIND_LABEL: Record<Question["kind"], string> = {
   "multi-select": "Multi",
   "image-choice": "Image",
   reveal: "Reveal",
+  ...GAME_KIND_TAGS,
 };
 
 export function QuestionList({

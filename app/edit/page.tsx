@@ -1,5 +1,7 @@
 "use client";
 
+import { GAME_KIND_TAGS } from "@/lib/gameTypes";
+import { GAME_KIND_LIST } from "@/types/quiz";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -370,6 +372,16 @@ function EditView() {
             <Button variant="outline" size="sm" className="col-span-2" onClick={() => addQuestion("reveal")}>
               + Reveal
             </Button>
+          </div>
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-400">Game types</span>
+            <div className="grid grid-cols-2 gap-2">
+              {GAME_KIND_LIST.map((kind) => (
+                <Button key={kind} variant="outline" size="sm" onClick={() => addQuestion(kind)}>
+                  + {GAME_KIND_TAGS[kind]}
+                </Button>
+              ))}
+            </div>
           </div>
           {hasCopiedQuestion && (
             <Button variant="primary" size="sm" className="w-full" disabled={clipboardBusy} onClick={() => { void paste(); }}>

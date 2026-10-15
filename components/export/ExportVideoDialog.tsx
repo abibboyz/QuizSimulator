@@ -1,5 +1,6 @@
 "use client";
 
+import { isGameKind } from "@/lib/gameTypes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Quiz } from "@/types/quiz";
@@ -381,7 +382,7 @@ export function ExportVideoDialog({ quiz, defaultFraming = "vertical", onClose }
               />
               <p className="mt-1 text-xs text-ink-500">
                 {answerMode === "pick-correct"
-                  ? "A player picks the right answer with a second left: select ring, then the correct reveal."
+                  ? `A player picks the right answer with a second left: select ring, then the correct reveal.${quiz.questions.some((q) => isGameKind(q.kind)) ? " Memory, pop, drag, order, timed and star/go questions are played through too (stars follow the Star/Go setting)." : ""}`
                   : "Nobody answers — exactly what auto-play does when left alone (out of time, answer shown)."}
               </p>
             </div>

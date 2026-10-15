@@ -45,6 +45,9 @@ import {
 } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
 import { celebrationDelayMs } from "@/lib/celebration";
+import { DRAG_MS, isGameKind, lockedMs, pickMode, popTapTime, resolveGame } from "@/lib/gameTypes";
+import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, starPoints, type StarChoice, type StarState } from "@/lib/stars";
+import type { GameQuestionKind } from "@/types/quiz";
 
 /* ----------------------------------------------------------------- options */
 
@@ -62,6 +65,12 @@ export interface TimelineOptions {
   answerMode: AnswerMode;
   /** Build the audio events at all. */
   sound: boolean;
+  /**
+   * Game question kinds whose simulated player answers even in `timeout` mode.
+   * The builder preview passes the game kinds so remember -> flip -> pick (or pop,
+   * drag, star) is visible instead of just a clock running out. Unset changes nothing.
+   */
+  simulate?: readonly GameQuestionKind[];
 }
 
 /*
@@ -112,6 +121,34 @@ export interface Pick {
   at: number;
 }
 
+/** Star or Go outcome of one answered question (lib/stars). */
+export interface StarRun {
+  /** Stars this answer put in the pot (0 when wrong or timed out). */
+  earned: number;
+  /** When the stars start to appear (the reveal, plus a beat). */
+  appearAt: number;
+  /** When Star / Go buttons show up, or null when there is nothing to choose. */
+  choiceAt: number | null;
+  /** The simulated tap, or null. In live play the player's own tap lands here. */
+  tapAt: number | null;
+  choice: StarChoice | null;
+  /** Stars in the pot after this answer, before the choice (what Star would bank). */
+  pot: number;
+  /** What the next correct star question would be worth after a Go. */
+  goWorth: number;
+  /** The tally right after the choice. */
+  after: StarState;
+  /** Points added to the score by this choice (a Star banks the pot at the quiz's star value). */
+  bankPoints: number;
+}
+
+/** A simulated drag in a drag-match question: the item leaves its tray at `startAt` and lands on `optionId` at `dropAt`. */
+export interface DragRun {
+  optionId: string;
+  startAt: number;
+  dropAt: number;
+}
+
 export interface QuestionRun {
   index: number;
   question: Question;
@@ -148,6 +185,12 @@ export interface QuestionRun {
   exitAt: number;
   /** False for the last question: the results screen replaces the stage outright. */
   animateOut: boolean;
+  /** When the game clock of the game question types starts (lib/gameTypes). Equals `liveAt` in an export. */
+  gameAt: number;
+  stars?: StarRun;
+  /** Points from banked stars that land on this question's row (this choice, plus the end-of-quiz bank on the last one). */
+  starPoints?: number;
+  drag?: DragRun;
   /** Quiz-wide animation settings with this question's overrides (lib/stageMotion). */
   motion: ResolvedMotion;
   /** How long it takes to leave: custom exits, then the stage swap if it uses one. */
@@ -167,6 +210,8 @@ export interface Timeline {
     total: number;
     score: number;
     bestStreak: number;
+    /** Stars banked at the end (Star or Go). Present only when the quiz has a star-collect question. */
+    stars?: number;
   };
   cues: CueInstance[];
   confetti: ConfettiInstance[];
@@ -234,6 +279,8 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
   let streak = 0;
   let bestStreak = 0;
   let correctCount = 0;
+  let starState: StarState = INITIAL_STARS;
+  const hasStars = questions.some((q) => q.kind === "star-collect");
 
   let enterAt = clock;
   let mountAt = clock;
@@ -248,10 +295,11 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     const thinkMs = limitSeconds !== null ? limitSeconds * 1000 : UNTIMED_THINK_MS;
 
     let picks: Pick[] = [];
+    let drag: DragRun | undefined;
     let revealAt: number;
     let timedOut: boolean;
 
-    const toPick = options.answerMode === "pick-correct" ? correctPicks(question) : [];
+    const toPick = options.answerMode === "pick-correct" || (isGameKind(question.kind) && options.simulate?.includes(question.kind)) ? correctPicks(question) : [];
     if (toPick.length) {
       const span = PICK_BEAT_MS + (toPick.length - 1) * MULTI_PICK_GAP_MS;
       const offset = Math.max(thinkMs - PICK_LEAD_MS, Math.min(span + 300, thinkMs * 0.9));
@@ -261,6 +309,13 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
         at: Math.max(liveAt, revealAt - PICK_BEAT_MS - (toPick.length - 1 - i) * MULTI_PICK_GAP_MS),
       }));
       timedOut = false;
+      if (isGameKind(question.kind)) {
+        // Game types: a simulated player can't tap a locked card, a pop that isn't up, or drop before the drag is done.
+        const adjusted = gamePicks(question, picks, liveAt, revealAt);
+        picks = adjusted.picks;
+        revealAt = adjusted.revealAt;
+        if (adjusted.drag) drag = adjusted.drag;
+      }
       for (const pick of picks) audio.push({ at: pick.at, recipe: "select" });
     } else {
       revealAt = liveAt + thinkMs;
@@ -321,11 +376,33 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       msTaken,
       timedOut,
     });
+    // Star or Go: stars appear with the reveal, then the (simulated) player chooses.
+    let starRun: StarRun | undefined;
+    if (question.kind === "star-collect") {
+      const answered = afterAnswer(starState, correct, resolveGame(question).stars);
+      const appearAt = revealAt + 250;
+      let choice: StarChoice | null = null;
+      let choiceAt: number | null = null;
+      let tapAt: number | null = null;
+      let after = answered.state;
+      if (hasChoice(answered.earned)) {
+        choice = resolveGame(question).videoChoice;
+        choiceAt = appearAt + 260 + answered.earned * 220;
+        tapAt = choiceAt + 800;
+        after = afterChoice(answered.state, choice);
+        audio.push({ at: tapAt, recipe: "select" });
+      }
+      const bankPoints = choice === "star" ? starPoints(answered.state.pot, settings.pointsBase) : 0;
+      starRun = { earned: answered.earned, appearAt, choiceAt, tapAt, choice, pot: answered.state.pot, goWorth: resolveGame(question).stars * (answered.state.goStreak + 2), after, bankPoints };
+      starState = after;
+      score += bankPoints;
+    }
     // A player who answered would be left to click on; the video carries on
     // after the same hold the timeout path uses.
-    const advanceAt = !unscored && feedbackOn
+    let advanceAt = !unscored && feedbackOn
       ? revealAt + celebrationDelayMs(question) + holdSeconds * 1000
       : revealAt + REVEAL_OFF_HOLD_MS;
+    if (starRun?.tapAt != null) advanceAt = Math.max(advanceAt, starRun.tapAt + 1000);
 
     // goNext(false): the automatic path — no stock whoosh.
     const isLast = index + 1 >= questions.length;
@@ -364,6 +441,10 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       points: result.points,
       scoreBefore,
       scoreAfter: score,
+      gameAt: liveAt,
+      ...(starRun ? { stars: starRun } : {}),
+      ...(starRun?.bankPoints ? { starPoints: starRun.bankPoints } : {}),
+      ...(drag ? { drag } : {}),
       streakBefore,
       streakAfter: streak,
       timeoutBar,
@@ -385,6 +466,17 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (between) endPending(nextLiveAt);
     clock = swapAt;
   });
+
+  // Stars still in the pot when the quiz ends are banked, with their points, on the last question.
+  if (hasStars && runs.length) {
+    const endPoints = starPoints(starState.pot, settings.pointsBase);
+    if (endPoints) {
+      const last = runs[runs.length - 1];
+      last.starPoints = (last.starPoints ?? 0) + endPoints;
+      last.scoreAfter += endPoints;
+      score += endPoints;
+    }
+  }
 
   /* ---- results */
   const resultsStart = clock;
@@ -427,6 +519,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       total: scoredCount,
       score,
       bestStreak,
+      ...(hasStars ? { stars: atEnd(starState).banked } : {}),
     },
     cues,
     confetti,
@@ -440,9 +533,44 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
  * correct option in turn.
  */
 function correctPicks(question: Question): string[] {
+  // Sequence: every answer, in the authored (correct) order.
+  if (question.kind === "sequence") return question.options.map((o) => o.id);
   const correct = question.options.filter((o) => o.correct).map((o) => o.id);
   if (!correct.length) return [];
-  return question.kind === "multi-select" ? correct : [correct[0]];
+  return question.kind === "multi-select" || pickMode(question) === "multi" ? correct : [correct[0]];
+}
+
+/**
+ * Moves a simulated player's picks to moments a real one could act (game kinds only):
+ * after memory cards are face down, while a pop is on screen, once a drag has had
+ * time to travel, once a timed answer has appeared. The reveal waits for the last pick.
+ */
+function gamePicks(question: Question, picks: Pick[], liveAt: number, revealAt: number): { picks: Pick[]; revealAt: number; drag?: DragRun } {
+  let drag: DragRun | undefined;
+  const game = resolveGame(question);
+  const open = liveAt + lockedMs(question) + 400;
+  let moved = picks.map((pick, i) => {
+    if (question.kind === "pop-match") {
+      return { ...pick, at: liveAt + popTapTime(question, pick.optionId, pick.at - liveAt, 0) };
+    }
+    if (question.kind === "timed-reveal") {
+      const index = question.options.findIndex((o) => o.id === pick.optionId);
+      return { ...pick, at: Math.max(pick.at, liveAt + index * game.stepMs + 700) };
+    }
+    if (question.kind === "memory-flip" || question.kind === "sequence") {
+      return { ...pick, at: Math.max(pick.at, open + i * MULTI_PICK_GAP_MS) };
+    }
+    return pick;
+  });
+  if (question.kind === "drag-match" && moved.length) {
+    const dragMs = game.animate ? DRAG_MS * game.factor : 0;
+    const dropAt = Math.max(moved[0].at, liveAt + 600 + dragMs);
+    moved = [{ ...moved[0], at: dropAt }];
+    drag = { optionId: moved[0].optionId, startAt: dropAt - dragMs, dropAt };
+  }
+  const lastPick = moved.reduce((latest, pick) => Math.max(latest, pick.at), liveAt);
+  const reveal = Math.max(revealAt, lastPick + PICK_BEAT_MS);
+  return { picks: moved, revealAt: reveal, ...(drag ? { drag } : {}) };
 }
 
 /* ----------------------------------------------------------- frame lookup */

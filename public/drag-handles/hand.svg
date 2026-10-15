@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <title>Hand</title>
+  <!-- Pointing hand, fingertip at (36, 8). Transparent background. -->
+  <g fill="#ffd2a1" stroke="#7a4a22" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="29" y="6" width="15" height="52" rx="7.5"/>
+    <path d="M24 50 H72 a8 8 0 0 1 8 8 V78 a16 16 0 0 1 -16 16 H42 a18 18 0 0 1 -18 -18 Z"/>
+    <ellipse cx="22" cy="66" rx="8" ry="12" transform="rotate(-24 22 66)"/>
+  </g>
+  <g fill="none" stroke="#7a4a22" stroke-width="3" stroke-linecap="round">
+    <path d="M51 52 V64"/><path d="M62 52 V64"/><path d="M72 56 V66"/>
+  </g>
+</svg>

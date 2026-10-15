@@ -19,6 +19,8 @@ interface Props {
   answers: AnswerRecord[];
   score: number;
   bestStreak: number;
+  /** Star or Go: stars banked. Passed only when the quiz has a star-collect question; adds a Stars tile. */
+  stars?: number;
   onRetryAll: () => void;
   onRetryMissed: (ids: string[]) => void;
   /** Phone-shaped play: narrower column, stat tiles two-up instead of four. */
@@ -35,6 +37,7 @@ export function ResultsScreen({
   answers,
   score,
   bestStreak,
+  stars,
   onRetryAll,
   onRetryMissed,
   narrow = false,
@@ -80,6 +83,7 @@ export function ResultsScreen({
         <Stat label="Correct" value={`${correctCount}/${scoredAnswers.length}`} />
         <Stat label="Accuracy" value={scoredAnswers.length ? `${Math.round(accuracy * 100)}%` : "—"} />
         <Stat label="Best streak" value={String(bestStreak)} />
+        {stars !== undefined && <Stat label="Stars" value={`⭐ ${stars}`} />}
       </div>
 
       <section className="glass overflow-hidden rounded-2xl">
@@ -89,10 +93,13 @@ export function ResultsScreen({
         <ol className="divide-y divide-ink-800">
           {order.map((question, i) => {
             const answer = answers.find((a) => a.questionId === question.id);
-            const correctText = question.options
-              .filter((o) => o.correct)
-              .map((o) => o.text || "(image)")
-              .join(", ");
+            // Sequence: the answer is the whole list, in order.
+            const correctText = question.kind === "sequence"
+              ? question.options.map((o) => o.text || "(image)").join(" → ")
+              : question.options
+                .filter((o) => o.correct)
+                .map((o) => o.text || "(image)")
+                .join(", ");
 
             return (
               <li key={question.id} className="flex items-start gap-4 px-5 py-4">
@@ -118,7 +125,8 @@ export function ResultsScreen({
                   )}
                 </div>
                 <span className="shrink-0 text-sm font-semibold tabular-nums text-ink-300">
-                  +{(answer?.points ?? 0).toLocaleString()}
+                  {answer?.starPoints ? <span className="mr-2 font-normal text-ink-400">⭐ +{answer.starPoints.toLocaleString()}</span> : null}
+                  +{((answer?.points ?? 0) + (answer?.starPoints ?? 0)).toLocaleString()}
                 </span>
               </li>
             );

@@ -1,6 +1,9 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 11 adds the game question types (memory-flip, pop-match, star-collect,
+ * drag-match, sequence, timed-reveal) and the optional per-question `game`
+ * settings. Older builds would not know these kinds, so such files are stamped 11.
  * 9 adds responsive per-question prompt and image-area sizing.
  * 8 adds single-answer questions (exactly one answer on a non true/false
  * question: always correct, celebrated, not scored). Older builds would
@@ -18,7 +21,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -28,6 +31,7 @@ export const SCHEMA_VERSION = 10;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.questions.some((q) => (GAME_KIND_LIST as readonly string[]).includes(q.kind))) return 11;
   if (quiz.settings.stageLayout || quiz.questions.some((q) => q.stageLayout || q.timerPlacement)) return 10;
   if (quiz.questions.some((q) => q.promptArea || q.imageArea || ((q.kind === "multiple-choice" || q.kind === "multi-select") && q.options.length > 6))) return 9;
   if (quiz.questions.some((q) => ["multiple-choice", "multi-select", "image-choice", "reveal"].includes(q.kind) && q.options.length === 1)) return 8;
@@ -135,7 +139,55 @@ export type AutoAdvanceBarStyle = "line" | "pill" | "dots";
  */
 export type QuizProgressStyle = "none" | "bar" | "colorful" | "segments" | "dots" | "mascot";
 
-export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice" | "reveal";
+export type QuestionKind =
+  | "multiple-choice"
+  | "true-false"
+  | "multi-select"
+  | "image-choice"
+  | "reveal"
+  | GameQuestionKind;
+
+/** The game question types added in schema 11. Everything else is a classic kind. */
+export type GameQuestionKind = "memory-flip" | "pop-match" | "star-collect" | "drag-match" | "sequence" | "timed-reveal";
+export const GAME_KIND_LIST: readonly GameQuestionKind[] = ["memory-flip", "pop-match", "star-collect", "drag-match", "sequence", "timed-reveal"];
+
+export type GameSpeed = "slow" | "normal" | "fast";
+export type DragHandleKind = "stick" | "hand" | "custom";
+
+/**
+ * Settings for the game question types. Every field is optional and resolved
+ * against defaults (lib/gameTypes `resolveGame`), so a half-filled or
+ * hand-edited record still plays. Ignored by the classic kinds, and kept when a
+ * question is switched between kinds so nothing is lost.
+ */
+export interface GameSettings {
+  /** false = no motion: flips, pops, stars and drags change state instantly. Unset = animated. */
+  animate?: boolean;
+  /** Speed of every game animation. Unset = normal. */
+  speed?: GameSpeed;
+  /** memory-flip: how long the cards (or the items to remember) stay on show. */
+  rememberMs?: number;
+  /** memory-flip: `flip` shows every card then turns them face down; `recall` shows only the items to remember, then reveals all the options. */
+  memoryMode?: "flip" | "recall";
+  /** memory-flip: the character on a face-down card. */
+  cardBack?: string;
+  /** pop-match: how long each item stays up. */
+  popMs?: number;
+  /** pop-match: how many items are on screen at once. */
+  popCount?: number;
+  /** pop-match: where items appear. */
+  popFrom?: "random" | "edges" | "mixed";
+  /** star-collect: stars a correct answer is worth. */
+  stars?: number;
+  /** star-collect: what the simulated player picks in the video export and the builder preview. */
+  videoChoice?: "star" | "go";
+  /** timed-reveal: gap between one answer appearing and the next. */
+  stepMs?: number;
+  /** drag-match: the thing the player drags (a word or emoji). The question picture is used instead when it has one. */
+  dragItem?: string;
+  /** drag-match: the animated pointer that follows the finger or mouse. */
+  dragHandle?: { kind: DragHandleKind; image?: MediaRef };
+}
 
 export type StageLayoutView = "web" | "mobile";
 export type StageLayoutItem = "question" | "answers" | "countdown";
@@ -489,6 +541,8 @@ export interface Question {
   reveal?: Partial<RevealSettings>;
   /** Overrides the quiz-wide question/answer animations. Absent = use the quiz's. */
   motion?: MotionOverrides;
+  /** Settings of the game question types (schema 11). Ignored by the classic kinds. */
+  game?: GameSettings;
 }
 
 /** Audience the quiz is coloured for. Affects palette only, never gameplay. */
@@ -803,6 +857,12 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
               ? `${label} has no correct answer marked.`
               : `${label} must have exactly one correct answer.`,
         });
+      }
+    } else if ((GAME_KIND_LIST as readonly string[]).includes(q.kind)) {
+      // Game types need a pair at least. Sequence has no tick: the order you list the answers in is the answer.
+      if (q.options.length < 2 && q.options.length >= 1) issues.push({ questionId: q.id, severity: "error", message: `${label} needs at least 2 answers.` });
+      if (q.kind !== "sequence" && !q.options.some((o) => o.correct)) {
+        issues.push({ questionId: q.id, severity: "error", message: `${label} has no correct answer marked.` });
       }
     } else if (!q.options.some((o) => o.correct)) {
       issues.push({ questionId: q.id, severity: "error", message: `${label} has no correct answer marked.` });

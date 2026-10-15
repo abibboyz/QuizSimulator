@@ -74,7 +74,31 @@ import {
 import { assemblyPieces, isPhotoAssemblyStyle, morphedPoints, pieceProgress, poseAt, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 import { frameSource } from "@/lib/videoExport/animatedImage";
+import { starPoints } from "@/lib/stars";
 import { answerChrome, boxlessFrame, FEEDBACK_BAR, tintLettering } from "@/lib/answerChrome";
+import {
+  DRAG_MS,
+  FLIP_MS,
+  GAME_KIND_HINTS,
+  HANDLE_ASSETS,
+  HANDLE_HOTSPOTS,
+  dragPoint,
+  dur,
+  flipCard,
+  handlePose,
+  isGameKind,
+  memoryState,
+  pickMode,
+  popPose,
+  popVisible,
+  progress,
+  resolveGame,
+  seededShuffle,
+  hashString,
+  timedRevealProgress,
+  timedRevealShown,
+  displayOptions,
+} from "@/lib/gameTypes";
 import { cartoonFamily, cartoonFont, paintStyledLines, resolveTextStyle, styledWrapWidth, wrapWords, type ResolvedTextStyle } from "@/lib/textStyle";
 
 /* ---------------------------------------------------------------- framing */
@@ -132,6 +156,14 @@ interface Box {
   draw: (x: number, y: number) => void;
 }
 
+export interface GamePointer {
+  x: number;
+  y: number;
+  down: boolean;
+  grabbing: boolean;
+  type: string;
+}
+
 function placementRect(value: StageItemPlacement, width: number, height: number) {
   return { x: value.x / 100 * width, y: value.y / 100 * height, w: value.width / 100 * width, h: value.height / 100 * height };
 }
@@ -156,6 +188,23 @@ interface TextTile {
   /** Width of the text column (styled lettering paints into it). */
   textW: number;
   thumb?: number;
+  /** Game question types only: flip / pop / hover state. Absent for the classic kinds. */
+  game?: TileGame | null;
+  /** Sequence on reveal: whether this answer was put in its right place. Absent for every other kind. */
+  verdict?: "correct" | "wrong" | "neutral";
+}
+
+/** How one answer tile is drawn by a game question type this frame. */
+interface TileGame {
+  visible: boolean;
+  /** Horizontal squash of a card flip (1 = flat on). */
+  scaleX: number;
+  scale: number;
+  alpha: number;
+  /** Draw the face-down back instead of the answer. */
+  back: boolean;
+  /** Whether the tile can be tapped right now (hit target for live play). */
+  hit: boolean;
 }
 
 /* ================================================================ renderer */
@@ -202,6 +251,20 @@ export class FrameRenderer {
   /** Transient builder edits; never mutate the saved quiz or export settings. */
   private stageDrafts: Partial<Record<StageLayoutItem, StageItemPlacement>> = {};
   private previewCountdown = false;
+  /** Game question types: pointer for the drag handle, tile boxes for drops, and the tray the token starts in (frame px). */
+  private pointer: GamePointer | null = null;
+  private tileRects = new Map<string, { x: number; y: number; w: number; h: number }>();
+  private prevTileRects = new Map<string, { x: number; y: number; w: number; h: number }>();
+  private dragHome: { x: number; y: number } | null = null;
+  private hoverId: string | null = null;
+  private hitsOff = false;
+  private lastHandle: { x: number; t: number } | null = null;
+  private liveVx = 0;
+
+  /** Live play and the builder: the real pointer, in frame CSS pixels. `grabbing` is true while the token is being dragged. */
+  setPointer(pointer: GamePointer | null): void {
+    this.pointer = pointer;
+  }
 
   showCountdownInPreview(show: boolean): void {
     this.previewCountdown = show;
@@ -266,6 +329,10 @@ export class FrameRenderer {
     this.timerRect = null;
     this.stageRects = {};
     this.answerRects = [];
+    this.prevTileRects = this.tileRects;
+    this.tileRects = new Map();
+    this.dragHome = null;
+    this.hoverId = this.pointer?.grabbing ? this.tileUnder(this.pointer.x, this.pointer.y) : null;
     ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
     ctx.globalAlpha = 1;
     ctx.imageSmoothingEnabled = true;
@@ -278,6 +345,7 @@ export class FrameRenderer {
     else if (scene.kind === "results") this.drawResults(t);
     else this.drawStage(scene.index, scene.shown, scene.motion, scene.progress, t);
 
+    if (scene.kind === "stage") this.drawDragOverlay(scene.shown, t);
     this.drawCelebration(t);
 
     for (const cue of this.timeline.cues) {
@@ -301,7 +369,7 @@ export class FrameRenderer {
   }
 
   private noteAnswerRect(id: string, x: number, y: number, w: number, h: number) {
-    if (!this.captureAnswers || this.ctx.globalAlpha < 0.01) return;
+    if (!this.captureAnswers || this.hitsOff || this.ctx.globalAlpha < 0.01) return;
     const m = this.ctx.getTransform();
     const points = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([px, py]) => ({
       x: (m.a * px + m.c * py + m.e) / this.scale,
@@ -616,7 +684,7 @@ export class FrameRenderer {
     // "mt-8" button row (with Submit / Next when they'd show) and the hint line.
     const revealedNow = t >= current.revealAt;
     const showsButton =
-      (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && current.question.kind === "multi-select" && !isSingleAnswer(current.question));
+      (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && current.question.kind === "multi-select" && !isSingleAnswer(current.question)) || (!revealedNow && isGameKind(current.question.kind) && pickMode(current.question) !== "single");
     const buttonRow = 32 + (showsButton ? 48 : 0);
     const barShown = current.timeoutBar && t >= (current.countdownAt ?? current.revealAt + celebrationDelayMs(current.question));
     const bottom = barShown ? 42 : 32;
@@ -999,7 +1067,7 @@ export class FrameRenderer {
 
     if (placement?.mode === "bottom" && !imageLeads) parts.push(track("question", posed(promptBox)));
 
-    const answerParts: Box[] = [q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answerGridBox(run, t, CW)];
+    const answerParts: Box[] = [q.kind === "image-choice" || q.kind === "reveal" ? this.imageGridBox(run, t, CW) : this.answersBox(run, t, CW)];
 
     if (revealed && !isUnscoredImage(q) && q.explanation) {
       // The explanation takes the question's exit but not its entrance (it arrives with the answer).
@@ -1017,7 +1085,7 @@ export class FrameRenderer {
       const available = Math.max(1, height - reserved);
       const grid = q.kind === "image-choice" || q.kind === "reveal"
         ? this.imageGridBox(run, t, CW, available)
-        : this.answerGridBox(run, t, CW, available);
+        : this.answersBox(run, t, CW, available);
       return this.stack([grid, ...extra], gap, CW);
     };
     parts.push(track("answers", this.stack(answerParts, gap, CW), adaptiveAnswers));
@@ -1079,7 +1147,9 @@ export class FrameRenderer {
           ? isUnscoredImage(q) ? "· LOOK AND DECIDE" : "· PICK AN IMAGE"
           : q.kind === "reveal"
             ? "· PICK A COVER"
-            : "";
+            : isGameKind(q.kind)
+              ? `· ${GAME_KIND_HINTS[q.kind].toUpperCase()}`
+              : "";
     const metaMax = Math.max(40, CW - groupW - 16);
     const mainW = this.measure(main, metaFont, 1.2);
     const extraW = extra ? this.measure(extra, metaFont, 1.2) : 0;
@@ -1440,13 +1510,24 @@ export class FrameRenderer {
     const lh = size * 1.5;
     const markerFont = this.font(600, 24);
 
-    const tiles: TextTile[] = q.options.map((option, i) => {
-      const marker = answerChrome(theme).hideMarkers ? "" : optionMarker(i, { band, marker: theme.optionMarker, override: option.icon });
+    const sequence = q.kind === "sequence";
+    // Sequence: the answers settle into the right order when it is revealed.
+    const shownOptions = sequence && revealed ? q.options : this.gameOptions(q);
+    const tiles: TextTile[] = shownOptions.map((option, i) => {
+      const baseMarker = answerChrome(theme).hideMarkers ? "" : optionMarker(i, { band, marker: theme.optionMarker, override: option.icon });
       const pickAt = this.pickedAt(run, option.id);
       const isPicked = pickAt !== null && t >= pickAt;
-      const showMark = revealed && (option.correct || isPicked);
+      // Sequence: picked answers carry their pick number; on reveal every answer shows its right place and whether you had it.
+      const pickRank = sequence ? run.picks.filter((p) => p.at <= t).findIndex((p) => p.optionId === option.id) : -1;
+      const authored = sequence ? q.options.findIndex((o) => o.id === option.id) : -1;
+      const marker = sequence ? (revealed ? String(authored + 1) : pickRank >= 0 ? String(pickRank + 1) : baseMarker) : baseMarker;
+      const verdict: TextTile["verdict"] = sequence && revealed
+        ? !run.picks.length ? "neutral" : run.picks[authored]?.optionId === option.id ? "correct" : "wrong"
+        : undefined;
+      const markCorrect = verdict ? verdict === "correct" : option.correct;
+      const showMark = verdict ? verdict !== "neutral" : revealed && (option.correct || isPicked);
       const markerW = marker ? this.measure(marker, markerFont) : 0;
-      const markW = showMark ? this.measure(option.correct ? "✓" : "✕", markerFont) : 0;
+      const markW = showMark ? this.measure(markCorrect ? "✓" : "✕", markerFont) : 0;
       const availableW = Math.max(1, colW - 32 * boxScale - (marker ? markerW + 12 : 0) - (showMark ? markW + 12 : 0));
       const rowCount = Math.max(1, Math.ceil(count / cols));
       const targetRow = targetHeight === undefined ? undefined : Math.max(1, (targetHeight - gap * (rowCount - 1)) / rowCount);
@@ -1456,7 +1537,8 @@ export class FrameRenderer {
         ? wrapWords(option.text, (s) => this.measure(s, font), styledWrapWidth(Math.max(20, textW), size, lettering))
         : this.wrap(option.text, font, Math.max(20, textW));
       const inner = Math.max(marker ? 32 : 0, option.media ? thumb : 0, lines.length * lh, showMark ? 32 : 0);
-      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(targetRow ?? 0, 48, 80 * boxScale * denseScale, inner + 32 * boxScale * denseScale), textW: Math.max(20, textW), thumb };
+      const game = this.gameTileState(run, i, option, t);
+      return { option, i, marker, markerW, isPicked, pickAt, showMark, lines, h: Math.max(targetRow ?? 0, 48, 80 * boxScale * denseScale, inner + 32 * boxScale * denseScale), textW: Math.max(20, textW), thumb, ...(game ? { game } : {}), ...(verdict ? { verdict } : {}) };
     });
 
     const rows: TextTile[][] = [];
@@ -1506,13 +1588,50 @@ export class FrameRenderer {
     lh: number,
     markerFont: string,
   ) {
+    const game = tile.game;
+    if (run.question.kind === "drag-match") this.tileRects.set(tile.option.id, this.frameRectOf(x, y, w, h));
+    if (!game) {
+      this.drawTextTileCore(run, tile, x, y, w, h, t, revealed, rp, font, lh, markerFont);
+      return;
+    }
+    if (!game.visible) return;
+    const { ctx } = this;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(Math.max(0.001, game.scaleX * game.scale), Math.max(0.001, game.scale));
+    ctx.translate(-cx, -cy);
+    ctx.globalAlpha *= game.alpha;
+    const previous = this.hitsOff;
+    this.hitsOff = !game.hit;
+    if (game.back) this.drawCardBack(run, tile, x, y, w, h, t);
+    else this.drawTextTileCore(run, tile, x, y, w, h, t, revealed, rp, font, lh, markerFont);
+    this.hitsOff = previous;
+    ctx.restore();
+  }
+
+  private drawTextTileCore(
+    run: QuestionRun,
+    tile: TextTile,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    t: number,
+    revealed: boolean,
+    rp: number,
+    font: string,
+    lh: number,
+    markerFont: string,
+  ) {
     const { ctx } = this;
     const theme = this.quiz.theme;
     const { option, i } = tile;
     const bg = optionColor(i, { band: themeAgeBand(theme), colors: theme.optionColors, override: option.color });
-    const showCorrect = revealed && option.correct;
-    const showWrong = revealed && tile.isPicked && !option.correct;
-    const faded = revealed && !option.correct && !tile.isPicked;
+    const showCorrect = tile.verdict ? revealed && tile.verdict === "correct" : revealed && option.correct;
+    const showWrong = tile.verdict ? revealed && tile.verdict === "wrong" : revealed && tile.isPicked && !option.correct;
+    const faded = tile.verdict ? false : revealed && !option.correct && !tile.isPicked;
 
     // `transition-all duration-200`: background, text colour, rings and opacity all ease together.
     const fill = mixColor(bg, showCorrect ? this.good : showWrong ? this.bad : bg, rp);
@@ -1534,7 +1653,7 @@ export class FrameRenderer {
     // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
     const boxless = answerChrome(theme).hideBoxes || run.question.hideAnswerBoxes === true || option.hideBox === true;
     const frame = boxless
-      ? boxlessFrame({ revealed, rp, pickP, correct: option.correct, picked: tile.isPicked }, { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad }, mixColor)
+      ? boxlessFrame({ revealed, rp, pickP, correct: tile.verdict ? tile.verdict === "correct" : option.correct, picked: tile.isPicked }, { rest: option.color ?? typography.color ?? this.ink[100], correct: this.good, wrong: this.bad }, mixColor)
       : null;
     const bar = frame?.bar;
     const tileText = frame?.text ?? textColor;
@@ -1598,7 +1717,7 @@ export class FrameRenderer {
         tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, tileText, "left", 0, !!typography.underline));
       }
       if (tile.showMark) {
-        this.drawLine(option.correct ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, tileText, "right");
+        this.drawLine((tile.verdict ? tile.verdict === "correct" : option.correct) ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, tileText, "right");
       }
     }), i);
   }
@@ -1863,6 +1982,556 @@ export class FrameRenderer {
     };
   }
 
+  /** The face-down side of a memory card. */
+  private drawCardBack(run: QuestionRun, tile: TextTile, x: number, y: number, w: number, h: number, t: number) {
+    const { ctx } = this;
+    const g = resolveGame(run.question);
+    const r = 16;
+    const picked = tile.isPicked;
+    const base = this.accent;
+    const gradient = ctx.createLinearGradient(x, y, x + w, y + h);
+    gradient.addColorStop(0, mixColor(base, "#ffffff", 0.12));
+    gradient.addColorStop(1, mixColor(base, "#000000", 0.35));
+    this.noteAnswerRect(tile.option.id, x, y, w, h);
+    if (picked) this.fillRing(x, y, w, h, r, 4, "rgba(255,255,255,0.85)");
+    this.rr(x, y, w, h, r);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.save();
+    ctx.setLineDash([5, 6]);
+    this.strokeRR(x + 7.5, y + 7.5, w - 15, h - 15, r - 6, "rgba(255,255,255,0.35)", 2);
+    ctx.restore();
+    const size = Math.min(44, h * 0.5);
+    this.drawLine(g.cardBack, x + w / 2, y + h / 2 - size / 2, size, this.font(700, Math.round(size * 0.8)), "#ffffff", "center");
+    void t;
+  }
+
+  /* ============================================================ game types */
+  /*
+   * The game question types (lib/gameTypes). Everything below is a pure
+   * function of the timeline clock, the question's id and its settings, so
+   * the builder preview, live play, host mode and the export all draw the same
+   * frame for the same moment. Classic kinds never reach this code: every
+   * entry point starts with an `isGameKind` check and falls through to the
+   * original drawing.
+   */
+
+  /** The answers in the order they are laid out (sequence and memory recall are shown shuffled, from the question id). */
+  private gameOptions(q: Question): Option[] {
+    if (q.kind === "sequence") return displayOptions(q);
+    if (q.kind === "memory-flip" && resolveGame(q).memoryMode === "recall" && q.options.length > 1) {
+      let order = seededShuffle(q.options, hashString(`${q.id}:recall`));
+      if (order.every((o, i) => o.id === q.options[i].id)) order = [...order.slice(1), order[0]];
+      return order;
+    }
+    return q.options;
+  }
+
+  private frameRectOf(x: number, y: number, w: number, h: number) {
+    const m = this.ctx.getTransform();
+    const pts = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([px, py]) => ({
+      x: (m.a * px + m.c * py + m.e) / this.scale,
+      y: (m.b * px + m.d * py + m.f) / this.scale,
+    }));
+    const left = Math.min(...pts.map((p) => p.x));
+    const top = Math.min(...pts.map((p) => p.y));
+    return { x: left, y: top, w: Math.max(...pts.map((p) => p.x)) - left, h: Math.max(...pts.map((p) => p.y)) - top };
+  }
+
+  private tileUnder(x: number, y: number): string | null {
+    for (const [id, r] of this.prevTileRects) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return id;
+    return null;
+  }
+
+  private backEase(p: number): number {
+    const c1 = 1.70158;
+    const q = Math.min(1, Math.max(0, p)) - 1;
+    return 1 + (c1 + 1) * q * q * q + c1 * q * q;
+  }
+
+  /** Flip / pop / hover state of one answer tile, or null to draw it the classic way. */
+  private gameTileState(run: QuestionRun, i: number, option: Option, t: number): TileGame | null {
+    const q = run.question;
+    if (!isGameKind(q.kind)) return null;
+    const g = resolveGame(q);
+    const clock = t - run.gameAt;
+    const revealed = t >= run.revealAt;
+    const flat: TileGame = { visible: true, scaleX: 1, scale: 1, alpha: 1, back: false, hit: !revealed };
+    if (q.kind === "memory-flip") {
+      const m = memoryState(q, clock);
+      if (g.memoryMode === "recall") {
+        // After the remember phase every option pops in (the items shown earlier are among them).
+        if (revealed) return { ...flat, hit: false };
+        const p = progress(clock, g.rememberMs + i * dur(g, 70), dur(g, 380));
+        return { ...flat, visible: clock >= g.rememberMs + i * dur(g, 70), scale: g.animate ? Math.max(0.001, this.backEase(p)) : 1, alpha: Math.min(1, p * 3 + (g.animate ? 0 : 1)), hit: clock >= g.rememberMs + i * dur(g, 70) + dur(g, 380) };
+      }
+      if (!revealed) return { ...flat, back: m.faceDown, scaleX: m.scaleX, hit: m.phase === "play" && m.flip >= 1 };
+      // The answer: every card that was face down turns over.
+      const wasDown = memoryState(q, run.revealAt - run.gameAt).faceDown;
+      if (!wasDown) return { ...flat, hit: false };
+      const flipMs = dur(g, FLIP_MS);
+      const p = progress(t, run.revealAt + i * dur(g, 60), flipMs);
+      const f = flipCard(p);
+      return { ...flat, hit: false, back: flipMs > 0 && !f.secondHalf, scaleX: flipMs > 0 ? f.scaleX : 1 };
+    }
+    if (q.kind === "timed-reveal") {
+      if (revealed) return { ...flat, hit: false };
+      const shown = timedRevealShown(q, i, clock);
+      const p = timedRevealProgress(q, i, clock);
+      return { ...flat, visible: shown, scale: g.animate ? Math.max(0.001, this.backEase(p)) : 1, alpha: g.animate ? Math.min(1, p * 3) : 1, hit: shown };
+    }
+    if (q.kind === "pop-match") {
+      // Before the reveal the pop field is drawn instead of the grid; at the reveal the answers pop into place.
+      if (!revealed) return { ...flat, visible: false, hit: false };
+      const p = progress(t, run.revealAt + i * dur(g, 70), dur(g, 360));
+      return { ...flat, hit: false, scale: g.animate ? Math.max(0.001, this.backEase(p)) : 1, alpha: g.animate ? Math.min(1, p * 3) : 1 };
+    }
+    if (q.kind === "drag-match") {
+      const drag = run.drag;
+      const simHover = !!drag && drag.optionId === option.id && !revealed && t > drag.startAt + (drag.dropAt - drag.startAt) * 0.55 && t < drag.dropAt + 200;
+      const hover = this.hoverId === option.id || simHover;
+      return { ...flat, scale: hover && g.animate ? 1.04 : 1 };
+    }
+    return null;
+  }
+
+  /** Answers area for every kind but image/reveal. Classic kinds go straight to the original grid. */
+  private answersBox(run: QuestionRun, t: number, CW: number, targetHeight?: number): Box {
+    const q = run.question;
+    if (!isGameKind(q.kind)) return this.answerGridBox(run, t, CW, targetHeight);
+    const g = resolveGame(q);
+    const revealed = t >= run.revealAt;
+    const clock = t - run.gameAt;
+    const gap = this.md ? 16 : 12;
+
+    const extras: Box[] = [];
+    if (q.kind === "memory-flip") extras.push(this.memoryCaptionBox(run, t, CW));
+    if (q.kind === "drag-match") extras.push(this.dragTrayBox(run, t, CW));
+    if (q.kind === "star-collect" && revealed) extras.push(this.starPanelBox(run, t, CW));
+    const extraH = extras.reduce((sum, b) => sum + b.h + gap, 0);
+    const grid = this.answerGridBox(run, t, CW, targetHeight === undefined ? undefined : Math.max(40, targetHeight - extraH));
+
+    let alt: Box | null = null;
+    if (!revealed && q.kind === "pop-match") alt = this.popFieldBox(run, t, CW, Math.max(grid.h, this.narrow ? 320 : 250));
+    else if (!revealed && q.kind === "memory-flip" && g.memoryMode === "recall" && clock < g.rememberMs) alt = this.recallShowcaseBox(run, t, CW, targetHeight === undefined ? undefined : Math.max(40, targetHeight - extraH));
+    const h = alt ? Math.max(alt.h, grid.h) : grid.h;
+    const main: Box = {
+      w: CW,
+      h,
+      draw: (x, y) => {
+        const box = alt ?? grid;
+        box.draw(x, y + (h - box.h) / 2);
+      },
+    };
+    return extras.length ? this.stack([main, ...extras], gap, CW) : main;
+  }
+
+  /** Memory recall: only the items to remember, big, while the remember clock runs. */
+  private recallShowcaseBox(run: QuestionRun, t: number, CW: number, targetHeight?: number): Box {
+    const q = run.question;
+    const items = q.options.filter((o) => o.correct);
+    const sub: QuestionRun = { ...run, question: { ...q, kind: "multiple-choice", layout: "grid", options: items.length ? items : q.options.slice(0, 1) } };
+    const inner = this.answerGridBox(sub, t, CW, targetHeight);
+    return {
+      w: CW,
+      h: inner.h,
+      draw: (x, y) => {
+        const previous = this.hitsOff;
+        this.hitsOff = true;
+        inner.draw(x, y);
+        this.hitsOff = previous;
+      },
+    };
+  }
+
+  /** "Remember!" strip for memory-flip: a draining bar while the cards are on show. */
+  private memoryCaptionBox(run: QuestionRun, t: number, CW: number): Box {
+    const q = run.question;
+    const g = resolveGame(q);
+    const clock = t - run.gameAt;
+    const revealed = t >= run.revealAt;
+    const m = memoryState(q, clock);
+    const recall = g.memoryMode === "recall";
+    const label = revealed ? "" : m.phase === "remember" ? (recall ? "👀 Remember these!" : "👀 Remember where everything is!") : recall ? "Which ones did you see?" : "Which card was it?";
+    const font = this.font(700, 14);
+    return {
+      w: CW,
+      h: 30,
+      draw: (x, y) => {
+        if (!label) return;
+        const cx = x + CW / 2;
+        this.drawLine(label, cx, y, 20, font, m.phase === "remember" ? this.accent : this.ink[300], "center", 0.4);
+        if (m.phase === "remember") {
+          const barW = Math.min(240, CW * 0.6);
+          const left = cx - barW / 2;
+          this.fillRR(left, y + 23, barW, 5, 2.5, withAlpha(this.ink[100], 0.18));
+          this.fillRR(left, y + 23, Math.max(5, barW * (1 - clamp01(clock / g.rememberMs))), 5, 2.5, this.accent);
+        }
+      },
+    };
+  }
+
+  /** Whack-style field: answers pop in at seeded positions or fly in from the edges, and stay up for popMs. */
+  private popFieldBox(run: QuestionRun, t: number, CW: number, h: number): Box {
+    const q = run.question;
+    const theme = this.quiz.theme;
+    const g = resolveGame(q);
+    const band = themeAgeBand(theme);
+    const typography = answerTextStyle(theme, q);
+    const size = (typography.fontSize ?? 18) * CW / PROMPT_DESIGN_WIDTH;
+    const family = fontFamily(typography.font ?? theme.font, typography.font ? typography.customFont : theme.customFont, this.assets.fonts);
+    const lettering = this.lettering();
+    const font = lettering ? cartoonFont(size, this.cartoonFace) : `${typography.italic ? "italic " : ""}${this.font(typography.bold === undefined ? 600 : typography.bold ? 700 : 400, size, family)}`;
+    const lh = size * 1.4;
+    const iw = Math.min(CW * (this.narrow ? 0.5 : 0.34), 230);
+    const clock = t - run.gameAt;
+    const visible = popVisible(q, clock);
+    return {
+      w: CW,
+      h,
+      draw: (x, y) => {
+        const { ctx } = this;
+        this.fillRR(x, y, CW, h, 20, withAlpha(this.ink[900], 0.35));
+        ctx.save();
+        ctx.setLineDash([6, 6]);
+        this.strokeRR(x + 0.5, y + 0.5, CW - 1, h - 1, 19.5, withAlpha(this.ink[100], 0.18), 1.5);
+        ctx.restore();
+        if (clock < 0) return;
+        ctx.save();
+        this.rr(x, y, CW, h, 20);
+        ctx.clip();
+        for (const a of visible) {
+          const option = q.options[a.optionIndex];
+          if (!option) continue;
+          const bg = optionColor(a.optionIndex, { band, colors: theme.optionColors, override: option.color });
+          const thumb = option.media ? 40 : 0;
+          const textW = Math.max(30, iw - 28 - (thumb ? thumb + 8 : 0));
+          const lines = lettering
+            ? wrapWords(option.text, (s) => this.measure(s, font), styledWrapWidth(textW, size, lettering))
+            : this.wrap(option.text, font, textW);
+          const ih = Math.max(thumb ? thumb + 20 : 0, lines.length * lh + 22, 52);
+          const pose = popPose(q, a, clock);
+          const finalX = Math.min(CW - iw / 2 - 8, Math.max(iw / 2 + 8, a.x * CW));
+          const finalY = Math.min(h - ih / 2 - 8, Math.max(ih / 2 + 8, a.y * h));
+          let cx = finalX;
+          let cy = finalY;
+          if (a.edge && g.animate) {
+            const e = 1 - pose.slide;
+            if (a.edge === "left") cx = lerp(finalX, -iw / 2 - 12, e);
+            else if (a.edge === "right") cx = lerp(finalX, CW + iw / 2 + 12, e);
+            else if (a.edge === "top") cy = lerp(finalY, -ih / 2 - 12, e);
+            else cy = lerp(finalY, h + ih / 2 + 12, e);
+          }
+          const scale = a.edge && g.animate ? Math.min(1, Math.max(0.001, pose.scale)) : Math.max(0.001, pose.scale);
+          const pickAt = this.pickedAt(run, option.id);
+          const picked = pickAt !== null && t >= pickAt;
+          // The tap target is the settled box, so it doesn't swim while the item flies in.
+          if (pose.scale > 0.5 && clock < a.end - dur(g, 260)) {
+            ctx.save();
+            ctx.translate(x, y);
+            this.noteAnswerRect(option.id, finalX - iw / 2, finalY - ih / 2, iw, ih);
+            ctx.restore();
+          }
+          ctx.save();
+          ctx.translate(x + cx, y + cy);
+          ctx.scale(scale, scale);
+          ctx.globalAlpha *= Math.min(1, pose.scale * 2.5);
+          const bump = picked ? 1 + 0.06 * Math.sin(Math.min(1, (t - (pickAt ?? t)) / 300) * Math.PI) : 1;
+          ctx.scale(bump, bump);
+          this.glowShadow(-iw / 2, -ih / 2, iw, ih, 18, 2, 18, withAlpha("#000000", 0.35));
+          this.fillRR(-iw / 2, -ih / 2, iw, ih, 18, bg);
+          if (picked) this.fillRing(-iw / 2, -ih / 2, iw, ih, 18, 4, "rgba(255,255,255,0.85)");
+          const text = typography.color ?? readableTextOn(bg);
+          let tx = -iw / 2 + 14;
+          if (option.media) {
+            const img = this.image(option.media);
+            ctx.save();
+            this.rr(tx, -thumb / 2, thumb, thumb, 8);
+            ctx.clip();
+            if (img) this.drawContain(img, tx, -thumb / 2, thumb, thumb);
+            ctx.restore();
+            tx += thumb + 8;
+          }
+          const top = -(lines.length * lh) / 2;
+          if (lettering) {
+            const m = this.metrics(font);
+            ctx.font = font;
+            ctx.letterSpacing = "0px";
+            paintStyledLines(ctx, lines, { x: tx, width: textW, top, lineHeight: lh, px: lh / 1.4, align: "center", ascent: m.ascent, descent: m.descent }, lettering, a.optionIndex, this.letteringPicture(lettering));
+          } else {
+            lines.forEach((line, li) => this.drawLine(line, tx + textW / 2, top + li * lh, lh, font, text, "center", 0, !!typography.underline));
+          }
+          if (picked) this.drawLine("✓", iw / 2 - 18, -ih / 2 + 2, 20, this.font(800, 18), text, "center");
+          ctx.restore();
+        }
+        ctx.restore();
+      },
+    };
+  }
+
+  private drawStarShape(cx: number, cy: number, r: number, rotate: number, fill: string, stroke: string) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotate);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rad = i % 2 === 0 ? r : r * 0.45;
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+      const px = Math.cos(ang) * rad;
+      const py = Math.sin(ang) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(1.5, r * 0.12);
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Star or Go: stars pop in after the reveal, then the Star / Go buttons (each a hit target in live play). */
+  private starPanelBox(run: QuestionRun, t: number, CW: number): Box {
+    const q = run.question;
+    const g = resolveGame(q);
+    const star = run.stars;
+    const h = this.narrow ? 170 : 150;
+    const bw = Math.min(170, (CW - 16) / 2);
+    return {
+      w: CW,
+      h,
+      draw: (x, y) => {
+        const { ctx } = this;
+        const cx = x + CW / 2;
+        const gold = "#ffd23f";
+        const ink = "#5b3b00";
+        this.fillRR(x, y, CW, h, 20, withAlpha(this.ink[900], 0.45));
+        this.strokeRR(x + 0.5, y + 0.5, CW - 1, h - 1, 19.5, withAlpha(gold, 0.35), 1.5);
+        if (!star) return;
+        const earned = star.earned;
+        const shown = Math.min(earned, 10);
+        const step = dur(g, 220);
+        const chosen = star.choice;
+        const tap = star.tapAt;
+        const sinceTap = tap !== null && t >= tap ? t - tap : null;
+        const fly = sinceTap !== null && chosen === "star" ? clamp01(sinceTap / dur(g, 700) || (g.animate ? 0 : 1)) : 0;
+        const title = earned > 0 ? `+${earned} ⭐` : "No stars this time";
+        this.drawLine(title, cx, y + 10, 32, this.font(800, 26), earned > 0 ? gold : this.ink[300], "center");
+        // The stars themselves.
+        const r = shown > 7 ? 15 : 19;
+        const gapX = r * 2.5;
+        for (let k = 0; k < shown; k++) {
+          const p = progress(t, star.appearAt + k * step, dur(g, 380));
+          if (p <= 0 && g.animate) continue;
+          const pop = g.animate ? this.backEase(p) : 1;
+          const sx = cx + (k - (shown - 1) / 2) * gapX;
+          const sy = y + 62 + r * 0.2;
+          const twinkle = g.animate && p >= 1 ? 1 + 0.08 * Math.sin((t - star.appearAt) / 260 + k) : 1;
+          const rot = g.animate ? (1 - p) * -1.2 + (p >= 1 ? 0.08 * Math.sin((t - star.appearAt) / 400 + k * 1.7) : 0) : 0;
+          // A banked star flies up and to the right (towards the total), staggered.
+          const f = clamp01(fly * 1.4 - k * 0.04);
+          const ox = lerp(0, CW * 0.38, f * f);
+          const oy = lerp(0, -46, f);
+          ctx.save();
+          ctx.globalAlpha *= 1 - f * f * 0.9;
+          this.drawStarShape(sx + ox, sy + oy, r * Math.max(0.001, pop) * twinkle * (1 - f * 0.5), rot, gold, "#e0a500");
+          ctx.restore();
+        }
+        // Choice buttons.
+        const by = y + h - 56;
+        const showButtons = star.choiceAt !== null && t >= star.choiceAt;
+        if (showButtons) {
+          const bp = g.animate ? this.backEase(progress(t, star.choiceAt!, dur(g, 320))) : 1;
+          const labels: [string, string, "star" | "go"][] = [["⭐ Star", `Bank ${star.pot ?? earned} · +${starPoints(star.pot ?? earned, this.quiz.settings.pointsBase).toLocaleString()} pts`, "star"], ["Go ➜", `Next is worth ${star.goWorth ?? ""}`, "go"]];
+          labels.forEach(([label, sub, id], k) => {
+            const bx = cx + (k === 0 ? -bw - 8 : 8);
+            const picked = chosen === id;
+            const settle = sinceTap !== null ? 1 - clamp01(sinceTap / dur(g, 300) || (g.animate ? 0 : 1)) : 1;
+            const dim = (chosen && !picked ? 0.35 : 1) * settle;
+            const press = picked && sinceTap !== null ? 1 - 0.06 * Math.sin(Math.min(1, sinceTap / 200) * Math.PI) : 1;
+            if (!chosen) {
+              ctx.save();
+              ctx.translate(x, y);
+              this.noteAnswerRect(`@${id}`, bx - x, by - y, bw, 46);
+              ctx.restore();
+            }
+            ctx.save();
+            ctx.globalAlpha *= dim;
+            ctx.translate(bx + bw / 2, by + 23);
+            ctx.scale(Math.max(0.001, bp * press), Math.max(0.001, bp * press));
+            ctx.translate(-(bx + bw / 2), -(by + 23));
+            const fill = id === "star" ? gold : this.accent;
+            if (picked) this.fillRing(bx, by, bw, 46, 14, 4, "rgba(255,255,255,0.85)");
+            this.fillRR(bx, by, bw, 46, 14, fill);
+            const textColor = id === "star" ? ink : readableTextOn(this.accent);
+            this.drawLine(label, bx + bw / 2, by + 4, 22, this.font(800, 16), textColor, "center");
+            this.drawLine(sub, bx + bw / 2, by + 26, 16, this.font(600, 11), withAlpha(textColor, 0.85), "center");
+            ctx.restore();
+          });
+        }
+        // After the choice: what happened to the stars.
+        if (sinceTap !== null && star.after) {
+          const msg = chosen === "star" ? `Banked! Total ⭐ ${star.after.banked}${star.bankPoints ? ` · +${star.bankPoints.toLocaleString()} pts` : ""}` : `Carrying ⭐ ${star.after.pot} — go again for more`;
+          const ap = clamp01(sinceTap / dur(g, 300) || (g.animate ? 0 : 1));
+          ctx.save();
+          ctx.globalAlpha *= ap;
+          this.drawLine(msg, cx, by + 12, 24, this.font(700, 15), chosen === "star" ? gold : this.accent, "center");
+          ctx.restore();
+        }
+      },
+    };
+  }
+
+  /** The tray the dragged item starts in. The item itself is drawn on top of everything in `drawDragOverlay`. */
+  private dragTrayBox(run: QuestionRun, t: number, CW: number): Box {
+    const S = this.narrow ? 64 : 76;
+    const revealed = t >= run.revealAt;
+    return {
+      w: CW,
+      h: S + 34,
+      draw: (x, y) => {
+        const { ctx } = this;
+        const cx = x + CW / 2;
+        const cy = y + 6 + S / 2;
+        this.dragHome = this.framePoint(cx, cy);
+        ctx.save();
+        ctx.setLineDash([7, 6]);
+        this.strokeRR(cx - S / 2 - 6 + 0.5, cy - S / 2 - 6 + 0.5, S + 12 - 1, S + 12 - 1, 20, withAlpha(this.ink[100], 0.3), 2);
+        ctx.restore();
+        if (!revealed && !run.picks.length) {
+          this.drawLine("Drag it onto its match", cx, y + S + 12, 18, this.font(600, 13), this.ink[300], "center", 0.3);
+          // Live play: grabbing the item starts a drag (the page turns this rect into a pointer target).
+          if (!(run.drag && t >= run.drag.startAt)) {
+            ctx.save();
+            ctx.translate(0, 0);
+            this.noteAnswerRect("@drag", cx - S / 2, cy - S / 2, S, S);
+            ctx.restore();
+          }
+        }
+      },
+    };
+  }
+
+  private framePoint(x: number, y: number): { x: number; y: number } {
+    const m = this.ctx.getTransform();
+    return { x: (m.a * x + m.c * y + m.e) / this.scale, y: (m.b * x + m.d * y + m.f) / this.scale };
+  }
+
+  /** Where the dragged item lands on answer `optionId` (right end of its tile), in frame px. */
+  private dragLanding(optionId: string | null): { x: number; y: number } | null {
+    if (!optionId) return null;
+    const r = this.tileRects.get(optionId);
+    return r ? { x: r.x + Math.max(r.w * 0.5, r.w - 52), y: r.y + r.h / 2 } : null;
+  }
+
+  /** The dragged item and its handle: scripted in preview/export, the real pointer in live play. Drawn over the whole stage. */
+  private drawDragOverlay(run: QuestionRun, t: number) {
+    const q = run.question;
+    if (q.kind !== "drag-match" || !this.dragHome) return;
+    const g = resolveGame(q);
+    const { ctx } = this;
+    const S = this.narrow ? 64 : 76;
+    const home = this.dragHome;
+    const revealed = t >= run.revealAt;
+    const correct = q.options.find((o) => o.correct)?.id ?? null;
+    const picked = [...run.picks].reverse().find((p) => p.at <= t)?.optionId ?? null;
+    let pos = { ...home };
+    let dragging = false;
+    let vx = 0;
+    let lift = 0;
+    const sim = (from: { x: number; y: number }, to: { x: number; y: number }, start: number, length: number) => {
+      const p = progress(t, start, length);
+      const at = (tt: number) => dragPoint(from, to, progress(tt, start, length));
+      const a = at(t);
+      vx = ((at(t + 16).x - at(t - 16).x) / 32) * 1000;
+      dragging = p > 0 && p < 1;
+      lift = a.lifted;
+      return { x: a.x, y: a.y };
+    };
+    const pointerGrab = this.pointer?.grabbing && !revealed && !picked;
+    if (pointerGrab && this.pointer) {
+      pos = { x: this.pointer.x, y: this.pointer.y };
+      dragging = true;
+      lift = 1;
+      this.liveVx = this.lastHandle ? ((pos.x - this.lastHandle.x) / Math.max(1, t - this.lastHandle.t)) * 1000 : 0;
+      this.lastHandle = { x: pos.x, t };
+      vx = this.liveVx;
+    } else {
+      this.lastHandle = null;
+      const landing = this.dragLanding(picked) ?? (revealed ? this.dragLanding(correct) : null);
+      if (run.drag && !revealed) {
+        const target = this.dragLanding(run.drag.optionId);
+        if (target) pos = t >= run.drag.dropAt ? target : sim(home, target, run.drag.startAt, Math.max(1, run.drag.dropAt - run.drag.startAt));
+      } else if (picked && landing) {
+        pos = landing;
+      } else if (revealed && landing) {
+        // Nobody dragged it: it travels to the right answer by itself.
+        const target = landing;
+        const start = run.revealAt;
+        pos = sim(home, target, start, Math.max(1, dur(g, DRAG_MS * 0.8)));
+        if (!g.animate) pos = target;
+      }
+    }
+
+    const handleKind = g.dragHandle.kind;
+    // Token.
+    ctx.save();
+    ctx.translate(pos.x, pos.y - lift * 10);
+    const sway = dragging && g.animate ? Math.max(-0.35, Math.min(0.35, vx / 2500)) : 0;
+    ctx.rotate(sway);
+    const scale = 1 + lift * 0.14;
+    ctx.scale(scale, scale);
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = (6 + lift * 16) * this.scale;
+    ctx.shadowOffsetY = (3 + lift * 8);
+    this.fillRR(-S / 2, -S / 2, S, S, 18, withAlpha(this.surface, 0.96));
+    ctx.shadowColor = "transparent";
+    this.strokeRR(-S / 2 + 1, -S / 2 + 1, S - 2, S - 2, 17, this.accent, 3);
+    const img = q.media ? this.image(q.media) : null;
+    if (img) {
+      ctx.save();
+      this.rr(-S / 2 + 6, -S / 2 + 6, S - 12, S - 12, 12);
+      ctx.clip();
+      this.drawContain(img, -S / 2 + 6, -S / 2 + 6, S - 12, S - 12);
+      ctx.restore();
+    } else {
+      this.drawLine(g.dragItem, 0, -S / 2 + 4, S - 8, this.font(700, g.dragItem.length > 3 ? 18 : Math.round(S * 0.52)), this.ink[100], "center");
+    }
+    ctx.restore();
+
+    // Handle: follows the pointer (mouse hover or drag), otherwise rests by the item and wiggles.
+    let tip = { x: pos.x, y: pos.y };
+    const ptr = this.pointer;
+    if (!dragging) {
+      tip = ptr && (ptr.type !== "touch" || ptr.down) && !revealed ? { x: ptr.x, y: ptr.y } : { x: pos.x + 20, y: pos.y + 18 };
+    }
+    const pose = handlePose(handleKind, dragging, vx, g.animate ? t : 0);
+    const size = this.narrow ? 54 : 64;
+    const key = handleKind === "hand" ? (dragging ? "hand-grab" : "hand") : handleKind === "stick" ? "stick" : "custom";
+    const ref = handleKind === "custom" && g.dragHandle.image ? g.dragHandle.image : key === "custom" ? HANDLE_ASSETS.stick : HANDLE_ASSETS[key];
+    const hot = HANDLE_HOTSPOTS[key === "custom" || !(key in HANDLE_ASSETS) ? "custom" : key];
+    const handleImg = this.image(ref);
+    ctx.save();
+    ctx.translate(tip.x, tip.y + (g.animate ? pose.bob : 0));
+    ctx.rotate((g.animate ? pose.rotate : 0) * Math.PI / 180);
+    ctx.scale(g.animate ? pose.scale : 1, g.animate ? pose.scale : 1);
+    if (handleImg) {
+      const k = Math.min(size / handleImg.width, size / handleImg.height);
+      const dw = handleImg.width * k;
+      const dh = handleImg.height * k;
+      ctx.drawImage(frameSource(handleImg, t), -hot.x * dw, -hot.y * dh, dw, dh);
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.fillStyle = this.accent;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   /* =============================================================== results */
 
   /** ResultsScreen. It starts at the top of the page (py-10) and scrolls; the video shows the top. */
@@ -1905,6 +2574,7 @@ export class FrameRenderer {
       ["Correct", `${results.correctCount}/${results.total}`, false],
       ["Accuracy", results.total ? `${Math.round(accuracy * 100)}%` : "—", false],
       ["Best streak", String(results.bestStreak), false],
+      ...(results.stars !== undefined ? [["Stars", `⭐ ${results.stars}`, false] as [string, string, boolean]] : []),
     ];
     const cols = this.narrow ? 2 : this.sm ? 4 : 2;
     const sGap = 12;
@@ -1960,14 +2630,16 @@ export class FrameRenderer {
     const label = "Correct answer: ";
     const items = runs.map((run, i) => {
       const q = run.question;
-      const points = `+${run.points.toLocaleString()}`;
+      const points = `+${(run.points + (run.starPoints ?? 0)).toLocaleString()}`;
       const textW = CW - 40 - 28 - 32 - this.measure(points, strongFont);
       const lead = `${i + 1}. `;
       const lines = this.wrap(lead + (q.prompt || "Untitled question"), promptFont, textW);
-      const correctText = q.options
-        .filter((o) => o.correct)
-        .map((o) => o.text || "(image)")
-        .join(", ");
+      const correctText = q.kind === "sequence"
+        ? q.options.map((o) => o.text || "(image)").join(" → ")
+        : q.options
+          .filter((o) => o.correct)
+          .map((o) => o.text || "(image)")
+          .join(", ");
       const extra = isUnscoredImage(q) ? ["Image slide · not scored"] : isSingleAnswer(q) ? ["Shown · not scored"] : run.correct
         ? []
         : this.wrap(`${label}${correctText}${run.timedOut ? " · ran out of time" : ""}`, smallFont, textW);

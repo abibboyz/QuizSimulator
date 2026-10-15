@@ -22,6 +22,8 @@ import { MuteButton } from "@/components/ui/MuteButton";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, type ViewMode } from "@/components/ui/ViewModeToggle";
 import { timerFor } from "@/lib/store/playSession";
+import { resolveGame } from "@/lib/gameTypes";
+import { INITIAL_STARS } from "@/lib/stars";
 
 function toggleFullscreen() {
   if (document.fullscreenElement) void document.exitFullscreen();
@@ -322,6 +324,8 @@ function HostQuestion({
           limitSeconds={limitSeconds}
           correct={revealed && !unscored}
           onRevealComplete={() => setRevealComplete(true)}
+          // Star or Go in host mode: the room sees the stars appear and talks it through; there is no per-player tally.
+          stars={revealed && question.kind === "star-collect" ? { earned: resolveGame(question).stars, choice: null, pot: resolveGame(question).stars, goWorth: resolveGame(question).stars * 2, after: INITIAL_STARS } : undefined}
           countdownSeconds={showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? autoAdvanceSeconds : undefined}
         />
       </div>

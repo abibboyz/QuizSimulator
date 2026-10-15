@@ -1,4 +1,5 @@
 import type { Timeline } from "./timeline.ts";
+import type { StarChoice, StarState } from "../stars.ts";
 
 export interface LiveFrameState {
   index: number;
@@ -11,6 +12,10 @@ export interface LiveFrameState {
   outcomes: (boolean | null)[];
   exitAt?: number;
   countdown?: { at: number; seconds: number };
+  /** Game clock origin of the game question types: when the stage became live. Unset = now (the stage just mounted). */
+  gameAt?: number | null;
+  /** Star or Go, from the play session: what the answer earned and what the player chose. Absent before the reveal. */
+  stars?: { earned: number; choice: StarChoice | null; choiceAt: number | null; pot: number; goWorth: number; after: StarState; bankPoints?: number };
 }
 
 /** Adapt a privately owned export timeline to actual player/host events.
@@ -36,6 +41,22 @@ export function syncLiveTimeline(timeline: Timeline, state: LiveFrameState): voi
     run.revealAt = current ? state.revealAt ?? Infinity : previous ? run.enterAt : Infinity;
     run.correct = current ? state.correct : state.outcomes[index] === true;
     run.picks = current ? state.picks : [];
+    // Game question types: live play is driven by the player, never by the simulated drag or star choice.
+    run.drag = undefined;
+    run.gameAt = current ? state.gameAt ?? state.elapsedMs : Infinity;
+    run.stars = current && state.stars && state.revealAt !== null
+      ? {
+          earned: state.stars.earned,
+          appearAt: state.revealAt + 250,
+          choiceAt: state.stars.earned > 0 ? state.revealAt + 250 + 260 + state.stars.earned * 220 : null,
+          tapAt: state.stars.choiceAt,
+          choice: state.stars.choice,
+          pot: state.stars.pot,
+          goWorth: state.stars.goWorth,
+          after: state.stars.after,
+          bankPoints: state.stars.bankPoints ?? 0,
+        }
+      : undefined;
     run.selectedIds = run.picks.map((pick) => pick.optionId);
     if (current) {
       run.limitSeconds = state.limitSeconds;

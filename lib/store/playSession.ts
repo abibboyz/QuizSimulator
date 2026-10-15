@@ -4,6 +4,8 @@ import { isSingleAnswer, isUnscoredImage, unscoredResult } from "@/lib/answerPre
 import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
+import { isAnswerCorrect, resolveGame, togglesPicks, toggleSequencePick } from "@/lib/gameTypes";
+import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, starPoints, type StarChoice, type StarState } from "@/lib/stars";
 
 /**
  * "countdown" sits between the intro screen and the first question, holding the
@@ -22,6 +24,14 @@ export interface AnswerRecord {
   points: number;
   msTaken: number;
   timedOut: boolean;
+  /** Star or Go questions: stars this answer put in the pot, and what the player chose to do with them. */
+  stars?: number;
+  starChoice?: StarChoice;
+  /** Stars in the pot after this answer (before the choice), and what a Go would make the next correct one worth. */
+  starPot?: number;
+  starGoWorth?: number;
+  /** Points added to the score when stars were banked on this answer (Star choice, or the end of the quiz). Absent when none. */
+  starPoints?: number;
 }
 
 interface PlayState {
@@ -37,6 +47,8 @@ interface PlayState {
   selected: string[];
   startedAt: number;
   lastResult: ScoreResult | null;
+  /** Star or Go tally (lib/stars). Untouched by every other question type. */
+  stars: StarState;
 
   start: (quiz: Quiz, onlyIds?: string[]) => void;
   /** `withIntro` keeps cue knowledge in the page; the store just holds a phase. */
@@ -45,6 +57,8 @@ interface PlayState {
   ready: () => void;
   toggle: (optionId: string) => void;
   submit: (msTaken: number, timedOut?: boolean) => void;
+  /** Star or Go: bank the pot (`star`) or carry it on (`go`). Without a choice the next question counts as Star. */
+  chooseStar: (choice: StarChoice) => void;
   next: () => void;
   reset: () => void;
 }
@@ -58,7 +72,8 @@ function prepare(quiz: Quiz, onlyIds?: string[]): Question[] {
   }
   if (quiz.settings.shuffleQuestions) questions = shuffled(questions);
   if (quiz.settings.shuffleOptions) {
-    questions = questions.map((q) => ({ ...q, options: shuffled(q.options) }));
+    // Sequence keeps its authored order: that order is the answer (it is shown shuffled by lib/gameTypes).
+    questions = questions.map((q) => (q.kind === "sequence" ? q : { ...q, options: shuffled(q.options) }));
   }
   return questions;
 }
@@ -78,10 +93,8 @@ export function basePointsFor(quiz: Quiz, question: Question | undefined): numbe
 
 /** True when the picked set matches the correct set exactly. */
 export function isCorrect(question: Question, selectedIds: string[]): boolean {
-  const correct = question.options.filter((o) => o.correct).map((o) => o.id);
-  if (!correct.length) return false;
-  const picked = new Set(selectedIds);
-  return correct.length === picked.size && correct.every((id) => picked.has(id));
+  // Same rule as ever for the classic kinds; Sequence also needs the authored order (lib/gameTypes).
+  return isAnswerCorrect(question, selectedIds);
 }
 
 export const usePlaySession = create<PlayState>((set, get) => ({
@@ -96,6 +109,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
   selected: [],
   startedAt: 0,
   lastResult: null,
+  stars: INITIAL_STARS,
 
   start: (quiz, onlyIds) =>
     set({
@@ -110,6 +124,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       selected: [],
       startedAt: 0,
       lastResult: null,
+      stars: INITIAL_STARS,
     }),
 
   begin: (withIntro = false) =>
@@ -127,12 +142,14 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     const question = order[index];
     if (!question || isUnscoredImage(question)) return;
 
-    if (question.kind === "multi-select") {
+    if (question.kind === "multi-select" || (togglesPicks(question) && question.kind !== "sequence")) {
       set({
         selected: selected.includes(optionId)
           ? selected.filter((id) => id !== optionId)
           : [...selected, optionId],
       });
+    } else if (question.kind === "sequence") {
+      set({ selected: toggleSequencePick(selected, optionId) });
     } else {
       set({ selected: [optionId] });
     }
@@ -162,7 +179,11 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       streakBonus: quiz.settings.streakBonus,
     });
 
+    // Star or Go: a correct answer puts stars in the pot; a wrong one or a timeout loses it (lib/stars).
+    const starred = question.kind === "star-collect" ? afterAnswer(state.stars, correct, resolveGame(question).stars) : null;
+
     set({
+      stars: starred ? starred.state : state.stars,
       phase: "revealed",
       score: state.score + result.points,
       streak: result.streakAfter,
@@ -170,15 +191,40 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       lastResult: result,
       answers: [
         ...state.answers,
-        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut, ...(unscored ? { unscored: true } : {}), ...(single ? { single: true } : {}) },
+        { questionId: question.id, selectedIds: selected, correct, points: result.points, msTaken, timedOut, ...(unscored ? { unscored: true } : {}), ...(single ? { single: true } : {}), ...(starred ? { stars: starred.earned, starPot: starred.state.pot, starGoWorth: resolveGame(question).stars * (starred.state.goStreak + 2) } : {}) },
       ],
     });
   },
 
+  chooseStar: (choice) => {
+    const { phase, answers, stars } = get();
+    const last = answers[answers.length - 1];
+    if (phase !== "revealed" || !last || !hasChoice(last.stars ?? 0) || last.starChoice) return;
+    // Star banks the pot, and banked stars are worth points (lib/stars).
+    const bonus = choice === "star" ? starPoints(stars.pot, get().quiz?.settings.pointsBase) : 0;
+    set({
+      stars: afterChoice(stars, choice),
+      score: get().score + bonus,
+      answers: [...answers.slice(0, -1), { ...last, starChoice: choice, ...(bonus ? { starPoints: bonus } : {}) }],
+    });
+  },
+
   next: () => {
+    // Nobody chose (auto-advance, Enter, the clock): the stars are banked.
+    const pending = get().answers[get().answers.length - 1];
+    if (get().phase === "revealed" && pending && hasChoice(pending.stars ?? 0) && !pending.starChoice) get().chooseStar("star");
     const { index, order } = get();
     if (index + 1 >= order.length) {
-      set({ phase: "results" });
+      // Whatever is still in the pot is banked, with its points, on the last answer.
+      const state = get();
+      const bonus = starPoints(state.stars.pot, state.quiz?.settings.pointsBase);
+      const answers = state.answers;
+      const last = answers[answers.length - 1];
+      set({
+        phase: "results",
+        stars: atEnd(state.stars),
+        ...(bonus && last ? { score: state.score + bonus, answers: [...answers.slice(0, -1), { ...last, starPoints: (last.starPoints ?? 0) + bonus }] } : {}),
+      });
       return;
     }
     set({ index: index + 1, phase: "asking", selected: [], startedAt: Date.now(), lastResult: null });
@@ -197,5 +243,6 @@ export const usePlaySession = create<PlayState>((set, get) => ({
       selected: [],
       startedAt: 0,
       lastResult: null,
+      stars: INITIAL_STARS,
     }),
 }));

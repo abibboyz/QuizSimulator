@@ -16,6 +16,9 @@ import { OptionList } from "@/components/builder/OptionList";
 import { CueEditor, describeCue } from "@/components/builder/CueEditor";
 import { CUE_SLOT_LABELS, PER_QUESTION_CUE_SLOTS } from "@/lib/cues";
 import { AnimationSection } from "@/components/builder/AnimationSection";
+import { GameSettingsPanel } from "@/components/builder/GameSettingsPanel";
+import { GAME_KIND_LABELS } from "@/lib/gameTypes";
+import { GAME_KIND_LIST } from "@/types/quiz";
 import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
 import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
 import { hidesImageBoxes, imageJoinerSlots, withImageJoiner, withImageJoinersFilled } from "@/lib/imageChoice";
@@ -46,6 +49,7 @@ const KINDS: { id: QuestionKind; label: string }[] = [
   { id: "multi-select", label: "Pick all that apply" },
   { id: "image-choice", label: "Image" },
   { id: "reveal", label: "Reveal (covered images)" },
+  ...GAME_KIND_LIST.map((id) => ({ id, label: GAME_KIND_LABELS[id] })),
 ];
 
 const LAYOUTS: { id: QuestionLayout; label: string; hint: string }[] = [
@@ -529,6 +533,8 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           />
         </Field>
       </div>
+
+      <GameSettingsPanel question={question} onChange={onChange} />
 
       {/* Keyed so preview state (a played reveal, a replay counter) never carries over to another question. */}
       <AnimationSection key={question.id} quiz={quiz} question={question} onChange={onChange} />

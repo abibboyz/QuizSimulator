@@ -5,6 +5,7 @@ import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { POST_PACK_CUES } from "@/lib/cues";
 import { REVEAL_DEFAULTS } from "@/lib/reveal";
+import { allowsMultiCorrect, isGameKind } from "@/lib/gameTypes";
 
 export function newId(): string {
   return nanoid(12);
@@ -84,6 +85,19 @@ export function createQuestion(kind: QuestionKind = "multiple-choice"): Question
     };
   }
 
+  if (isGameKind(kind)) {
+    // Game types start from the same four text answers as multiple choice. Sequence lists the answers in the
+    // correct order (so every answer is "correct" and the list order is the key).
+    const options = [createOption("", true), createOption(), createOption(), createOption()];
+    return {
+      id: newId(),
+      kind,
+      layout: "grid",
+      prompt: "",
+      options: kind === "sequence" ? options.map((o) => ({ ...o, correct: true })) : options,
+    };
+  }
+
   return {
     id: newId(),
     kind,
@@ -119,6 +133,7 @@ export function duplicateQuestion(question: Question): Question {
     cues: question.cues ? { ...question.cues } : undefined,
     ...(question.reveal ? { reveal: { ...question.reveal } } : {}),
     ...(question.celebration ? { celebration: { ...question.celebration } } : {}),
+    ...(question.game ? { game: { ...question.game, ...(question.game.dragHandle ? { dragHandle: { ...question.game.dragHandle } } : {}) } } : {}),
     ...(question.motion
       ? {
           motion: {
@@ -165,7 +180,24 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
   const base =
     question.kind === "true-false"
       ? [createOption("", true), createOption(), createOption(), createOption()]
-      : question.options;
+      : question.kind === "sequence"
+        // Leaving Sequence: every answer was "correct"; keep only the first so the other types stay valid.
+        ? question.options.map((o, i) => ({ ...o, correct: i === 0 }))
+        : question.options;
+
+  if (isGameKind(kind)) {
+    const padded = base.length >= 2 ? base : [...base, createOption()];
+    const options = kind === "sequence"
+      ? padded.map((o) => ({ ...o, correct: true }))
+      : allowsMultiCorrect(kind) && padded.some((o) => o.correct)
+        ? padded
+        : (() => {
+            // One correct answer (drag, star/go): keep the first one ticked, or the first answer.
+            const keep = Math.max(0, padded.findIndex((o) => o.correct));
+            return padded.map((o, i) => ({ ...o, correct: i === keep }));
+          })();
+    return { ...question, kind, layout: question.layout === "big-text" ? "grid" : question.layout, options: capTextOptions(options) };
+  }
 
   if (kind === "multiple-choice" || kind === "image-choice" || kind === "reveal") {
     // Collapse to exactly one correct answer — the first one marked, or the first option.

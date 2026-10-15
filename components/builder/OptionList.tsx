@@ -22,6 +22,7 @@ import type { ReactNode } from "react";
 import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
 import { isSingleAnswer } from "@/lib/answerPresentation";
+import { allowsMultiCorrect, isGameKind } from "@/lib/gameTypes";
 import { readableTextOn } from "@/lib/themes";
 import { answerColorPresets, optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
@@ -52,7 +53,10 @@ export function OptionList(props: Props) {
 function TextOptionList({ question, onChange, theme, action }: Props) {
   const ageBand = themeAgeBand(theme);
   const fixed = question.kind === "true-false";
-  const multi = question.kind === "multi-select";
+  // Game types: sequence has no tick (the list order is the answer); the others pick-all like multi-select.
+  const game = isGameKind(question.kind);
+  const ordered = question.kind === "sequence";
+  const multi = question.kind === "multi-select" || allowsMultiCorrect(question.kind);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -75,7 +79,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
   // Down to one answer (never for true/false): a lone answer is a single-answer
   // slide and is always saved correct.
   const remove = (id: string) => {
-    if (fixed || question.options.length <= 1) return;
+    if (fixed || question.options.length <= (game ? 2 : 1)) return;
     const options = question.options.filter((o) => o.id !== id);
     onChange({ ...question, options: options.length === 1 ? [{ ...options[0], correct: true }] : options });
   };
@@ -101,7 +105,8 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
       textColor={theme.optionTextColor}
       colors={theme.optionColors}
       sortable={!fixed}
-      canRemove={!fixed && question.options.length > 1}
+      canRemove={!fixed && question.options.length > (game ? 2 : 1)}
+      ordered={ordered}
       locked={single}
       onText={(text) => update(option.id, { text })}
       onIcon={(icon) => update(option.id, { icon: icon.trim() ? icon : undefined })}
@@ -118,7 +123,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Answers <span className="text-ink-500">· {question.options.length} of {MAX_OPTIONS}</span> {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : multi && <span className="text-ink-500">· mark every correct one</span>}
+          Answers <span className="text-ink-500">· {question.options.length} of {MAX_OPTIONS}</span> {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : ordered ? <span className="text-ink-500">· list them in the correct order (drag ⠿ to reorder); players see them shuffled</span> : multi ? <span className="text-ink-500">· mark every correct one</span> : game && <span className="text-ink-500">· mark the one correct answer</span>}
         </span>
         <span className="flex items-center gap-1">
           {action}
@@ -166,6 +171,8 @@ interface RowProps {
   canRemove: boolean;
   /** Single answer: the tick is fixed on. */
   locked?: boolean;
+  /** Sequence: show the answer's place in the order instead of a tick. */
+  ordered?: boolean;
   onText: (text: string) => void;
   onIcon: (icon: string) => void;
   onColor: (color: string | undefined) => void;
@@ -187,6 +194,7 @@ function OptionRow({
   sortable,
   canRemove,
   locked = false,
+  ordered = false,
   onText,
   onIcon,
   onColor,
@@ -248,19 +256,29 @@ function OptionRow({
         presets={answerColorPresets(ageBand)}
       />
 
-      <button
-        type="button"
-        role={multi ? "checkbox" : "radio"}
-        aria-checked={option.correct}
-        onClick={onMarkCorrect}
-        disabled={locked}
-        title={locked ? "Single answer · always correct" : option.correct ? "Correct answer" : "Mark as correct"}
-        className={`focus-ring grid h-7 w-7 shrink-0 place-items-center text-sm font-bold transition ${
-          multi ? "rounded-md" : "rounded-full"
-        } ${option.correct ? "bg-good text-ink-950" : "border border-ink-600 text-transparent hover:border-good/60"}`}
-      >
-        ✓
-      </button>
+      {ordered ? (
+        <span
+          aria-label={`Position ${index + 1} in the correct order`}
+          title="Position in the correct order"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-good text-sm font-bold text-ink-950"
+        >
+          {index + 1}
+        </span>
+      ) : (
+        <button
+          type="button"
+          role={multi ? "checkbox" : "radio"}
+          aria-checked={option.correct}
+          onClick={onMarkCorrect}
+          disabled={locked}
+          title={locked ? "Single answer · always correct" : option.correct ? "Correct answer" : "Mark as correct"}
+          className={`focus-ring grid h-7 w-7 shrink-0 place-items-center text-sm font-bold transition ${
+            multi ? "rounded-md" : "rounded-full"
+          } ${option.correct ? "bg-good text-ink-950" : "border border-ink-600 text-transparent hover:border-good/60"}`}
+        >
+          ✓
+        </button>
+      )}
 
       <Input
         value={option.text}
