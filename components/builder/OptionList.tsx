@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/Field";
 import { ImageAnswerGrid } from "@/components/builder/ImageAnswerGrid";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
 
-const MAX_OPTIONS = 6;
+const MAX_OPTIONS = 50;
 
 interface Props {
   question: Question;
@@ -118,7 +118,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Answers {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : multi && <span className="text-ink-500">· mark every correct one</span>}
+          Answers <span className="text-ink-500">· {question.options.length} of {MAX_OPTIONS}</span> {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : multi && <span className="text-ink-500">· mark every correct one</span>}
         </span>
         <span className="flex items-center gap-1">
           {action}

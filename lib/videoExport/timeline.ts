@@ -139,6 +139,8 @@ export interface QuestionRun {
   streakAfter: number;
   /** "Out of time — next question in Ns" is on screen during the reveal hold. */
   timeoutBar: boolean;
+  /** Actual live hold start; exports use reveal time plus celebration delay. */
+  countdownAt?: number;
   holdSeconds: number;
   /** The run moves on (goNext). */
   advanceAt: number;

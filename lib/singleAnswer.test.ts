@@ -127,10 +127,9 @@ test("multi-answer timeline is unchanged by single-answer support", () => {
   assert.equal(timeline.results.total, 2);
 });
 
-test("a lone picture keeps the size of one of a pair, centred (DOM grid and export agree)", () => {
-  assert.deepEqual(imageChoiceTile(1, 812, 12), { w: 400, offset: 206 });
+test("a lone picture fills its responsive image area (DOM grid and export agree)", () => {
+  assert.deepEqual(imageChoiceTile(1, 812, 12), { w: 812, offset: 0 });
   assert.deepEqual(imageChoiceTile(2, 812, 12), { w: 400, offset: 0 });
-  assert.equal(imageChoiceGridStyle(1, 12).gridTemplateColumns, "minmax(0, calc((100% - 12px) / 2))");
-  assert.equal(imageChoiceGridStyle(1, 12).justifyContent, "center");
+  assert.equal(imageChoiceGridStyle(1, 12).gridTemplateColumns, "minmax(0, 1fr)");
   assert.deepEqual(imageChoiceGridStyle(4, 12), { display: "grid", gap: "12px", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" });
 });

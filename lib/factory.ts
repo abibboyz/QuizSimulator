@@ -130,9 +130,9 @@ export function duplicateQuestion(question: Question): Question {
   };
 }
 
-/** Text answers stay a short list. Image questions are the only kind that
- *  carries a large set, so leaving that kind has to shed the extras. */
-const TEXT_OPTION_CAP = 6;
+/** Choice and multi-select questions support large quiz banks without inheriting
+ * the image question's much larger 100-item ceiling. */
+const TEXT_OPTION_CAP = 50;
 
 function capTextOptions(options: Option[]): Option[] {
   if (options.length <= TEXT_OPTION_CAP) return options;

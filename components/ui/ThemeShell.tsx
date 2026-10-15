@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { Theme } from "@/types/quiz";
-import { getPreset, themeVars } from "@/lib/themes";
+import { DEFAULT_THEME, getPreset, themeVars } from "@/lib/themes";
 import { AnimatedBackground } from "@/components/bg/AnimatedBackground";
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   subtle?: boolean;
   /** Keep the background inside the phone-width play frame. */
   narrow?: boolean;
+  /** The shared canvas owns the quiz background; surrounding UI is neutral. */
+  frameOnly?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * Every surface that shows quiz content wraps in this, so the builder preview
  * and the live stage can't drift apart.
  */
-export function ThemeShell({ theme, children, className = "", subtle = false, narrow = false }: Props) {
+export function ThemeShell({ theme, children, className = "", subtle = false, narrow = false, frameOnly = false }: Props) {
   const preset = getPreset(theme.preset);
 
   const background = (
@@ -46,10 +48,10 @@ export function ThemeShell({ theme, children, className = "", subtle = false, na
     //   the root and paints behind the surface colour above, hiding the
     //   animation and any background image entirely.
     <div
-      className={`isolate relative min-h-dvh text-ink-100 ${narrow ? "mx-auto w-full max-w-[26rem]" : ""} ${className}`}
-      style={{ ...themeVars(theme), background: theme.surface }}
+      className={`isolate relative min-h-dvh text-ink-100 ${narrow && !frameOnly ? "mx-auto w-full max-w-[26rem]" : ""} ${className}`}
+      style={{ ...themeVars(frameOnly ? DEFAULT_THEME : theme), background: frameOnly ? "#05060a" : theme.surface }}
     >
-      {narrow ? (
+      {frameOnly ? null : narrow ? (
         <div className="pointer-events-none fixed inset-0 -z-10 mx-auto w-full max-w-[26rem] overflow-hidden lg:rounded-[2rem]">
           {background}
         </div>

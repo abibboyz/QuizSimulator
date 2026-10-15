@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { usePresence } from "motion/react";
 import type { Question, QuizSettings, Theme } from "@/types/quiz";
 import { LoopMotion } from "@/components/play/LoopMotion";
+import { FitStage } from "@/components/play/FitStage";
 import { resolveLoops } from "@/lib/loopMotion";
 import { PromptCanvas } from "@/components/play/PromptCanvas";
 import { isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
@@ -12,6 +13,7 @@ import { promptPosition } from "@/lib/questionPresentation";
 import { promptAlign } from "@/lib/promptText";
 import { MediaImage } from "@/components/ui/MediaImage";
 import { hidesImageBoxes } from "@/lib/imageChoice";
+import { stagePlacementFor } from "@/lib/stageLayout";
 import { AnswerGrid, type StageMode } from "@/components/play/AnswerGrid";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -26,7 +28,7 @@ import {
 
 interface Props {
   question: Question;
-  loopSettings?: Pick<QuizSettings, "loopMotion" | "hideImageBoxes">;
+  loopSettings?: Pick<QuizSettings, "loopMotion" | "hideImageBoxes" | "stageLayout">;
   index: number;
   total: number;
   selected: string[];
@@ -49,6 +51,8 @@ interface Props {
   onPositionChange?: (placement: NonNullable<Question["promptPlacement"]>) => void;
   /** Builder preview: drag the answer-box dot. */
   onAnswerBoxScale?: (scale: number) => void;
+  onImageAreaChange?: (area: NonNullable<Question["imageArea"]>) => void;
+  onPromptAreaChange?: (area: NonNullable<Question["promptArea"]>) => void;
   onRevealComplete?: () => void;
   promptReplay?: number;
   /**
@@ -86,6 +90,8 @@ export function QuestionStage({
   motion,
   onPositionChange,
   onAnswerBoxScale,
+  onImageAreaChange,
+  onPromptAreaChange,
   onRevealComplete,
   promptReplay = 0,
   showCount = true,
@@ -99,6 +105,15 @@ export function QuestionStage({
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const imageLeads = question.layout === "image-top" && !!question.media;
   const reduced = useReducedMotion();
+  const layoutView = narrow ? "mobile" : "web";
+  const questionLayout = stagePlacementFor(loopSettings, question, layoutView, "question");
+  const answersLayout = stagePlacementFor(loopSettings, question, layoutView, "answers");
+  const customLayout = !!questionLayout || !!answersLayout;
+  const regionStyle = (placement: typeof questionLayout) => placement ? {
+    position: "absolute" as const,
+    left: `${placement.x}%`, top: `${placement.y}%`, width: `${placement.width}%`, height: `${placement.height}%`,
+    overflow: !narrow && mode !== "preview" ? "hidden" : "auto", display: "grid", alignContent: "center", zIndex: 2,
+  } : undefined;
 
   // Stage animation clocks. With default motion both spans are 0, so neither
   // clock ever schedules a frame and nothing below changes today's render.
@@ -137,14 +152,16 @@ export function QuestionStage({
   // pushing the answer tiles under the control bar.
   const gap = mode === "preview" ? "gap-1.5" : mode === "host" ? "gap-3 md:gap-5" : "gap-6 md:gap-8";
 
+  const promptWidth = Math.min(1, Math.max(0.35, question.promptArea?.width ?? 1));
+  const promptHeight = Math.min(2.5, Math.max(0.5, question.promptArea?.height ?? 1));
   const promptNode = (
-    <div className="w-full"><LoopMotion value={loops.question} preview={mode === "preview"}>
+    <div className="relative mx-auto grid w-full place-items-center" style={{ width: `${promptWidth * 100}%`, minHeight: mode === "preview" ? `${24 * promptHeight}px` : `${6 * promptHeight}vh` }}><LoopMotion value={loops.question} preview={mode === "preview"}>
       <PromptCanvas question={question} theme={theme} elapsed={textElapsed} typed={typed} />
-    </LoopMotion></div>
+    </LoopMotion>{mode === "preview" && onPromptAreaChange && <PromptAreaHandles width={promptWidth} height={promptHeight} onChange={onPromptAreaChange} />}</div>
   );
 
   return (
-    <div className={`flex w-full flex-col ${gap}`}>
+    <div className={`relative flex w-full flex-col ${gap}`} style={customLayout ? { minHeight: mode === "host" ? "70vh" : narrow ? "68dvh" : "62dvh" } : undefined}>
       {(showCount || header) && <div className={`flex items-start gap-4 ${showCount ? "justify-between" : "justify-end"}`}>
         {showCount && <span className={`font-semibold uppercase tracking-widest text-ink-300 ${META_TEXT[mode]}`}>
           Question {index + 1} of {total}
@@ -155,6 +172,8 @@ export function QuestionStage({
         {header}
       </div>}
 
+      <div className={questionLayout ? "grid content-center overflow-auto" : "contents"} style={regionStyle(questionLayout)}>
+      <FitStage disabled={!questionLayout || narrow || mode === "preview"} width={856} minHeight={0} className="absolute inset-0">
       {imageLeads && !overlay && (
         <div className={aligned ? `flex w-full ${align === "right" ? "justify-end" : "justify-start"}` : "flex justify-center"} style={questionStyle}>
           <LoopMotion value={loops.question} preview={mode === "preview"}>
@@ -232,7 +251,11 @@ export function QuestionStage({
       )}
 
       {bottom && <div style={questionStyle}>{promptNode}</div>}
+      </FitStage>
+      </div>
 
+      <div className={answersLayout ? "grid content-center overflow-auto" : "contents"} style={regionStyle(answersLayout)}>
+      <FitStage disabled={!answersLayout || narrow || mode === "preview"} width={856} minHeight={0} className="absolute inset-0">
       <AnswerGrid
         loops={loops}
         hideImageBoxes={hideImageBoxes}
@@ -249,6 +272,7 @@ export function QuestionStage({
         sinceExit={sinceExit}
         onRevealComplete={onRevealComplete}
         onAnswerBoxScale={onAnswerBoxScale}
+        onImageAreaChange={onImageAreaChange}
       />
 
       {revealed && !isUnscoredImage(question) &&
@@ -269,6 +293,18 @@ export function QuestionStage({
           // per question, so the card never remounts (and re-pops) mid-run.
           return exitSpan > 0 ? <div style={explanationStyle}>{card}</div> : card;
         })()}
+      </FitStage>
+      </div>
     </div>
   );
+}
+
+function PromptAreaHandles({ width, height, onChange }: { width: number; height: number; onChange: (area: NonNullable<Question["promptArea"]>) => void }) {
+  const drag = useRef<{ axis: "x" | "y"; start: number; width: number; height: number } | null>(null);
+  const make = (axis: "x" | "y", classes: string, label: string) => <button type="button" aria-label={label} title={label}
+    className={`absolute z-30 h-3.5 w-3.5 touch-none rounded-full border-2 border-white bg-[var(--accent)] shadow ${classes}`}
+    onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { axis, start: axis === "x" ? event.clientX : event.clientY, width, height }; }}
+    onPointerMove={(event) => { const d = drag.current; if (!d || d.axis !== axis) return; const delta = (axis === "x" ? event.clientX : event.clientY) - d.start; onChange({ width: Math.round((axis === "x" ? Math.min(1, Math.max(.35, d.width + delta / 220)) : d.width) * 20) / 20, height: Math.round((axis === "y" ? Math.min(2.5, Math.max(.5, d.height + delta / 60)) : d.height) * 20) / 20 }); }}
+    onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} />;
+  return <>{make("x", "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize", "Drag horizontally to resize question area")}{make("y", "-bottom-2 left-1/2 -translate-x-1/2 cursor-ns-resize", "Drag vertically to resize question area")}</>;
 }

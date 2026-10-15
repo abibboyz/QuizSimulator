@@ -1,6 +1,7 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * 9 adds responsive per-question prompt and image-area sizing.
  * 8 adds single-answer questions (exactly one answer on a non true/false
  * question: always correct, celebrated, not scored). Older builds would
  * reject the one-answer question, so such files are stamped 8.
@@ -17,7 +18,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 10;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -27,6 +28,8 @@ export const SCHEMA_VERSION = 8;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  if (quiz.settings.stageLayout || quiz.questions.some((q) => q.stageLayout || q.timerPlacement)) return 10;
+  if (quiz.questions.some((q) => q.promptArea || q.imageArea || ((q.kind === "multiple-choice" || q.kind === "multi-select") && q.options.length > 6))) return 9;
   if (quiz.questions.some((q) => ["multiple-choice", "multi-select", "image-choice", "reveal"].includes(q.kind) && q.options.length === 1)) return 8;
   if (quiz.theme?.hideAnswerMarkers || quiz.theme?.hideAnswerBoxes || [quiz.theme?.promptTextStyle, quiz.theme?.answerTextStyle].some((style) => style && style.preset !== "plain")) return 7;
   if (quiz.theme?.answerStyle || quiz.questions.some((q) => q.answerStyle || q.promptStyle?.wordArtColors || q.promptStyle?.letterShape || q.promptStyle?.textAnimation?.unit === "letter" || (q.kind === "image-choice" && !q.options.some((o) => o.correct)))) return 6;
@@ -133,6 +136,18 @@ export type AutoAdvanceBarStyle = "line" | "pill" | "dots";
 export type QuizProgressStyle = "none" | "bar" | "colorful" | "segments" | "dots" | "mascot";
 
 export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice" | "reveal";
+
+export type StageLayoutView = "web" | "mobile";
+export type StageLayoutItem = "question" | "answers" | "countdown";
+export interface StageItemPlacement {
+  /** Top-left and size as percentages of the responsive stage. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+export type StageLayoutFrame = Partial<Record<StageLayoutItem, StageItemPlacement>>;
+export type ResponsiveStageLayout = Partial<Record<StageLayoutView, StageLayoutFrame>>;
 
 /* ----------------------------------------------------------------- reveal */
 
@@ -365,6 +380,8 @@ export interface Question {
   kind: QuestionKind;
   layout: QuestionLayout;
   prompt: string;
+  /** Responsive space reserved for the prompt on this question. Fractions/scales, never fixed screen pixels. */
+  promptArea?: { width?: number; height?: number };
   promptStyle?: {
     bold?: boolean;
     italic?: boolean;
@@ -441,6 +458,12 @@ export interface Question {
    * other kinds). Unset means 12.
    */
   optionGap?: number;
+  /** Responsive width and tile-height scale for image/reveal answer areas. */
+  imageArea?: { width?: number; height?: number };
+  /** Per-question overrides for draggable Web/Mobile stage regions. */
+  stageLayout?: ResponsiveStageLayout;
+  /** Timer position/size overrides; missing views inherit the quiz default. */
+  timerPlacement?: QuizSettings["timerPlacement"];
   /**
    * Words between side-by-side pictures on image and reveal questions.
    * The index is the picture on the left. Missing, or every gap blank, keeps
@@ -634,6 +657,8 @@ export interface QuizSettings {
     web?: TimerPlacement;
     mobile?: TimerPlacement;
   };
+  /** Default draggable stage regions, shared by every question unless locally overridden. */
+  stageLayout?: ResponsiveStageLayout;
   /** Custom meter fill. Unset follows the theme accent. */
   progressColor?: string;
   /** Custom empty-track colour. Unset uses a translucent white track. */

@@ -300,6 +300,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
 
       {(question.kind === "image-choice" || question.kind === "reveal") && (
         <>
+          <p className="text-xs text-ink-400">Drag the side and bottom handles in the preview to resize this question’s image area. A single image fills the chosen area.</p>
           <Field label="Tile gap" hint="Pixels between image tiles. Default 12.">
             <Input
               type="number"

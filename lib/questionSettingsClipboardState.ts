@@ -14,6 +14,10 @@ export interface QuestionSettings {
   hideAnswerBoxes?: boolean;
   layout?: Question["layout"];
   promptPlacement?: Question["promptPlacement"];
+  promptArea?: Question["promptArea"];
+  imageArea?: Question["imageArea"];
+  stageLayout?: Question["stageLayout"];
+  timerPlacement?: Question["timerPlacement"];
   optionGap?: number;
   imageJoinerStyle?: Question["imageJoinerStyle"];
   timerSeconds?: number | null;
