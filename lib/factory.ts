@@ -5,7 +5,7 @@ import { SCHEMA_VERSION } from "@/types/quiz";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { POST_PACK_CUES } from "@/lib/cues";
 import { REVEAL_DEFAULTS } from "@/lib/reveal";
-import { isGameKind } from "@/lib/gameTypes";
+import { allowsMultiCorrect, isGameKind } from "@/lib/gameTypes";
 
 export function newId(): string {
   return nanoid(12);
@@ -189,7 +189,13 @@ export function convertKind(question: Question, kind: QuestionKind): Question {
     const padded = base.length >= 2 ? base : [...base, createOption()];
     const options = kind === "sequence"
       ? padded.map((o) => ({ ...o, correct: true }))
-      : padded.some((o) => o.correct) ? padded : padded.map((o, i) => ({ ...o, correct: i === 0 }));
+      : allowsMultiCorrect(kind) && padded.some((o) => o.correct)
+        ? padded
+        : (() => {
+            // One correct answer (drag, star/go): keep the first one ticked, or the first answer.
+            const keep = Math.max(0, padded.findIndex((o) => o.correct));
+            return padded.map((o, i) => ({ ...o, correct: i === keep }));
+          })();
     return { ...question, kind, layout: question.layout === "big-text" ? "grid" : question.layout, options: capTextOptions(options) };
   }
 

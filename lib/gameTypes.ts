@@ -166,8 +166,13 @@ export type PickMode = "single" | "multi" | "ordered";
  */
 export function pickMode(question: Pick<Question, "kind" | "options">): PickMode {
   if (question.kind === "sequence") return "ordered";
-  if (isGameKind(question.kind)) return question.options.filter((o) => o.correct).length > 1 ? "multi" : "single";
+  if (allowsMultiCorrect(question.kind)) return question.options.filter((o) => o.correct).length > 1 ? "multi" : "single";
   return "single";
+}
+
+/** Game kinds where the author may tick more than one correct answer. Drag and Star/Go always have exactly one. */
+export function allowsMultiCorrect(kind: string): boolean {
+  return kind === "memory-flip" || kind === "pop-match" || kind === "timed-reveal";
 }
 
 /** True when a tap toggles a selection instead of locking in (game kinds only; the classic check stays `kind === "multi-select"`). */

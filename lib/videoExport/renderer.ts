@@ -1509,8 +1509,9 @@ export class FrameRenderer {
     const lh = size * 1.5;
     const markerFont = this.font(600, 24);
 
-    const shownOptions = this.gameOptions(q);
     const sequence = q.kind === "sequence";
+    // Sequence: the answers settle into the right order when it is revealed.
+    const shownOptions = sequence && revealed ? q.options : this.gameOptions(q);
     const tiles: TextTile[] = shownOptions.map((option, i) => {
       const baseMarker = answerChrome(theme).hideMarkers ? "" : optionMarker(i, { band, marker: theme.optionMarker, override: option.icon });
       const pickAt = this.pickedAt(run, option.id);
@@ -2347,7 +2348,8 @@ export class FrameRenderer {
           labels.forEach(([label, sub, id], k) => {
             const bx = cx + (k === 0 ? -bw - 8 : 8);
             const picked = chosen === id;
-            const dim = chosen && !picked ? 0.35 : 1;
+            const settle = sinceTap !== null ? 1 - clamp01(sinceTap / dur(g, 300) || (g.animate ? 0 : 1)) : 1;
+            const dim = (chosen && !picked ? 0.35 : 1) * settle;
             const press = picked && sinceTap !== null ? 1 - 0.06 * Math.sin(Math.min(1, sinceTap / 200) * Math.PI) : 1;
             if (!chosen) {
               ctx.save();
@@ -2375,7 +2377,7 @@ export class FrameRenderer {
           const ap = clamp01(sinceTap / dur(g, 300) || (g.animate ? 0 : 1));
           ctx.save();
           ctx.globalAlpha *= ap;
-          this.drawLine(msg, cx, y + 64 + (this.narrow ? 0 : 0), 24, this.font(700, 15), chosen === "star" ? gold : this.accent, "center");
+          this.drawLine(msg, cx, by + 12, 24, this.font(700, 15), chosen === "star" ? gold : this.accent, "center");
           ctx.restore();
         }
       },

@@ -1,0 +1,825 @@
+{
+ "pick-correct": {
+  "durationMs": 66200,
+  "intro": {
+   "start": 0,
+   "end": 1200,
+   "cue": null
+  },
+  "questions": [
+   {
+    "index": 0,
+    "question": {
+     "id": "l1",
+     "kind": "multiple-choice",
+     "layout": "grid",
+     "prompt": "Plain multiple choice",
+     "explanation": "Because.",
+     "media": {
+      "kind": "stored",
+      "id": "pic",
+      "w": 800,
+      "h": 450
+     },
+     "options": [
+      {
+       "id": "l1a",
+       "text": "Paris",
+       "correct": true
+      },
+      {
+       "id": "l1b",
+       "text": "Rome",
+       "correct": false
+      },
+      {
+       "id": "l1c",
+       "text": "Oslo",
+       "correct": false
+      },
+      {
+       "id": "l1d",
+       "text": "Lima",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 1200,
+    "mountAt": 1200,
+    "animateIn": false,
+    "liveAt": 1200,
+    "limitSeconds": 12,
+    "picks": [
+     {
+      "optionId": "l1a",
+      "at": 11600
+     }
+    ],
+    "revealAt": 12200,
+    "frozenElapsedMs": 11000,
+    "correct": true,
+    "timedOut": false,
+    "selectedIds": [
+     "l1a"
+    ],
+    "points": null,
+    "scoreBefore": 0,
+    "scoreAfter": null,
+    "streakBefore": 0,
+    "streakAfter": 1,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 14200,
+    "exitAt": 14200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 1,
+    "question": {
+     "id": "l2",
+     "kind": "true-false",
+     "layout": "big-text",
+     "prompt": "True or false?",
+     "options": [
+      {
+       "id": "l2a",
+       "text": "True",
+       "correct": true
+      },
+      {
+       "id": "l2b",
+       "text": "False",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 14200,
+    "mountAt": 14400,
+    "animateIn": true,
+    "liveAt": 14200,
+    "limitSeconds": 12,
+    "picks": [
+     {
+      "optionId": "l2a",
+      "at": 24600
+     }
+    ],
+    "revealAt": 25200,
+    "frozenElapsedMs": 11000,
+    "correct": true,
+    "timedOut": false,
+    "selectedIds": [
+     "l2a"
+    ],
+    "points": null,
+    "scoreBefore": null,
+    "scoreAfter": null,
+    "streakBefore": 1,
+    "streakAfter": 2,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 27200,
+    "exitAt": 27200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 2,
+    "question": {
+     "id": "l3",
+     "kind": "multi-select",
+     "layout": "list",
+     "prompt": "Pick all that apply",
+     "timerSeconds": 8,
+     "options": [
+      {
+       "id": "l3a",
+       "text": "One",
+       "correct": true
+      },
+      {
+       "id": "l3b",
+       "text": "Two",
+       "correct": true
+      },
+      {
+       "id": "l3c",
+       "text": "Three",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 27200,
+    "mountAt": 27400,
+    "animateIn": true,
+    "liveAt": 27200,
+    "limitSeconds": 8,
+    "picks": [
+     {
+      "optionId": "l3a",
+      "at": 33250
+     },
+     {
+      "optionId": "l3b",
+      "at": 33600
+     }
+    ],
+    "revealAt": 34200,
+    "frozenElapsedMs": 7000,
+    "correct": true,
+    "timedOut": false,
+    "selectedIds": [
+     "l3a",
+     "l3b"
+    ],
+    "points": null,
+    "scoreBefore": null,
+    "scoreAfter": null,
+    "streakBefore": 2,
+    "streakAfter": 3,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 36200,
+    "exitAt": 36200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 3,
+    "question": {
+     "id": "l4",
+     "kind": "image-choice",
+     "layout": "grid",
+     "prompt": "Which is Oslo?",
+     "optionGap": 12,
+     "options": [
+      {
+       "id": "l4a",
+       "text": "",
+       "correct": false,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      },
+      {
+       "id": "l4b",
+       "text": "Oslo",
+       "correct": true,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      }
+     ]
+    },
+    "enterAt": 36200,
+    "mountAt": 36400,
+    "animateIn": true,
+    "liveAt": 36200,
+    "limitSeconds": 12,
+    "picks": [
+     {
+      "optionId": "l4b",
+      "at": 46600
+     }
+    ],
+    "revealAt": 47200,
+    "frozenElapsedMs": 11000,
+    "correct": true,
+    "timedOut": false,
+    "selectedIds": [
+     "l4b"
+    ],
+    "points": null,
+    "scoreBefore": null,
+    "scoreAfter": null,
+    "streakBefore": 3,
+    "streakAfter": 4,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 49200,
+    "exitAt": 49200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 4,
+    "question": {
+     "id": "l5",
+     "kind": "reveal",
+     "layout": "grid",
+     "prompt": "Which city is under the cover?",
+     "optionGap": 12,
+     "options": [
+      {
+       "id": "l5a",
+       "text": "Paris",
+       "correct": true,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      },
+      {
+       "id": "l5b",
+       "text": "Rome",
+       "correct": false,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      }
+     ],
+     "reveal": {
+      "animation": "tiles",
+      "cover": {
+       "kind": "stored",
+       "id": "cover",
+       "w": 1200,
+       "h": 400
+      },
+      "durationMs": 1000
+     }
+    },
+    "enterAt": 49200,
+    "mountAt": 49400,
+    "animateIn": true,
+    "liveAt": 49200,
+    "limitSeconds": 12,
+    "picks": [
+     {
+      "optionId": "l5a",
+      "at": 59600
+     }
+    ],
+    "revealAt": 60200,
+    "frozenElapsedMs": 11000,
+    "correct": true,
+    "timedOut": false,
+    "selectedIds": [
+     "l5a"
+    ],
+    "points": null,
+    "scoreBefore": null,
+    "scoreAfter": null,
+    "streakBefore": 4,
+    "streakAfter": 5,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 62200,
+    "exitAt": 62200,
+    "animateOut": false,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   }
+  ],
+  "results": {
+   "start": 62200,
+   "end": 66200,
+   "correctCount": 5,
+   "total": 5,
+   "score": null,
+   "bestStreak": 5
+  },
+  "cues": [],
+  "confetti": [
+   {
+    "at": 62200,
+    "preset": {
+     "particleCount": 70,
+     "spread": 70,
+     "startVelocity": 45,
+     "ticks": 180,
+     "bursts": [
+      {
+       "x": 0.1,
+       "y": 0.9,
+       "angle": 60
+      },
+      {
+       "x": 0.9,
+       "y": 0.9,
+       "angle": 120
+      }
+     ]
+    },
+    "seed": 1
+   }
+  ],
+  "audio": []
+ },
+ "timeout": {
+  "durationMs": 71200,
+  "intro": {
+   "start": 0,
+   "end": 1200,
+   "cue": null
+  },
+  "questions": [
+   {
+    "index": 0,
+    "question": {
+     "id": "l1",
+     "kind": "multiple-choice",
+     "layout": "grid",
+     "prompt": "Plain multiple choice",
+     "explanation": "Because.",
+     "media": {
+      "kind": "stored",
+      "id": "pic",
+      "w": 800,
+      "h": 450
+     },
+     "options": [
+      {
+       "id": "l1a",
+       "text": "Paris",
+       "correct": true
+      },
+      {
+       "id": "l1b",
+       "text": "Rome",
+       "correct": false
+      },
+      {
+       "id": "l1c",
+       "text": "Oslo",
+       "correct": false
+      },
+      {
+       "id": "l1d",
+       "text": "Lima",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 1200,
+    "mountAt": 1200,
+    "animateIn": false,
+    "liveAt": 1200,
+    "limitSeconds": 12,
+    "picks": [],
+    "revealAt": 13200,
+    "frozenElapsedMs": 12000,
+    "correct": false,
+    "timedOut": true,
+    "selectedIds": [],
+    "points": 0,
+    "scoreBefore": 0,
+    "scoreAfter": 0,
+    "streakBefore": 0,
+    "streakAfter": 0,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 15200,
+    "exitAt": 15200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 1,
+    "question": {
+     "id": "l2",
+     "kind": "true-false",
+     "layout": "big-text",
+     "prompt": "True or false?",
+     "options": [
+      {
+       "id": "l2a",
+       "text": "True",
+       "correct": true
+      },
+      {
+       "id": "l2b",
+       "text": "False",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 15200,
+    "mountAt": 15400,
+    "animateIn": true,
+    "liveAt": 15200,
+    "limitSeconds": 12,
+    "picks": [],
+    "revealAt": 27200,
+    "frozenElapsedMs": 12000,
+    "correct": false,
+    "timedOut": true,
+    "selectedIds": [],
+    "points": 0,
+    "scoreBefore": 0,
+    "scoreAfter": 0,
+    "streakBefore": 0,
+    "streakAfter": 0,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 29200,
+    "exitAt": 29200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 2,
+    "question": {
+     "id": "l3",
+     "kind": "multi-select",
+     "layout": "list",
+     "prompt": "Pick all that apply",
+     "timerSeconds": 8,
+     "options": [
+      {
+       "id": "l3a",
+       "text": "One",
+       "correct": true
+      },
+      {
+       "id": "l3b",
+       "text": "Two",
+       "correct": true
+      },
+      {
+       "id": "l3c",
+       "text": "Three",
+       "correct": false
+      }
+     ]
+    },
+    "enterAt": 29200,
+    "mountAt": 29400,
+    "animateIn": true,
+    "liveAt": 29200,
+    "limitSeconds": 8,
+    "picks": [],
+    "revealAt": 37200,
+    "frozenElapsedMs": 8000,
+    "correct": false,
+    "timedOut": true,
+    "selectedIds": [],
+    "points": 0,
+    "scoreBefore": 0,
+    "scoreAfter": 0,
+    "streakBefore": 0,
+    "streakAfter": 0,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 39200,
+    "exitAt": 39200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 3,
+    "question": {
+     "id": "l4",
+     "kind": "image-choice",
+     "layout": "grid",
+     "prompt": "Which is Oslo?",
+     "optionGap": 12,
+     "options": [
+      {
+       "id": "l4a",
+       "text": "",
+       "correct": false,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      },
+      {
+       "id": "l4b",
+       "text": "Oslo",
+       "correct": true,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      }
+     ]
+    },
+    "enterAt": 39200,
+    "mountAt": 39400,
+    "animateIn": true,
+    "liveAt": 39200,
+    "limitSeconds": 12,
+    "picks": [],
+    "revealAt": 51200,
+    "frozenElapsedMs": 12000,
+    "correct": false,
+    "timedOut": true,
+    "selectedIds": [],
+    "points": 0,
+    "scoreBefore": 0,
+    "scoreAfter": 0,
+    "streakBefore": 0,
+    "streakAfter": 0,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 53200,
+    "exitAt": 53200,
+    "animateOut": true,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   },
+   {
+    "index": 4,
+    "question": {
+     "id": "l5",
+     "kind": "reveal",
+     "layout": "grid",
+     "prompt": "Which city is under the cover?",
+     "optionGap": 12,
+     "options": [
+      {
+       "id": "l5a",
+       "text": "Paris",
+       "correct": true,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      },
+      {
+       "id": "l5b",
+       "text": "Rome",
+       "correct": false,
+       "media": {
+        "kind": "stored",
+        "id": "pic",
+        "w": 800,
+        "h": 450
+       }
+      }
+     ],
+     "reveal": {
+      "animation": "tiles",
+      "cover": {
+       "kind": "stored",
+       "id": "cover",
+       "w": 1200,
+       "h": 400
+      },
+      "durationMs": 1000
+     }
+    },
+    "enterAt": 53200,
+    "mountAt": 53400,
+    "animateIn": true,
+    "liveAt": 53200,
+    "limitSeconds": 12,
+    "picks": [],
+    "revealAt": 65200,
+    "frozenElapsedMs": 12000,
+    "correct": false,
+    "timedOut": true,
+    "selectedIds": [],
+    "points": 0,
+    "scoreBefore": 0,
+    "scoreAfter": 0,
+    "streakBefore": 0,
+    "streakAfter": 0,
+    "timeoutBar": false,
+    "holdSeconds": 2,
+    "advanceAt": 67200,
+    "exitAt": 67200,
+    "animateOut": false,
+    "motion": {
+     "question": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 450,
+      "easing": "smooth",
+      "staggerMs": 0
+     },
+     "answers": {
+      "enter": "default",
+      "exit": "default",
+      "durationMs": 300,
+      "easing": "smooth",
+      "staggerMs": 45
+     }
+    },
+    "exitMs": 200,
+    "swapOutDelayMs": 0
+   }
+  ],
+  "results": {
+   "start": 67200,
+   "end": 71200,
+   "correctCount": 0,
+   "total": 5,
+   "score": 0,
+   "bestStreak": 0
+  },
+  "cues": [],
+  "confetti": [],
+  "audio": []
+ }
+}

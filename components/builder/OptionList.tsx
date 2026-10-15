@@ -22,7 +22,7 @@ import type { ReactNode } from "react";
 import type { AgeBand, Option, OptionMarker, Question, Theme } from "@/types/quiz";
 import { createOption } from "@/lib/factory";
 import { isSingleAnswer } from "@/lib/answerPresentation";
-import { isGameKind } from "@/lib/gameTypes";
+import { allowsMultiCorrect, isGameKind } from "@/lib/gameTypes";
 import { readableTextOn } from "@/lib/themes";
 import { answerColorPresets, optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
@@ -56,7 +56,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
   // Game types: sequence has no tick (the list order is the answer); the others pick-all like multi-select.
   const game = isGameKind(question.kind);
   const ordered = question.kind === "sequence";
-  const multi = question.kind === "multi-select" || (game && !ordered);
+  const multi = question.kind === "multi-select" || allowsMultiCorrect(question.kind);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -123,7 +123,7 @@ function TextOptionList({ question, onChange, theme, action }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Answers <span className="text-ink-500">· {question.options.length} of {MAX_OPTIONS}</span> {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : ordered ? <span className="text-ink-500">· list them in the correct order (drag ⠿ to reorder); players see them shuffled</span> : multi && <span className="text-ink-500">· mark every correct one</span>}
+          Answers <span className="text-ink-500">· {question.options.length} of {MAX_OPTIONS}</span> {single ? <span className="text-ink-500">· Single answer · always celebrated, not scored</span> : ordered ? <span className="text-ink-500">· list them in the correct order (drag ⠿ to reorder); players see them shuffled</span> : multi ? <span className="text-ink-500">· mark every correct one</span> : game && <span className="text-ink-500">· mark the one correct answer</span>}
         </span>
         <span className="flex items-center gap-1">
           {action}
