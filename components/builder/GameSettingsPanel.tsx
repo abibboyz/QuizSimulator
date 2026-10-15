@@ -144,11 +144,11 @@ export function GameSettingsPanel({ question, onChange }: { question: Question; 
           {(storedHandle?.kind ?? "stick") === "custom" && (
             <div className="space-y-1">
               <MediaDropZone
-                label="Handle image (transparent PNG)"
+                label="Handle image (transparent PNG or animated GIF)"
                 media={storedHandle?.image}
                 onChange={(image) => patch({ dragHandle: { kind: "custom", ...(image ? { image } : {}) } })}
               />
-              <p className="text-xs text-ink-500">Upload or replace any time. The middle of the picture is the pointer tip. Without an image the Stick is used.</p>
+              <p className="text-xs text-ink-500">Upload or replace any time. A GIF keeps animating (in the builder, preview, play, host and the exported video). The middle of the picture is the pointer tip. Without an image the Stick is used.</p>
             </div>
           )}
         </div>
