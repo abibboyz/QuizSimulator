@@ -15,7 +15,7 @@ export interface LiveFrameState {
   /** Game clock origin of the game question types: when the stage became live. Unset = now (the stage just mounted). */
   gameAt?: number | null;
   /** Star or Go, from the play session: what the answer earned and what the player chose. Absent before the reveal. */
-  stars?: { earned: number; choice: StarChoice | null; choiceAt: number | null; pot: number; goWorth: number; after: StarState };
+  stars?: { earned: number; choice: StarChoice | null; choiceAt: number | null; pot: number; goWorth: number; after: StarState; bankPoints?: number };
 }
 
 /** Adapt a privately owned export timeline to actual player/host events.
@@ -54,6 +54,7 @@ export function syncLiveTimeline(timeline: Timeline, state: LiveFrameState): voi
           pot: state.stars.pot,
           goWorth: state.stars.goWorth,
           after: state.stars.after,
+          bankPoints: state.stars.bankPoints ?? 0,
         }
       : undefined;
     run.selectedIds = run.picks.map((pick) => pick.optionId);

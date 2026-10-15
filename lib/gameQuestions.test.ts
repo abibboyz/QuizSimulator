@@ -169,3 +169,108 @@ test("session: a sequence is never reshuffled when answers are shuffled (its ord
     assert.deepEqual(play.getState().order[0].options.map((o) => o.id), ["o0", "o1", "o2", "o3"]);
   }
 });
+
+/* ----------------------------------------------------------- star points */
+
+const starQ = (id: string, stars = 2): Question => ({ ...q("star-collect", [0], id), game: { stars } });
+const answer = (id: string, ok: boolean) => { play.getState().toggle(ok ? "o0" : "o1"); play.getState().submit(500); void id; };
+const pointsOf = (quiz: Quiz) => {
+  // The score of a run where every question is answered right, one tick after the other.
+  play.getState().start(quiz); play.getState().begin(false);
+  for (let i = 0; i < quiz.questions.length; i++) { play.getState().toggle("o0"); play.getState().submit(500); play.getState().next(); }
+  return play.getState().score;
+};
+
+test("star points: Star banks the pot into the score at 100 a star (pointsBase 1000)", () => {
+  startWith(starQ("s1"));
+  const s = () => play.getState();
+  answer("s1", true);
+  const before = s().score;
+  s().chooseStar("star");
+  assert.equal(s().score, before + 200);
+  assert.equal(s().answers[0].starPoints, 200);
+  s().next();
+  assert.equal(s().score, before + 200, "nothing more at the end: the pot is empty");
+});
+
+test("star points: Go adds nothing until the stars are banked; the later Star banks them all", () => {
+  startWith(starQ("s1"), starQ("s2"));
+  const s = () => play.getState();
+  answer("s1", true);
+  const afterFirst = s().score;
+  s().chooseStar("go");
+  assert.equal(s().score, afterFirst, "carried stars are not points yet");
+  s().next();
+  answer("s2", true);
+  const afterSecond = s().score;
+  s().chooseStar("star");
+  assert.equal(s().score, afterSecond + (2 + 4) * 100, "2 carried + 4 (x2) banked");
+  assert.equal(s().answers[1].starPoints, 600);
+  assert.equal(s().answers[0].starPoints, undefined);
+});
+
+test("star points: no choice counts as Star and earns its points; leftovers are banked on the last answer", () => {
+  startWith(starQ("s1"), starQ("s2"));
+  const s = () => play.getState();
+  answer("s1", true);
+  const before = s().score;
+  s().next(); // no choice: Star
+  assert.equal(s().score, before + 200);
+  answer("s2", true);
+  s().chooseStar("go");
+  const beforeEnd = s().score;
+  s().next(); // last question: the carried 4 stars are banked
+  assert.equal(s().phase, "results");
+  assert.equal(s().score, beforeEnd + 200, "Star reset the streak, so the second answer was 2 stars");
+  assert.equal(s().answers[1].starPoints, 200);
+  assert.equal(s().stars.banked, 4);
+});
+
+test("star points: a wrong answer loses the carried stars and their points", () => {
+  startWith(starQ("s1"), starQ("s2"));
+  const s = () => play.getState();
+  answer("s1", true);
+  s().chooseStar("go");
+  const before = s().score;
+  s().next();
+  answer("s2", false);
+  s().next();
+  assert.equal(s().stars.banked, 0);
+  assert.equal(s().score, before, "no star points, and the wrong answer scores 0");
+});
+
+test("star points: scale with the quiz's base points, and the score always equals the sum of the rows", () => {
+  const quiz = quizOf(starQ("s1"), starQ("s2"));
+  quiz.settings.pointsBase = 500;
+  startWith(...quiz.questions);
+  play.getState().reset(); play.getState().start(quiz); play.getState().begin(false);
+  const s = () => play.getState();
+  answer("s1", true); s().chooseStar("star"); s().next();
+  answer("s2", true); s().next();
+  assert.equal(s().answers[0].starPoints, 100, "2 stars x 50");
+  assert.equal(s().answers[1].starPoints, 100);
+  assert.equal(s().score, s().answers.reduce((sum, a) => sum + a.points + (a.starPoints ?? 0), 0));
+});
+
+test("star points: every other question type scores exactly as before, with or without a star question in the quiz", () => {
+  const classic = legacyQuiz();
+  // Use the same A/B answers: the first option is correct in each of these classics.
+  const plain = quizOf(...classic.questions.slice(0, 3));
+  const withStar = quizOf(...classic.questions.slice(0, 3), starQ("s1"));
+  const run = (quiz: Quiz) => {
+    play.getState().reset(); play.getState().start(quiz); play.getState().begin(false);
+    const results: number[] = [];
+    for (const question of quiz.questions.filter((x) => x.kind !== "star-collect")) {
+      for (const o of question.options.filter((x) => x.correct)) play.getState().toggle(o.id);
+      play.getState().submit(500);
+      results.push(play.getState().answers.at(-1)!.points);
+      play.getState().next();
+    }
+    return results;
+  };
+  assert.deepEqual(run(withStar), run(plain), "per-question points of the classic types are identical");
+  assert.ok(pointsOf(quizOf(q("pop-match", [0]), q("drag-match", [0], "d"))) > 0);
+  const noStar = quizOf(q("pop-match", [0]), q("sequence", [0, 1, 2, 3], "s"));
+  play.getState().start(noStar);
+  assert.ok(play.getState().answers.every((a) => a.starPoints === undefined));
+});

@@ -58,8 +58,17 @@ Existing theme, text-style, header and timer settings apply to the new types as 
 See `lib/stars.ts` (unit-tested). A correct answer is worth `stars × (1 + goStreak)` stars, put in the pot.
 Star banks the pot and resets goStreak. Go keeps the pot and raises goStreak by 1, so the next correct star question
 is worth ×2, ×3 … A wrong answer or a timeout loses the pot (banked stars are safe). No choice (Enter, auto-advance, the
-clock) counts as Star. Stars still in the pot when the quiz ends are banked. Stars never change points or streaks;
-they are their own meter, shown on the results screen only when the quiz has a Star/Go question.
+clock) counts as Star. Stars still in the pot when the quiz ends are banked.
+
+**Points rule (Star/Go questions only):** banked stars also add to the score. A star is worth **a tenth of the quiz's
+base points** (*Settings → base points*, 1000 by default, so **100 points a star**). The points are added when the stars
+are banked: on **Star**, on "no choice" (counts as Star), and at the end of the quiz for stars still in the pot. Stars
+that are only carried with **Go**, or lost with a wrong answer / timeout, are worth nothing. The row of the question
+where they were banked shows `⭐ +N` and the total (so the score always equals the sum of the rows). Streaks and the
+points of every other question are never affected, and a quiz without a Star/Go question scores exactly as before.
+The same rule runs in Play, the results screen and the exported video (the Star button and the "Banked!" message show
+the points). Host is a display with its own manual team scores, so it adds nothing automatically.
+
 Keys in Play: **S** = Star, **G** = Go, Enter = Star.
 
 ## Existing data
@@ -88,8 +97,8 @@ Keys in Play: **S** = Star, **G** = Go, Enter = Star.
 * Drag needs a pointer; keyboard/screen-reader users use the answer buttons (tap an answer instead of dragging).
 * Animated GIF/APNG/WebP (handle or any picture) needs the browser's `ImageDecoder` (Chrome, Edge). Without it the first frame is shown, as for every other animated picture in the app.
 * The pop field is a fixed grid (4×3 cells) inside a framed area; items never overlap the prompt.
-* Game settings are not part of the "copy question settings" clipboard (they are copied when a question is duplicated or copied between quizzes).
-* Video export follows the dialog's *Answers* option. **Show correct pick** plays every new type through (memory flip then pick, pops tapped, scripted drag with the handle, order tapped, stars with the Star/Go choice from *Preview / video picks*). **Let the clock run out** means nobody answers, so the new types just time out and show their answer, like every other type. The builder preview always plays the new types through so you can see them.
+* "Copy question settings" is unchanged (prompt settings only). Game settings are kept when a question is duplicated or copied between quizzes.
+* Video export follows the dialog's *Answers* option. **Show correct pick** plays every new type through (memory flip then pick, pops tapped, scripted drag with the handle, order tapped, stars with the Star/Go choice from *Preview / video picks*). **Let the clock run out** means nobody answers, so the new types time out and show their answer, like every other type. This is the intended behaviour. The builder preview always plays the new types through so you can see them.
 
 ## How to try each type (test checklist)
 

@@ -36,7 +36,7 @@ interface Props {
    */
   gameLive?: boolean;
   /** Star or Go: what the answer earned and what was chosen. Absent before the reveal. */
-  stars?: { earned: number; choice: StarChoice | null; pot: number; goWorth: number; after: StarState };
+  stars?: { earned: number; choice: StarChoice | null; pot: number; goWorth: number; after: StarState; bankPoints?: number };
   /** Star or Go: the player tapped Star or Go. Without it the two buttons are drawn but not tappable (host mode). */
   onStarChoice?: (choice: StarChoice) => void;
 }

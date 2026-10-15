@@ -15,8 +15,14 @@
  *  - Nobody chose (auto-advance, Enter, the clock): that counts as Star.
  *  - Whatever is still in the pot when the quiz ends is banked.
  *
- * Other question types never touch the tally. Points are not affected: stars
- * are their own meter, shown beside the score and on the results screen.
+ * Points: banked stars also add to the score, only on quizzes with a Star or Go
+ * question. A star is worth a tenth of the quiz's base points per question
+ * (`pointsBase`, 1000 by default, so 100 points a star), added at the moment the
+ * stars are banked (Star, no choice, or the end of the quiz). Stars in the pot,
+ * or lost with a wrong answer, are worth nothing. Streaks and the points of
+ * every other question are not affected.
+ *
+ * Other question types never touch the tally or the score through it.
  */
 
 export interface StarState {
@@ -26,6 +32,19 @@ export interface StarState {
   banked: number;
   /** Consecutive Go choices carried into the next star question. */
   goStreak: number;
+}
+
+/** The base points a quiz without its own setting uses. */
+const DEFAULT_POINTS_BASE = 1000;
+
+/** Points one banked star is worth: a tenth of the quiz's base points (1000 -> 100). */
+export function starValue(pointsBase: number | undefined): number {
+  return Math.max(0, Math.round((typeof pointsBase === "number" && Number.isFinite(pointsBase) ? pointsBase : DEFAULT_POINTS_BASE) / 10));
+}
+
+/** Points for banking `stars` stars. */
+export function starPoints(stars: number, pointsBase: number | undefined): number {
+  return Math.max(0, Math.round(stars)) * starValue(pointsBase);
 }
 
 export type StarChoice = "star" | "go";

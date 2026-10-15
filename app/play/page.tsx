@@ -510,7 +510,7 @@ function PlayView() {
                 countdownSeconds={autoAdvanceReady && showsAutoAdvanceCountdown(quiz.settings) ? holdSeconds : undefined}
                 gameLive={stageLive}
                 stars={phase === "revealed" && question.kind === "star-collect" && answers[answers.length - 1]?.stars !== undefined
-                  ? { earned: answers[answers.length - 1].stars ?? 0, choice: answers[answers.length - 1].starChoice ?? null, pot: answers[answers.length - 1].starPot ?? 0, goWorth: answers[answers.length - 1].starGoWorth ?? 0, after: session.stars }
+                  ? { earned: answers[answers.length - 1].stars ?? 0, choice: answers[answers.length - 1].starChoice ?? null, pot: answers[answers.length - 1].starPot ?? 0, goWorth: answers[answers.length - 1].starGoWorth ?? 0, after: session.stars, bankPoints: answers[answers.length - 1].starPoints ?? 0 }
                   : undefined}
                 onStarChoice={starPending ? chooseStar : undefined}
               />

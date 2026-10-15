@@ -5,7 +5,7 @@ import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
 import { isAnswerCorrect, resolveGame, togglesPicks, toggleSequencePick } from "@/lib/gameTypes";
-import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, type StarChoice, type StarState } from "@/lib/stars";
+import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, starPoints, type StarChoice, type StarState } from "@/lib/stars";
 
 /**
  * "countdown" sits between the intro screen and the first question, holding the
@@ -30,6 +30,8 @@ export interface AnswerRecord {
   /** Stars in the pot after this answer (before the choice), and what a Go would make the next correct one worth. */
   starPot?: number;
   starGoWorth?: number;
+  /** Points added to the score when stars were banked on this answer (Star choice, or the end of the quiz). Absent when none. */
+  starPoints?: number;
 }
 
 interface PlayState {
@@ -198,7 +200,13 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     const { phase, answers, stars } = get();
     const last = answers[answers.length - 1];
     if (phase !== "revealed" || !last || !hasChoice(last.stars ?? 0) || last.starChoice) return;
-    set({ stars: afterChoice(stars, choice), answers: [...answers.slice(0, -1), { ...last, starChoice: choice }] });
+    // Star banks the pot, and banked stars are worth points (lib/stars).
+    const bonus = choice === "star" ? starPoints(stars.pot, get().quiz?.settings.pointsBase) : 0;
+    set({
+      stars: afterChoice(stars, choice),
+      score: get().score + bonus,
+      answers: [...answers.slice(0, -1), { ...last, starChoice: choice, ...(bonus ? { starPoints: bonus } : {}) }],
+    });
   },
 
   next: () => {
@@ -207,7 +215,16 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     if (get().phase === "revealed" && pending && hasChoice(pending.stars ?? 0) && !pending.starChoice) get().chooseStar("star");
     const { index, order } = get();
     if (index + 1 >= order.length) {
-      set({ phase: "results", stars: atEnd(get().stars) });
+      // Whatever is still in the pot is banked, with its points, on the last answer.
+      const state = get();
+      const bonus = starPoints(state.stars.pot, state.quiz?.settings.pointsBase);
+      const answers = state.answers;
+      const last = answers[answers.length - 1];
+      set({
+        phase: "results",
+        stars: atEnd(state.stars),
+        ...(bonus && last ? { score: state.score + bonus, answers: [...answers.slice(0, -1), { ...last, starPoints: (last.starPoints ?? 0) + bonus }] } : {}),
+      });
       return;
     }
     set({ index: index + 1, phase: "asking", selected: [], startedAt: Date.now(), lastResult: null });

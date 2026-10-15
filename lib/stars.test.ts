@@ -32,3 +32,16 @@ test("a wrong answer (or a timeout) loses the pot but never touches banked stars
 test("whatever is still in the pot at the end is banked", () => {
   assert.deepEqual(atEnd({ pot: 5, banked: 1, goStreak: 3 }), { pot: 0, banked: 6, goStreak: 0 });
 });
+
+import { starPoints, starValue } from "./stars.ts";
+
+test("points: a banked star is worth a tenth of the base points", () => {
+  assert.equal(starValue(1000), 100);
+  assert.equal(starValue(500), 50);
+  assert.equal(starValue(0), 0, "no base points, no star points");
+  assert.equal(starValue(Number.NaN), 100, "a quiz without the setting uses the default base");
+  assert.equal(starValue(undefined), 100);
+  assert.equal(starPoints(3, 1000), 300);
+  assert.equal(starPoints(0, 1000), 0);
+  assert.equal(starPoints(-2, 1000), 0);
+});

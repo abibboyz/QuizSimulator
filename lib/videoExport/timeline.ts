@@ -46,7 +46,7 @@ import {
 import { resolveReveal } from "@/lib/reveal";
 import { celebrationDelayMs } from "@/lib/celebration";
 import { DRAG_MS, isGameKind, lockedMs, pickMode, popTapTime, resolveGame } from "@/lib/gameTypes";
-import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, type StarChoice, type StarState } from "@/lib/stars";
+import { afterAnswer, afterChoice, atEnd, hasChoice, INITIAL_STARS, starPoints, type StarChoice, type StarState } from "@/lib/stars";
 import type { GameQuestionKind } from "@/types/quiz";
 
 /* ----------------------------------------------------------------- options */
@@ -138,6 +138,8 @@ export interface StarRun {
   goWorth: number;
   /** The tally right after the choice. */
   after: StarState;
+  /** Points added to the score by this choice (a Star banks the pot at the quiz's star value). */
+  bankPoints: number;
 }
 
 /** A simulated drag in a drag-match question: the item leaves its tray at `startAt` and lands on `optionId` at `dropAt`. */
@@ -186,6 +188,8 @@ export interface QuestionRun {
   /** When the game clock of the game question types starts (lib/gameTypes). Equals `liveAt` in an export. */
   gameAt: number;
   stars?: StarRun;
+  /** Points from banked stars that land on this question's row (this choice, plus the end-of-quiz bank on the last one). */
+  starPoints?: number;
   drag?: DragRun;
   /** Quiz-wide animation settings with this question's overrides (lib/stageMotion). */
   motion: ResolvedMotion;
@@ -388,8 +392,10 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
         after = afterChoice(answered.state, choice);
         audio.push({ at: tapAt, recipe: "select" });
       }
-      starRun = { earned: answered.earned, appearAt, choiceAt, tapAt, choice, pot: answered.state.pot, goWorth: resolveGame(question).stars * (answered.state.goStreak + 2), after };
+      const bankPoints = choice === "star" ? starPoints(answered.state.pot, settings.pointsBase) : 0;
+      starRun = { earned: answered.earned, appearAt, choiceAt, tapAt, choice, pot: answered.state.pot, goWorth: resolveGame(question).stars * (answered.state.goStreak + 2), after, bankPoints };
       starState = after;
+      score += bankPoints;
     }
     // A player who answered would be left to click on; the video carries on
     // after the same hold the timeout path uses.
@@ -437,6 +443,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       scoreAfter: score,
       gameAt: liveAt,
       ...(starRun ? { stars: starRun } : {}),
+      ...(starRun?.bankPoints ? { starPoints: starRun.bankPoints } : {}),
       ...(drag ? { drag } : {}),
       streakBefore,
       streakAfter: streak,
@@ -459,6 +466,17 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
     if (between) endPending(nextLiveAt);
     clock = swapAt;
   });
+
+  // Stars still in the pot when the quiz ends are banked, with their points, on the last question.
+  if (hasStars && runs.length) {
+    const endPoints = starPoints(starState.pot, settings.pointsBase);
+    if (endPoints) {
+      const last = runs[runs.length - 1];
+      last.starPoints = (last.starPoints ?? 0) + endPoints;
+      last.scoreAfter += endPoints;
+      score += endPoints;
+    }
+  }
 
   /* ---- results */
   const resultsStart = clock;

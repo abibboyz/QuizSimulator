@@ -74,6 +74,7 @@ import {
 import { assemblyPieces, isPhotoAssemblyStyle, morphedPoints, pieceProgress, poseAt, type PhotoAssemblyStyle } from "@/lib/photoAssembly";
 import { createRevealEnv, drawReveal, REVEAL_TILE, type RevealDrawEnv } from "@/lib/revealDraw";
 import { frameSource } from "@/lib/videoExport/animatedImage";
+import { starPoints } from "@/lib/stars";
 import { answerChrome, boxlessFrame, FEEDBACK_BAR, tintLettering } from "@/lib/answerChrome";
 import {
   DRAG_MS,
@@ -2344,7 +2345,7 @@ export class FrameRenderer {
         const showButtons = star.choiceAt !== null && t >= star.choiceAt;
         if (showButtons) {
           const bp = g.animate ? this.backEase(progress(t, star.choiceAt!, dur(g, 320))) : 1;
-          const labels: [string, string, "star" | "go"][] = [["⭐ Star", `Bank ${star.pot ?? earned}`, "star"], ["Go ➜", `Next is worth ${star.goWorth ?? ""}`, "go"]];
+          const labels: [string, string, "star" | "go"][] = [["⭐ Star", `Bank ${star.pot ?? earned} · +${starPoints(star.pot ?? earned, this.quiz.settings.pointsBase).toLocaleString()} pts`, "star"], ["Go ➜", `Next is worth ${star.goWorth ?? ""}`, "go"]];
           labels.forEach(([label, sub, id], k) => {
             const bx = cx + (k === 0 ? -bw - 8 : 8);
             const picked = chosen === id;
@@ -2373,7 +2374,7 @@ export class FrameRenderer {
         }
         // After the choice: what happened to the stars.
         if (sinceTap !== null && star.after) {
-          const msg = chosen === "star" ? `Banked! Total ⭐ ${star.after.banked}` : `Carrying ⭐ ${star.after.pot} — go again for more`;
+          const msg = chosen === "star" ? `Banked! Total ⭐ ${star.after.banked}${star.bankPoints ? ` · +${star.bankPoints.toLocaleString()} pts` : ""}` : `Carrying ⭐ ${star.after.pot} — go again for more`;
           const ap = clamp01(sinceTap / dur(g, 300) || (g.animate ? 0 : 1));
           ctx.save();
           ctx.globalAlpha *= ap;
@@ -2629,7 +2630,7 @@ export class FrameRenderer {
     const label = "Correct answer: ";
     const items = runs.map((run, i) => {
       const q = run.question;
-      const points = `+${run.points.toLocaleString()}`;
+      const points = `+${(run.points + (run.starPoints ?? 0)).toLocaleString()}`;
       const textW = CW - 40 - 28 - 32 - this.measure(points, strongFont);
       const lead = `${i + 1}. `;
       const lines = this.wrap(lead + (q.prompt || "Untitled question"), promptFont, textW);

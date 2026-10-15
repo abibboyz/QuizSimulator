@@ -125,7 +125,8 @@ export function ResultsScreen({
                   )}
                 </div>
                 <span className="shrink-0 text-sm font-semibold tabular-nums text-ink-300">
-                  +{(answer?.points ?? 0).toLocaleString()}
+                  {answer?.starPoints ? <span className="mr-2 font-normal text-ink-400">⭐ +{answer.starPoints.toLocaleString()}</span> : null}
+                  +{((answer?.points ?? 0) + (answer?.starPoints ?? 0)).toLocaleString()}
                 </span>
               </li>
             );

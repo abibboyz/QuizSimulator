@@ -40,3 +40,37 @@ test("existing question types: a game run's gameAt equals liveAt, so legacy fram
     assert.equal(run.drag, undefined);
   }
 });
+
+import { buildTimeline as build } from "./timeline.ts";
+import { starPoints } from "../stars.ts";
+import type { Question } from "../../types/quiz.ts";
+
+const starQuestion = (id: string, videoChoice: "star" | "go"): Question => ({
+  id, kind: "star-collect", layout: "grid", prompt: id, game: { stars: 2, videoChoice },
+  options: [{ id: `${id}a`, text: "A", correct: true }, { id: `${id}b`, text: "B", correct: false }],
+});
+
+test("export timeline: banked stars add points to the score, the row and the results; classic rows are untouched", () => {
+  const base = legacyQuiz();
+  const plain = build(base, { answerMode: "pick-correct", sound: false });
+  for (const choice of ["star", "go"] as const) {
+    const quiz = { ...base, questions: [...base.questions, starQuestion("s1", choice)] };
+    const timeline = build(quiz, { answerMode: "pick-correct", sound: false });
+    const classicRows = timeline.questions.slice(0, base.questions.length);
+    assert.deepEqual(classicRows.map((r) => r.points), plain.questions.map((r) => r.points), "classic points unchanged");
+    const star = timeline.questions[base.questions.length];
+    const bank = starPoints(2, base.settings.pointsBase);
+    // Star banks at the choice, Go banks the carried stars when the quiz ends: either way it is the last row.
+    assert.equal(star.starPoints, bank, choice);
+    assert.equal(timeline.results.score, plain.results.score + star.points + bank);
+    assert.equal(star.scoreAfter, timeline.results.score);
+    assert.equal(timeline.results.stars, 2);
+  }
+});
+
+test("export timeline: letting the clock run out earns no stars and no star points", () => {
+  const quiz = { ...legacyQuiz(), questions: [starQuestion("s1", "star")] };
+  const timeline = build(quiz, { answerMode: "timeout", sound: false });
+  assert.equal(timeline.results.score, 0);
+  assert.equal(timeline.questions[0].starPoints, undefined);
+});
