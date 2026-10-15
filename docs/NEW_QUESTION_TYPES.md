@@ -89,7 +89,7 @@ Keys in Play: **S** = Star, **G** = Go, Enter = Star.
 * Animated GIF/APNG/WebP (handle or any picture) needs the browser's `ImageDecoder` (Chrome, Edge). Without it the first frame is shown, as for every other animated picture in the app.
 * The pop field is a fixed grid (4×3 cells) inside a framed area; items never overlap the prompt.
 * Game settings are not part of the "copy question settings" clipboard (they are copied when a question is duplicated or copied between quizzes).
-* The export's simulated player always answers correctly (Star/Go uses the "Preview / video picks" setting).
+* Video export follows the dialog's *Answers* option. **Show correct pick** plays every new type through (memory flip then pick, pops tapped, scripted drag with the handle, order tapped, stars with the Star/Go choice from *Preview / video picks*). **Let the clock run out** means nobody answers, so the new types just time out and show their answer, like every other type. The builder preview always plays the new types through so you can see them.
 
 ## How to try each type (test checklist)
 
@@ -99,5 +99,6 @@ Keys in Play: **S** = Star, **G** = Go, Enter = Star.
 4. **+ Drag**: preview shows a scripted drag; in Play grab the item and drop it on an answer. Switch the handle Stick / Hand / Custom. For Custom upload a transparent PNG, then replace it with an animated GIF and check it keeps animating in builder preview, Play, Host and in the exported video.
 5. **+ Order**: reorder the list in the builder; Play: tap the answers in order (a wrong order shows the right one).
 6. **+ Timed**: answers appear one by one; answer early.
-7. For each: switch the Web 16:9 / Mobile 9:16 preview, change text style / theme / header toggles, Host (`/host`), Export video.
-8. Regression: existing multiple-choice, true/false, multi-select, image-choice and reveal questions look and behave as before.
+7. Export video → *Answers: Show correct pick*: each new type is played through (also try Vertical). Check the GIF handle keeps animating.
+8. For each: switch the Web 16:9 / Mobile 9:16 preview, change text style / theme / header toggles, Host (`/host`), Export video.
+9. Regression: existing multiple-choice, true/false, multi-select, image-choice and reveal questions look and behave as before.
