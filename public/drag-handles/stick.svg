@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <title>Stick</title>
+  <!-- Pointing tip at (12, 90). Transparent background. -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="14" y1="88" x2="84" y2="14" stroke="#5b3a1a" stroke-width="13"/>
+    <line x1="14" y1="88" x2="84" y2="14" stroke="#c98a45" stroke-width="9"/>
+    <line x1="17" y1="84" x2="80" y2="17" stroke="#e8b571" stroke-width="3" opacity="0.8"/>
+    <line x1="58" y1="38" x2="70" y2="26" stroke="#d94f4f" stroke-width="10"/>
+    <line x1="14" y1="88" x2="22" y2="79" stroke="#2f1d0c" stroke-width="10"/>
+  </g>
+  <circle cx="86" cy="12" r="6" fill="#ffd23f" stroke="#a87400" stroke-width="2"/>
+</svg>

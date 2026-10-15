@@ -26,7 +26,7 @@ const RUNTIME = `quizsim-runtime-${VERSION}`;
  * created while offline.
  */
 const PAGES = ["/", "/play", "/host", "/edit", "/offline"];
-const EXTRAS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const EXTRAS = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/drag-handles/stick.svg", "/drag-handles/hand.svg", "/drag-handles/hand-grab.svg"];
 
 /**
  * The build's asset filenames are hashed and change every deploy, so they

@@ -5,6 +5,7 @@
 
 import type { CueSet, MediaRef, Question, Quiz } from "@/types/quiz";
 import { cueSetRefs, mapCueSet, quizCueRefs } from "./cues.ts";
+import { dragHandleRefs } from "./gameTypes.ts";
 
 /** Same key the video renderer uses to look a picture up once it is loaded. */
 export function mediaKey(ref: MediaRef): string {
@@ -39,6 +40,8 @@ export function imageRefs(quiz: Quiz): MediaRef[] {
     if (q.background?.enabled && q.background.image) refs.push(q.background.image);
     for (const o of q.options) if (o.media) refs.push(o.media);
     if (q.kind === "reveal" && q.reveal?.cover) refs.push(q.reveal.cover);
+    // Drag to match: the handle graphic (shipped default SVGs or the author's upload).
+    refs.push(...dragHandleRefs(q));
     // Shown only while the celebration is on. A saved-but-disabled picture stays
     // out of the play/export load, same as a disabled question background.
     if (q.celebration?.enabled && q.celebration.image) refs.push(q.celebration.image);
@@ -71,6 +74,8 @@ export function collectRefs(quiz: Quiz): MediaRef[] {
     // Kept whatever the kind, so flipping a question away from Reveal and
     // back doesn't lose its cover to the garbage collector.
     if (q.reveal?.cover) refs.push(q.reveal.cover);
+    // Kept whatever the kind, same reason: a custom drag handle survives a trip through other types.
+    if (q.game?.dragHandle?.image) refs.push(q.game.dragHandle.image);
     // Kept while the switch is off, so turning it back on still has the picture.
     if (q.celebration?.image) refs.push(q.celebration.image);
   }
@@ -88,6 +93,7 @@ export function questionMediaRefs(question: Question): MediaRef[] {
     question.media,
     ...question.options.map((option) => option.media),
     question.reveal?.cover,
+    question.game?.dragHandle?.image,
     question.celebration?.image,
     ...cueSetRefs(question.cues),
   ].filter((ref): ref is MediaRef => !!ref);
@@ -110,6 +116,7 @@ export function remapQuestionMedia(question: Question, remap: Map<string, string
     cues: mapCueSet(question.cues, swap),
     ...(question.reveal ? { reveal: { ...question.reveal, cover: swap(question.reveal.cover) } } : {}),
     ...(question.celebration ? { celebration: { ...question.celebration, image: swap(question.celebration.image) } } : {}),
+    ...(question.game?.dragHandle?.image ? { game: { ...question.game, dragHandle: { ...question.game.dragHandle, image: swap(question.game.dragHandle.image) } } } : {}),
   };
 }
 
@@ -147,6 +154,8 @@ export function remapMedia(quiz: Quiz, remap: Map<string, string>): Quiz {
       ...(q.reveal ? { reveal: { ...q.reveal, cover: swap(q.reveal.cover) } } : {}),
       // Only questions that have a celebration get the key — older quizzes come back byte-identical.
       ...(q.celebration ? { celebration: { ...q.celebration, image: swap(q.celebration.image) } } : {}),
+      // Only questions with a custom drag handle get the key — older quizzes come back byte-identical.
+      ...(q.game?.dragHandle?.image ? { game: { ...q.game, dragHandle: { ...q.game.dragHandle, image: swap(q.game.dragHandle.image) } } } : {}),
     })),
   };
 }

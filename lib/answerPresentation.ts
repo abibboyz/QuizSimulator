@@ -21,9 +21,9 @@ export function isScored(question: Pick<Question, "kind" | "options"> | undefine
   return !isUnscoredImage(question) && !isSingleAnswer(question);
 }
 
-/** Whether the answer is shown with feedback right away: the quiz setting, or always for a single answer. */
+/** Whether the answer is shown with feedback right away: the quiz setting, or always for a single answer. Star or Go always shows it: the stars and the choice live on the reveal. */
 export function showsFeedback(settings: Pick<QuizSettings, "revealAfterEach">, question: Pick<Question, "kind" | "options"> | undefined): boolean {
-  return settings.revealAfterEach || isSingleAnswer(question);
+  return settings.revealAfterEach || isSingleAnswer(question) || question?.kind === "star-collect";
 }
 
 export const ANSWER_BOX_SCALE_MIN = 0.05;

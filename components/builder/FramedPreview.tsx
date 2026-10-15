@@ -8,6 +8,7 @@ import { loopTime, previewSegment } from "@/lib/previewFrame";
 import { loadAssets, releaseAssets } from "@/lib/videoExport/assets";
 import { FRAMINGS, FrameRenderer, type Framing, type RenderAssets } from "@/lib/videoExport/renderer";
 import { buildTimeline } from "@/lib/videoExport/timeline";
+import { GAME_KIND_LIST } from "@/types/quiz";
 
 interface Props {
   quiz: Quiz;
@@ -78,7 +79,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
   const [resultsFor, setResultsFor] = useState<number | null>(null);
   const showResults = resultsFor === index;
 
-  const timeline = useMemo(() => buildTimeline(quiz, { answerMode: "timeout", sound: false }), [quiz]);
+  const timeline = useMemo(() => buildTimeline(quiz, { answerMode: "timeout", sound: false, simulate: GAME_KIND_LIST }), [quiz]);
   const segment = useMemo(
     () => previewSegment(timeline, showResults ? { kind: "results" } : { kind: "question", index }),
     [timeline, showResults, index],

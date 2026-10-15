@@ -29,6 +29,8 @@ import { QUESTION_SWAP, REVEAL_OFF_HOLD_MS } from "@/lib/playTiming";
 import { clockHoldMs, resolveMotion, swapOutDelayMs, usesSwapIn, usesSwapOut } from "@/lib/stageMotion";
 import { resolveReveal } from "@/lib/reveal";
 import { hidesImageBoxes } from "@/lib/imageChoice";
+import { canPickAt, GAME_KIND_HINTS, isGameKind, pickMode } from "@/lib/gameTypes";
+import type { StarChoice } from "@/lib/stars";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function PlayPage() {
@@ -318,19 +320,40 @@ function PlayView() {
     (optionId: string) => {
       const state = usePlaySession.getState();
       if (state.phase !== "asking" || pendingRef.current || isUnscoredImage(state.order[state.index])) return;
+      // Memory: the cards can't be picked while they are still on show or turning over.
+      if (!canPickAt(state.order[state.index], Date.now() - startedAtRef.current)) return;
 
       state.toggle(optionId);
       if (soundOn) playSelect();
 
+      const current = state.order[state.index];
+      const elapsed = limit !== null ? countdown.elapsedMs : Date.now() - startedAtRef.current;
+      // Game types: Sequence locks in once every answer is placed; pick-all game questions wait for Submit.
+      if (current && isGameKind(current.kind) && pickMode(current) !== "single") {
+        if (pickMode(current) === "ordered" && usePlaySession.getState().selected.length >= current.options.length) usePlaySession.getState().submit(elapsed);
+        return;
+      }
       // Single-answer questions lock in on click; multi-select waits for Submit
       // (a lone multi-select answer behaves like multiple choice).
-      if (state.order[state.index]?.kind !== "multi-select" || isSingleAnswer(state.order[state.index])) {
-        const elapsed = limit !== null ? countdown.elapsedMs : Date.now() - startedAtRef.current;
+      if (current?.kind !== "multi-select" || isSingleAnswer(current)) {
         usePlaySession.getState().submit(elapsed);
       }
     },
     [countdown.elapsedMs, limit, soundOn],
   );
+
+  // Star or Go: record the choice, let the stars animate, then move on.
+  const starPending = phase === "revealed" && question?.kind === "star-collect" && (answers[answers.length - 1]?.stars ?? 0) > 0 && !answers[answers.length - 1]?.starChoice;
+  const chooseStar = useCallback((choice: StarChoice) => {
+    const state = usePlaySession.getState();
+    const last = state.answers[state.answers.length - 1];
+    if (state.phase !== "revealed" || !last || (last.stars ?? 0) <= 0 || last.starChoice) return;
+    state.chooseStar(choice);
+    if (soundOn) playSelect();
+    window.setTimeout(() => { if (usePlaySession.getState().answers.length === state.answers.length && usePlaySession.getState().phase === "revealed") goNextRef.current(false); }, 1300);
+  }, [soundOn]);
+  const chooseStarRef = useRef(chooseStar);
+  useEffect(() => { chooseStarRef.current = chooseStar; }, [chooseStar]);
 
   // Keyboard: number keys pick answers, Enter/Space moves on.
   useEffect(() => {
@@ -346,11 +369,17 @@ function PlayView() {
           event.preventDefault();
           handlePick(current.options[n - 1].id);
         }
-        if ((event.key === "Enter" || event.key === " ") && (isUnscoredImage(current) && limit === null || current.kind === "multi-select" && state.selected.length)) {
+        if ((event.key === "Enter" || event.key === " ") && (isUnscoredImage(current) && limit === null || current.kind === "multi-select" && state.selected.length || isGameKind(current.kind) && pickMode(current) !== "single" && state.selected.length)) {
           event.preventDefault();
           submitAnswer();
         }
       } else if (state.phase === "revealed") {
+        // Star or Go: S banks the stars, G carries them on. Enter / Space / → move on, which counts as Star.
+        if (current.kind === "star-collect" && (event.key === "s" || event.key === "S" || event.key === "g" || event.key === "G")) {
+          event.preventDefault();
+          chooseStarRef.current(event.key.toLowerCase() === "s" ? "star" : "go");
+          return;
+        }
         if (event.key === "Enter" || event.key === " " || event.key === "ArrowRight") {
           event.preventDefault();
           advance();
@@ -479,6 +508,11 @@ function PlayView() {
                 onPick={handlePick}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
                 countdownSeconds={autoAdvanceReady && showsAutoAdvanceCountdown(quiz.settings) ? holdSeconds : undefined}
+                gameLive={stageLive}
+                stars={phase === "revealed" && question.kind === "star-collect" && answers[answers.length - 1]?.stars !== undefined
+                  ? { earned: answers[answers.length - 1].stars ?? 0, choice: answers[answers.length - 1].starChoice ?? null, pot: answers[answers.length - 1].starPot ?? 0, goWorth: answers[answers.length - 1].starGoWorth ?? 0, after: session.stars }
+                  : undefined}
+                onStarChoice={starPending ? chooseStar : undefined}
               />
             </motion.div>
           </AnimatePresence>
@@ -488,12 +522,18 @@ function PlayView() {
           <div className="pointer-events-auto flex shrink-0 justify-center gap-3 rounded-xl bg-black/50 px-4 py-2">
             <MuteButton />
             {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
-            {phase === "asking" && question.kind === "multi-select" && !isSingleAnswer(question) && (
+            {phase === "asking" && (question.kind === "multi-select" && !isSingleAnswer(question) || isGameKind(question.kind) && pickMode(question) !== "single") && (
               <Button variant="primary" size="lg" disabled={!selected.length} onClick={submitAnswer}>
                 Submit answer
               </Button>
             )}
-            {phase === "revealed" && showsFeedback(quiz.settings, question) && (
+            {phase === "revealed" && showsFeedback(quiz.settings, question) && starPending && (
+              <>
+                <Button variant="primary" size="lg" onClick={() => chooseStar("star")}>⭐ Star</Button>
+                <Button variant="outline" size="lg" onClick={() => chooseStar("go")}>Go ➜</Button>
+              </>
+            )}
+            {phase === "revealed" && showsFeedback(quiz.settings, question) && !starPending && (
               <Button variant="primary" size="lg" onClick={advance}>
                 {index + 1 >= order.length ? "See results" : "Next question"} →
               </Button>
@@ -503,7 +543,7 @@ function PlayView() {
           {!autoAdvanceReady && (
             // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
             <p className="shrink-0 rounded bg-black/50 px-4 pb-2 text-center text-xs text-white">
-              {isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile
+              {starPending ? "Bank your stars with Star (S), or keep them in the pot with Go (G)" : isGameKind(question.kind) && phase === "asking" ? `${GAME_KIND_HINTS[question.kind][0].toUpperCase()}${GAME_KIND_HINTS[question.kind].slice(1)}` : isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile
                 ? phase === "asking"
                   ? question.kind === "image-choice" || question.kind === "reveal"
                     ? "Tap an image"
@@ -529,6 +569,7 @@ function PlayView() {
           answers={answers}
           score={score}
           bestStreak={bestStreak}
+          stars={order.some((q) => q.kind === "star-collect") ? session.stars.banked : undefined}
           narrow={mobile}
           soundOn={soundOn}
           outroCue={outroCue}
