@@ -86,10 +86,10 @@ export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_P
         </button>)}
         <button type="button" className="focus-ring ml-auto rounded-lg px-2 py-1 font-semibold text-ink-400 hover:text-white" onClick={() => {
           if (layoutScope === "all") {
-            const withoutQuestion = withStagePlacement(quiz.settings.stageLayout, view, "question", null);
+            const withoutQuestion = withStagePlacement(withStagePlacement(quiz.settings.stageLayout, view, "countdown", null), view, "question", null);
             onChangeSettings?.({ stageLayout: withStagePlacement(withoutQuestion, view, "answers", null), timerPlacement: withTimerPlacement(quiz.settings.timerPlacement, view, null) });
           } else {
-            const withoutQuestion = withStagePlacement(question.stageLayout, view, "question", null);
+            const withoutQuestion = withStagePlacement(withStagePlacement(question.stageLayout, view, "countdown", null), view, "question", null);
             onChange({ ...question, stageLayout: withStagePlacement(withoutQuestion, view, "answers", null), timerPlacement: withTimerPlacement(question.timerPlacement, view, null) });
           }
         }}>Reset layout</button>
@@ -105,7 +105,7 @@ export function PreviewPane({ quiz, question, index, onChange, frame = DEFAULT_P
           else onChange({ ...question, stageLayout: withStagePlacement(question.stageLayout, view, item, point) });
         }}
       />
-      <p className="text-[11px] text-ink-500">The selected scope applies to question, answer, and timer positions and sizes. Web and Mobile are saved separately. Reset clears this view’s layout for the selected scope; question overrides return to the quiz defaults.</p>
+      <p className="text-[11px] text-ink-500">The selected scope applies to question, answer, timer, and next-question countdown positions and sizes. An enabled countdown stays visible here for positioning; playback and exports show it only during the actual wait. Web and Mobile are saved separately. Reset clears this view’s layout for the selected scope; question overrides return to the quiz defaults.</p>
     </div>
   );
 }

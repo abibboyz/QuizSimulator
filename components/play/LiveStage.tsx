@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePresence } from "motion/react";
 import type { Question, Quiz } from "@/types/quiz";
 import { canvasBackingSize } from "@/lib/canvasSize";
-import { fitStage } from "@/lib/fitStage";
+import { liveStageSize } from "@/lib/fitStage";
 import { resolveReveal } from "@/lib/reveal";
 import { customExitMs, resolveMotion } from "@/lib/stageMotion";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -27,6 +27,8 @@ interface Props {
   interactive?: boolean;
   onPick?: (id: string) => void;
   onRevealComplete?: () => void;
+  /** Present only while the live next-question wait is active and visible. */
+  countdownSeconds?: number;
 }
 
 /** Preview/export rendering, driven by live events instead of simulated answers.
@@ -41,6 +43,7 @@ export function LiveStage(props: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const latest = useRef(props);
+  const countdownStart = useRef<number | null>(null);
   useEffect(() => { latest.current = props; });
   const clock = useRef({ start: 0, revealAt: null as number | null, picks: new Map<string, number>(), exitAt: undefined as number | undefined });
   const [assets, setAssets] = useState<RenderAssets | null>(null);
@@ -80,14 +83,15 @@ export function LiveStage(props: Props) {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const resize = () => {
-      const scale = fitStage(viewport.clientWidth, viewport.clientHeight, frame.cssWidth, frame.cssHeight);
-      setSize({ width: frame.cssWidth * scale, height: frame.cssHeight * scale });
+      // Mobile stays phone-shaped even in a wide desktop browser.
+      // Hit targets share the canvas's percentage coordinates in either mode.
+      setSize(liveStageSize(viewport.clientWidth, viewport.clientHeight, frame.cssWidth, frame.cssHeight, framing === "vertical"));
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [frame]);
+  }, [frame, framing]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -102,6 +106,8 @@ export function LiveStage(props: Props) {
     const draw = (now: number) => {
       const live = latest.current;
       const t = now - clock.current.start;
+      if (live.countdownSeconds === undefined) countdownStart.current = null;
+      else if (countdownStart.current === null) countdownStart.current = t;
       if (live.revealed && clock.current.revealAt === null) clock.current.revealAt = t;
       const picks = clock.current.picks;
       for (const id of picks.keys()) if (!live.selected.includes(id)) picks.delete(id);
@@ -110,6 +116,7 @@ export function LiveStage(props: Props) {
         index: live.index, elapsedMs: t, remainingMs: live.remainingMs, limitSeconds: live.limitSeconds,
         revealAt: clock.current.revealAt, picks: [...picks].map(([optionId, at]) => ({ optionId, at })),
         correct: live.correct ?? false, outcomes: live.outcomes ?? [], exitAt: clock.current.exitAt,
+        countdown: countdownStart.current === null ? undefined : { at: countdownStart.current, seconds: live.countdownSeconds! },
       });
       const rects = renderer.renderLive(t, live.outcomes);
       const signature = JSON.stringify(rects);

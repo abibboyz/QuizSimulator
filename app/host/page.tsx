@@ -8,14 +8,13 @@ import { isSingleAnswer, isUnscoredImage } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { Question, Quiz, QuizSettings } from "@/types/quiz";
+import type { Question, Quiz } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playCue, playUrgentTick, playWhoosh } from "@/lib/sound";
 import { resolveReveal } from "@/lib/reveal";
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
-import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { TeamScoreboard } from "@/components/host/TeamScoreboard";
 import { Button } from "@/components/ui/Button";
@@ -125,7 +124,7 @@ function HostView() {
   const limit = timerFor(quiz, question);
 
   return (
-    <ThemeShell theme={questionTheme(quiz.theme, question)}>
+    <ThemeShell frameOnly theme={questionTheme(quiz.theme, question)}>
       {/*
         Fixed to the viewport rather than min-height: on a 720p projector the
         controls must never be pushed below the fold where the host can't reach
@@ -167,8 +166,6 @@ function HostView() {
             autoReveal={quiz.settings.autoReveal}
             autoAdvanceSeconds={quiz.settings.autoAdvanceSeconds}
             showAutoAdvanceCountdown={showsAutoAdvanceCountdown(quiz.settings)}
-            autoAdvanceMessage={quiz.settings.autoAdvanceMessage}
-            meter={quiz.settings}
             canBack={index > 0}
             isLast={index + 1 >= questions.length}
             onNext={goNext}
@@ -197,12 +194,6 @@ interface HostQuestionProps {
   autoReveal: boolean;
   autoAdvanceSeconds: number | null;
   showAutoAdvanceCountdown: boolean;
-  autoAdvanceMessage?: string;
-  /** Just the meter's slice of settings — the rest already arrives unpacked. */
-  meter: Pick<
-    QuizSettings,
-    "progressStyle" | "progressPulse" | "progressColor" | "progressTrackColor" | "progressThickness" | "showTimerNumber" | "progressMascot" | "progressMascotMedia" | "progressMascotMotion" | "quizProgressStyle" | "showProgressBar" | "autoAdvanceBarStyle" | "autoAdvanceColor" | "autoAdvanceTrackColor" | "timerPlacement"
-  >;
   canBack: boolean;
   isLast: boolean;
   onNext: () => void;
@@ -220,8 +211,6 @@ function HostQuestion({
   autoReveal,
   autoAdvanceSeconds,
   showAutoAdvanceCountdown,
-  autoAdvanceMessage,
-  meter,
   canBack,
   isLast,
   onNext,
@@ -333,6 +322,7 @@ function HostQuestion({
           limitSeconds={limitSeconds}
           correct={revealed && !unscored}
           onRevealComplete={() => setRevealComplete(true)}
+          countdownSeconds={showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? autoAdvanceSeconds : undefined}
         />
       </div>
 
@@ -370,16 +360,7 @@ function HostQuestion({
       </div>
 
 
-      {showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? (
-        <AutoAdvanceBar
-          seconds={autoAdvanceSeconds}
-          label="next question"
-          message={autoAdvanceMessage}
-          styleName={meter.autoAdvanceBarStyle}
-          color={meter.autoAdvanceColor}
-          trackColor={meter.autoAdvanceTrackColor}
-        />
-      ) : (
+      {!(showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady)) && (
         <p className="mt-3 shrink-0 text-center text-xs text-ink-500">
           Space {revealed || unscored ? "advances" : "reveals"} · ← → to move · F for fullscreen
           {!unscored && autoReveal && !revealed && " · answer shows itself at zero"}

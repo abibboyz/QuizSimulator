@@ -15,7 +15,6 @@ import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, pri
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
-import { AutoAdvanceBar } from "@/components/play/AutoAdvanceBar";
 import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
@@ -392,7 +391,7 @@ function PlayView() {
   }
 
   return (
-    <ThemeShell narrow={mobile} theme={questionTheme(quiz.theme, phase === "asking" || phase === "revealed" ? question : undefined)}>
+    <ThemeShell narrow={mobile} frameOnly={phase === "asking" || phase === "revealed"} theme={questionTheme(quiz.theme, phase === "asking" || phase === "revealed" ? question : undefined)}>
       {phase === "countdown" && <div className="min-h-dvh" aria-label="Quiz starting" />}
       {phase === "intro" && (
         <div
@@ -443,8 +442,8 @@ function PlayView() {
       )}
 
       {(phase === "asking" || phase === "revealed") && question && (
-        <div className="flex h-dvh min-h-0 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1">
+        <div className="relative h-dvh min-h-0 overflow-hidden">
+          <div className="absolute inset-0">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={question.id}
@@ -479,12 +478,14 @@ function PlayView() {
                 interactive={stageLive && !isUnscoredImage(question)}
                 onPick={handlePick}
                 onRevealComplete={() => setCompletedRevealRun(runKey)}
+                countdownSeconds={autoAdvanceReady && showsAutoAdvanceCountdown(quiz.settings) ? holdSeconds : undefined}
               />
             </motion.div>
           </AnimatePresence>
 
           </div>
-          <div className="flex shrink-0 justify-center gap-3 px-4 py-2">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[env(safe-area-inset-bottom)]">
+          <div className="pointer-events-auto flex shrink-0 justify-center gap-3 rounded-xl bg-black/50 px-4 py-2">
             <MuteButton />
             {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
             {phase === "asking" && question.kind === "multi-select" && !isSingleAnswer(question) && (
@@ -499,20 +500,9 @@ function PlayView() {
             )}
           </div>
 
-          {autoAdvanceReady && showsAutoAdvanceCountdown(quiz.settings) && (
-            <AutoAdvanceBar
-              key={`advance-${question.id}`}
-              seconds={holdSeconds}
-              label={index + 1 >= order.length ? "results" : "next question"}
-              message={quiz.settings.autoAdvanceMessage}
-              styleName={quiz.settings.autoAdvanceBarStyle}
-              color={quiz.settings.autoAdvanceColor}
-              trackColor={quiz.settings.autoAdvanceTrackColor}
-            />
-          )}
           {!autoAdvanceReady && (
             // Keyboard shortcuts are noise on a phone; touch wording is noise on a desktop.
-            <p className="shrink-0 px-4 pb-2 text-center text-xs text-ink-500">
+            <p className="shrink-0 rounded bg-black/50 px-4 pb-2 text-center text-xs text-white">
               {isUnscoredImage(question) ? (limit === null ? "Look at the images, then continue when ready" : "Look and decide · next slide when the timer ends") : mobile
                 ? phase === "asking"
                   ? question.kind === "image-choice" || question.kind === "reveal"
@@ -528,6 +518,7 @@ function PlayView() {
                   : "Press Enter for the next question"}
             </p>
           )}
+          </div>
 
         </div>
       )}

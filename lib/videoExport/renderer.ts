@@ -201,6 +201,11 @@ export class FrameRenderer {
   private stageRects: Partial<Record<StageLayoutItem, { x: number; y: number; w: number; h: number }>> = {};
   /** Transient builder edits; never mutate the saved quiz or export settings. */
   private stageDrafts: Partial<Record<StageLayoutItem, StageItemPlacement>> = {};
+  private previewCountdown = false;
+
+  showCountdownInPreview(show: boolean): void {
+    this.previewCountdown = show;
+  }
   private stageFit = 1;
   private stageTop = 0;
   private captureAnswers = false;
@@ -613,7 +618,7 @@ export class FrameRenderer {
     const showsButton =
       (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && current.question.kind === "multi-select" && !isSingleAnswer(current.question));
     const buttonRow = 32 + (showsButton ? 48 : 0);
-    const barShown = current.timeoutBar && t >= current.revealAt + celebrationDelayMs(current.question);
+    const barShown = current.timeoutBar && t >= (current.countdownAt ?? current.revealAt + celebrationDelayMs(current.question));
     const bottom = barShown ? 42 : 32;
 
     const qpH = progressBox ? progressBox.h + 20 : 0;
@@ -642,7 +647,7 @@ export class FrameRenderer {
     stage.draw(x0, qpH);
     ctx.restore();
 
-    if (barShown) this.drawTimeoutBar(current, t, x0, qpH + stage.h + buttonRow + 16, CW);
+    if (barShown || (this.previewCountdown && this.quiz.settings.showAutoAdvanceCountdown)) this.drawTimeoutBar(current, t, x0, qpH + stage.h + buttonRow + 16, CW);
     // Outside the question swap, still inside the fit, so a dragged timer stays
     // put on the video frame and scales with the rest of that frame.
     this.drawFreeTimer(shown, t, fit, top);
@@ -659,7 +664,7 @@ export class FrameRenderer {
   }
 
   previewStagePlacement(item: StageLayoutItem, point: StageItemPlacement | null): void {
-    if (point) this.stageDrafts[item] = clampStagePlacement(point);
+    if (point) this.stageDrafts[item] = clampStagePlacement(point, item);
     else delete this.stageDrafts[item];
   }
 
@@ -717,11 +722,23 @@ export class FrameRenderer {
   /** AutoAdvanceBar. */
   private drawTimeoutBar(run: QuestionRun, t: number, x0: number, y: number, CW: number) {
     const total = Math.max(1, run.holdSeconds);
-    const since = t - run.revealAt - celebrationDelayMs(run.question);
+    const since = Math.max(0, t - (run.countdownAt ?? run.revealAt + celebrationDelayMs(run.question)));
     const left = Math.max(0, total - Math.floor(since / 1000));
     const isLast = run.index + 1 >= this.timeline.questions.length;
     const w = Math.min(320, CW);
     const x = x0 + (CW - w) / 2;
+    const placed = this.stageDrafts.countdown ?? stagePlacementFor(this.quiz.settings, run.question, this.stageView, "countdown");
+    this.ctx.save();
+    if (placed) {
+      const rect = placementRect(placed, this.W, this.H);
+      this.stageRects.countdown = rect;
+      this.ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+      this.ctx.translate(rect.x, rect.y);
+      this.ctx.scale(rect.w / w, rect.h / 32);
+      this.ctx.translate(-x, -y);
+    } else {
+      this.stageRects.countdown = { x: this.W / 2 + (x - this.W / 2) * this.stageFit, y: this.stageTop + y * this.stageFit, w: w * this.stageFit, h: 32 * this.stageFit };
+    }
     const font = this.font(600, 12);
     const message = autoAdvanceMessage(this.quiz.settings.autoAdvanceMessage, isLast ? "results" : "next question", left);
     this.drawLine(message, x + w / 2, y, 16, font, this.ink[400], "center");
@@ -741,6 +758,7 @@ export class FrameRenderer {
       this.fillRR(x, y + 24, w, h, h / 2, track);
       if (fraction > 0) this.fillRR(x, y + 24, w * fraction, h, h / 2, fill);
     }
+    this.ctx.restore();
   }
 
   /* ------------------------------------------------------- quiz progress */

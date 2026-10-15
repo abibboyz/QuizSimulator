@@ -153,6 +153,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
     let renderer: FrameRenderer;
     try {
       renderer = new FrameRenderer(canvas, timeline, quiz, framing, assets);
+      renderer.showCountdownInPreview(true);
     } catch (error) {
       console.error(error);
       return;
@@ -320,7 +321,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
     const dx = (event.clientX - drag.startX) / box.width * frame.cssWidth;
     const dy = (event.clientY - drag.startY) / box.height * frame.cssHeight;
     const minW = frame.cssWidth * 0.1;
-    const minH = frame.cssHeight * 0.08;
+    const minH = frame.cssHeight * (drag.item === "countdown" ? 0.02 : 0.08);
     const rect = drag.mode === "move"
       ? { ...drag.rect, x: Math.min(frame.cssWidth - drag.rect.w, Math.max(0, drag.rect.x + dx)), y: Math.min(frame.cssHeight - drag.rect.h, Math.max(0, drag.rect.y + dy)) }
       : { ...drag.rect, w: Math.min(frame.cssWidth - drag.rect.x, Math.max(minW, drag.rect.w + dx)), h: Math.min(frame.cssHeight - drag.rect.y, Math.max(minH, drag.rect.h + dy)) };
@@ -383,7 +384,7 @@ export function FramedPreview({ quiz, index, framing, onTimerPlace, layoutEditin
           aria-hidden
           className="pointer-events-none absolute z-20 hidden h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink-950 bg-white shadow"
         />
-        {layoutEditing && (["question", "answers"] as const).map((item) => {
+        {layoutEditing && (["question", "answers", "countdown"] as const).map((item) => {
           const rect = stageRects[item];
           if (!rect) return null;
           return <div key={item} role="button" tabIndex={0} aria-label={`Drag ${item} area`}

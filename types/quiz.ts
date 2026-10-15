@@ -138,7 +138,7 @@ export type QuizProgressStyle = "none" | "bar" | "colorful" | "segments" | "dots
 export type QuestionKind = "multiple-choice" | "true-false" | "multi-select" | "image-choice" | "reveal";
 
 export type StageLayoutView = "web" | "mobile";
-export type StageLayoutItem = "question" | "answers";
+export type StageLayoutItem = "question" | "answers" | "countdown";
 export interface StageItemPlacement {
   /** Top-left and size as percentages of the responsive stage. */
   x: number;

@@ -10,6 +10,7 @@ export interface LiveFrameState {
   correct: boolean;
   outcomes: (boolean | null)[];
   exitAt?: number;
+  countdown?: { at: number; seconds: number };
 }
 
 /** Adapt a privately owned export timeline to actual player/host events.
@@ -29,7 +30,9 @@ export function syncLiveTimeline(timeline: Timeline, state: LiveFrameState): voi
     run.exitAt = current ? state.exitAt ?? Infinity : Infinity;
     run.animateOut = current && state.exitAt !== undefined;
     run.advanceAt = Infinity;
-    run.timeoutBar = false; // live controls own the actual auto-advance clock
+    run.timeoutBar = current && !!state.countdown;
+    run.countdownAt = current ? state.countdown?.at : undefined;
+    if (current && state.countdown) run.holdSeconds = state.countdown.seconds;
     run.revealAt = current ? state.revealAt ?? Infinity : previous ? run.enterAt : Infinity;
     run.correct = current ? state.correct : state.outcomes[index] === true;
     run.picks = current ? state.picks : [];
