@@ -19,10 +19,35 @@ function stripNew(timeline: ReturnType<typeof buildTimeline>) {
 
 const golden = JSON.parse(readFileSync(new URL("./legacyTimeline.golden.json", import.meta.url), "utf8")) as Record<string, unknown>;
 
+/**
+ * The one intended difference from main: a Reveal question's hold now lasts until
+ * its picture has finished uncovering (`completeRevealHold`). On main the fixture's
+ * 1.5 s source wait + 1 s uncover was cut off by the 2 s hold. Everything else —
+ * every other question kind, and everything before that hold — must still match main.
+ */
+function withCompleteRevealHold(main: unknown) {
+  const copy = JSON.parse(JSON.stringify(main));
+  const reveal = copy.questions.find((run: { question: { kind: string } }) => run.question.kind === "reveal");
+  const from = reveal.advanceAt as number;
+  const extraMs = (3 - reveal.holdSeconds) * 1000;
+  reveal.holdSeconds = 3;
+  const shift = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(shift);
+    if (!node || typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node)) {
+      if (typeof value === "number" && ["at", "start", "end", "advanceAt", "exitAt", "durationMs"].includes(key) && value >= from) {
+        (node as Record<string, number>)[key] = value + extraMs;
+      } else shift(value);
+    }
+  };
+  shift(copy);
+  return copy;
+}
+
 for (const mode of ["pick-correct", "timeout"] as const) {
-  test(`existing question types: ${mode} timeline is identical to the one main produced`, () => {
+  test(`existing question types: ${mode} timeline matches main except the full Reveal hold`, () => {
     const timeline = buildTimeline(legacyQuiz(), { answerMode: mode, sound: false });
-    assert.deepEqual(stripNew(timeline), golden[mode]);
+    assert.deepEqual(stripNew(timeline), withCompleteRevealHold(golden[mode]));
   });
 }
 

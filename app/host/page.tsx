@@ -12,6 +12,7 @@ import type { Question, Quiz } from "@/types/quiz";
 import { getQuiz } from "@/lib/storage";
 import { shuffled } from "@/lib/scoring";
 import { initSound, playCorrect, playCue, playUrgentTick, playWhoosh } from "@/lib/sound";
+import { completeRevealHold } from "@/lib/autoAdvance";
 import { resolveReveal } from "@/lib/reveal";
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
@@ -279,12 +280,14 @@ function HostQuestion({
     return () => window.clearTimeout(id);
   }, [unscored, autoReveal, single, expired, revealed, reveal]);
 
+  const revealHold = autoAdvanceSeconds === null ? null : completeRevealHold(autoAdvanceSeconds, question);
+
   // Hands-free run: roll on to the next question by itself.
   useEffect(() => {
-    if (!revealed || autoAdvanceSeconds === null || isLast || (question.celebration?.enabled && !celebrationReady)) return;
-    const id = window.setTimeout(advance, autoAdvanceSeconds * 1000);
+    if (!revealed || revealHold === null || isLast || (question.celebration?.enabled && !celebrationReady)) return;
+    const id = window.setTimeout(advance, revealHold * 1000);
     return () => window.clearTimeout(id);
-  }, [revealed, autoAdvanceSeconds, isLast, advance, question.celebration?.enabled, celebrationReady]);
+  }, [revealed, revealHold, isLast, advance, question.celebration?.enabled, celebrationReady]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -326,7 +329,7 @@ function HostQuestion({
           onRevealComplete={() => setRevealComplete(true)}
           // Star or Go in host mode: the room sees the stars appear and talks it through; there is no per-player tally.
           stars={revealed && question.kind === "star-collect" ? { earned: resolveGame(question).stars, choice: null, pot: resolveGame(question).stars, goWorth: resolveGame(question).stars * 2, after: INITIAL_STARS } : undefined}
-          countdownSeconds={showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? autoAdvanceSeconds : undefined}
+          countdownSeconds={showAutoAdvanceCountdown && revealed && autoAdvanceSeconds !== null && !isLast && (!question.celebration?.enabled || celebrationReady) ? revealHold ?? undefined : undefined}
         />
       </div>
 

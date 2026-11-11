@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Question, QuestionKind, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { validateQuiz } from "@/types/quiz";
+import { BufferedSave } from "@/lib/bufferedSave";
 import { getQuiz, saveQuiz } from "@/lib/storage";
 import { createQuestion, duplicateQuestion } from "@/lib/factory";
 import { exportQuizFile } from "@/lib/transfer";
@@ -26,7 +27,7 @@ import { DEFAULT_PREVIEW_FRAME, type PreviewFrame } from "@/lib/previewFrame";
 import { AnimationsPanel } from "@/components/builder/AnimationsPanel";
 
 type Tab = "preview" | "theme" | "settings" | "animate";
-type SaveState = "clean" | "saving" | "saved";
+type SaveState = "clean" | "saving" | "saved" | "error";
 
 // useSearchParams needs a Suspense boundary above it.
 export default function EditPage() {
@@ -97,18 +98,27 @@ function EditView() {
     };
   }, [quizId]);
 
-  // Debounced autosave. 500ms is long enough to coalesce typing, short enough
-  // that closing the tab mid-thought doesn't cost anything.
+  const [saver] = useState(() => new BufferedSave<Quiz>(saveQuiz, setSaveState));
+  const flushSave = useCallback(() => { void saver.flush(); }, [saver]);
+
+  // Flush the newest snapshot on route changes and when the page is hidden.
+  useEffect(() => {
+    const onHidden = () => { if (document.visibilityState === "hidden") flushSave(); };
+    window.addEventListener("pagehide", flushSave);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      flushSave();
+      window.removeEventListener("pagehide", flushSave);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+  }, [flushSave, quizId]);
+
   useEffect(() => {
     if (!quiz || !dirtyRef.current) return;
-    setSaveState("saving");
-
-    const timer = window.setTimeout(() => {
-      void saveQuiz(quiz).then(() => setSaveState("saved"));
-    }, 500);
-
+    saver.update(quiz);
+    const timer = window.setTimeout(flushSave, 500);
     return () => window.clearTimeout(timer);
-  }, [quiz]);
+  }, [quiz, flushSave, saver]);
 
   const mutate = useCallback((updater: (current: Quiz) => Quiz) => {
     dirtyRef.current = true;
@@ -292,7 +302,7 @@ function EditView() {
           />
 
           <span className="text-xs text-ink-500" aria-live="polite">
-            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
+            {saveState === "error" ? <button onClick={flushSave}>Save failed — retry</button> : saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </span>
 
           <div className="flex flex-wrap gap-2">
@@ -427,6 +437,7 @@ function EditView() {
             {tab === "preview" &&
               (active ? (
                 <PreviewPane
+                  key={active.id}
                   quiz={quiz}
                   question={active}
                   index={activeIndex}

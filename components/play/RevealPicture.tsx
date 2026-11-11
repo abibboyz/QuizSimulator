@@ -6,7 +6,7 @@ import { useMediaUrl } from "@/hooks/useMediaUrl";
 import { useElapsedSince } from "@/hooks/useElapsedSince";
 import { captionPose, resolveReveal, revealAspect, revealFallbackColor, revealProgress } from "@/lib/reveal";
 import { createRevealEnv, drawReveal, type RevealDrawEnv, type RevealFit, type RevealSource } from "@/lib/revealDraw";
-import { POP_IN } from "@/lib/playTiming";
+import { POP_IN, REVEAL_TIMING } from "@/lib/playTiming";
 import { canvasBackingSize } from "@/lib/canvasSize";
 
 interface Props {
@@ -29,10 +29,12 @@ interface Props {
   fit?: RevealFit;
   /** Fires after the answer picture has finished uncovering. */
   onRevealComplete?: () => void;
+  /** Share the decode-gated clock with a caption outside the picture. */
+  onElapsed?: (elapsed: number | null) => void;
 }
 
 /** How long a reveal waits for its pictures to decode before going ahead without them. */
-const SOURCE_WAIT_MS = 1500;
+const SOURCE_WAIT_MS = REVEAL_TIMING.sourceWaitMs;
 
 function refKey(ref: Question["media"]): string {
   if (!ref) return "";
@@ -80,6 +82,7 @@ export function RevealPicture({
   radius = 16,
   fit,
   onRevealComplete,
+  onElapsed,
 }: Props) {
   const reveal = question.reveal;
   const settings = useMemo(() => resolveReveal({ reveal }), [reveal]);
@@ -102,6 +105,9 @@ export function RevealPicture({
   const ready = sourcesReady || gaveUpOn === sourcesKey;
 
   const elapsed = useElapsedSince(ready ? revealKey : null, settings.durationMs + POP_IN.durationMs, instant);
+  useEffect(() => {
+    onElapsed?.(elapsed);
+  }, [elapsed, onElapsed]);
   const progress = revealProgress(elapsed, settings.durationMs);
   const caption = captionClass !== null && settings.caption ? settings.caption : null;
   const capPose = captionPose(elapsed, settings.durationMs);
@@ -216,6 +222,8 @@ interface CaptionProps {
   revealKey: string | null;
   instant?: boolean;
   className?: string;
+  /** Null holds the caption hidden while the picture is loading. */
+  elapsed?: number | null;
 }
 
 /**
@@ -223,8 +231,9 @@ interface CaptionProps {
  * the start (nothing jumps when it lands), and it pops in with `captionPose`
  * once the uncover finishes — the same function and moment the exporter uses.
  */
-export function RevealCaption({ settings, revealKey, instant = false, className = "" }: CaptionProps) {
-  const elapsed = useElapsedSince(revealKey, settings.durationMs + POP_IN.durationMs, instant);
+export function RevealCaption({ settings, revealKey, instant = false, className = "", elapsed: sharedElapsed }: CaptionProps) {
+  const ownElapsed = useElapsedSince(sharedElapsed === undefined ? revealKey : null, settings.durationMs + POP_IN.durationMs, instant);
+  const elapsed = sharedElapsed === undefined ? ownElapsed : sharedElapsed;
   if (!settings.caption) return null;
   const pose = captionPose(elapsed, settings.durationMs);
   return (

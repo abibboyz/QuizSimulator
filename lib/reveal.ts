@@ -48,6 +48,9 @@ export const REVEAL_ANIMATIONS: Record<RevealAnimation, RevealAnimationInfo> = {
   "wipe-right": { label: "Wipe → right", usesCover: true },
   "wipe-up": { label: "Wipe ↑ up", usesCover: true },
   "wipe-down": { label: "Wipe ↓ down", usesCover: true },
+  "wipe-center": { label: "Wipe from center", usesCover: true },
+  blinds: { label: "Horizontal blinds", usesCover: true, tilesLabel: "Number of slats" },
+  dissolve: { label: "Mosaic dissolve", usesCover: true, tilesLabel: "Pieces across" },
   iris: { label: "Iris / spotlight", usesCover: true, usesFocus: true },
   shatter: { label: "Shatter", usesCover: true, tilesLabel: "Pieces across" },
   fade: { label: "Cross-fade", usesCover: true },
@@ -317,4 +320,10 @@ export function captionPose(
 ): { opacity: number; y: number; scale: number } {
   const p = popEase(captionProgress(sinceReveal, durationMs, POP_IN.durationMs));
   return { opacity: p, y: 8 * (1 - p), scale: lerp(0.97, 1, p) };
+}
+
+/** Seeded dissolve order: stable for scrubbing, replay and video export. */
+export function dissolveOpacity(p: number, column: number, row: number): number {
+  const delay = mulberry32((column + 1) * 73856093 ^ (row + 1) * 19349663)() * 0.7;
+  return 1 - clamp01((clamp01(p) - delay) / 0.3);
 }

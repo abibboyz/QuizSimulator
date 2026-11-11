@@ -1,4 +1,6 @@
-import type { QuizSettings } from "@/types/quiz";
+import { resolveReveal } from "./reveal.ts";
+import { POP_IN, REVEAL_TIMING } from "./playTiming.ts";
+import type { Question, QuizSettings } from "@/types/quiz";
 import type { AnswerRecord } from "@/lib/store/playSession";
 import type { Phase } from "@/lib/store/playSession";
 
@@ -45,4 +47,13 @@ export function showsAutoAdvanceCountdown(
   settings: Pick<QuizSettings, "showAutoAdvanceCountdown"> | undefined,
 ): boolean {
   return settings?.showAutoAdvanceCountdown === true;
+}
+
+/** Allow decoding plus the complete uncover and caption before automatic navigation. */
+export function completeRevealHold(seconds: number, question?: Question): number {
+  if (question?.kind !== "reveal") return seconds;
+  const reveal = resolveReveal(question);
+  // Leave a frame-scheduling margin and keep the displayed countdown in whole seconds.
+  const minimumMs = REVEAL_TIMING.sourceWaitMs + reveal.durationMs + (reveal.caption ? POP_IN.durationMs : 0) + 100;
+  return Math.max(seconds, Math.ceil(minimumMs / 1000));
 }

@@ -21,7 +21,7 @@ import { isScored, isSingleAnswer, isUnscoredImage, showsFeedback, unscoredResul
 import type { Cue, CueSlot, MediaRef, Question, Quiz } from "@/types/quiz";
 import { activeCue, cueHoldMs } from "@/lib/cues";
 import { hidesImageBoxes } from "@/lib/imageChoice";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
+import { completeRevealHold, revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { accuracyLabel, scoreQuestion } from "@/lib/scoring";
 import { basePointsFor, isCorrect, timerFor } from "@/lib/store/playSession";
 import {
@@ -367,7 +367,7 @@ export function buildTimeline(quiz: Quiz, options: TimelineOptions): Timeline {
       if (sound && sound !== "custom") audio.push({ at: revealAt, recipe: CUE_SOUND_RECIPES[sound] });
     }
 
-    const holdSeconds = revealHoldSeconds(settings);
+    const holdSeconds = completeRevealHold(revealHoldSeconds(settings), question);
     const timeoutBar = showsAutoAdvanceCountdown(settings) && !unscored && shouldAutoAdvanceAfterTimeout({ ...settings, revealAfterEach: feedbackOn }, "revealed", {
       questionId: question.id,
       selectedIds,

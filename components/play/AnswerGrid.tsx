@@ -138,6 +138,7 @@ export function AnswerGrid({
   onImageAreaChange,
 }: Props) {
   const reduced = useReducedMotion();
+  const [revealElapsed, setRevealElapsed] = useState<number | null>(null);
   const ageBand = themeAgeBand(theme);
   const correctColor = theme.correctColor ?? DEFAULT_CORRECT_COLOR;
   const wrongColor = theme.wrongColor ?? DEFAULT_WRONG_COLOR;
@@ -269,7 +270,8 @@ export function AnswerGrid({
                     <RevealPicture
                       question={{ media: answerMedia, reveal: question.reveal }}
                       theme={theme}
-                      revealKey="reveal"
+                      revealKey={`${question.id}:reveal`}
+                      onElapsed={setRevealElapsed}
                       maxHeight="100%"
                       instant={reduced}
                       onRevealComplete={onRevealComplete}
@@ -315,6 +317,7 @@ export function AnswerGrid({
         </div>
         <RevealCaption
           settings={settings}
+          elapsed={revealed ? revealElapsed : null}
           revealKey={revealed ? `${question.id}:reveal` : null}
           instant={reduced}
           className={`mt-2 text-center font-bold ${captionText}`}

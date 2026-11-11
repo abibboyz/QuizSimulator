@@ -15,7 +15,7 @@ import { initSound, playCorrect, playCue, playSelect, playWhoosh, playWrong, pri
 import { questionTheme } from "@/lib/questionPresentation";
 import { ThemeShell } from "@/components/ui/ThemeShell";
 import { ResultsScreen } from "@/components/play/ResultsScreen";
-import { revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
+import { completeRevealHold, revealHoldSeconds, shouldAutoAdvanceAfterTimeout, showsAutoAdvanceCountdown } from "@/lib/autoAdvance";
 import { Button } from "@/components/ui/Button";
 import { DEFAULT_THEME } from "@/lib/themes";
 import { ViewModeToggle, VIEW_KEY, type ViewMode } from "@/components/ui/ViewModeToggle";
@@ -303,7 +303,7 @@ function PlayView() {
     ? !isUnscoredImage(question) && shouldAutoAdvanceAfterTimeout({ ...quiz.settings, revealAfterEach: showsFeedback(quiz.settings, question) }, phase, answers[answers.length - 1])
     : false;
   const autoAdvanceReady = advancingAfterTimeout && (!question?.celebration?.enabled || celebrationReady);
-  const holdSeconds = quiz ? revealHoldSeconds(quiz.settings) : 5;
+  const holdSeconds = quiz ? completeRevealHold(revealHoldSeconds(quiz.settings), question) : 5;
 
   useEffect(() => {
     if (!autoAdvanceReady) return;

@@ -67,3 +67,14 @@ test("timeout copy is customizable without losing the live action or seconds", (
   assert.equal(autoAdvanceMessage("🚀 {action} starts in {seconds}!", "round two", 3), "🚀 round two starts in 3!");
   assert.equal(autoAdvanceMessage("Take a breath 🧠", "ignored", 9), "Take a breath 🧠");
 });
+
+test("automatic navigation lets long reveals and captions finish without changing other question types", async () => {
+  const { completeRevealHold } = await import("./autoAdvance.ts");
+  const { createQuestion } = await import("./factory.ts");
+  const question = createQuestion("reveal");
+  question.reveal = { durationMs: 6000, caption: "Answer" };
+  assert.equal(completeRevealHold(1, question), 8);
+  assert.equal(completeRevealHold(10, question), 10);
+  assert.equal(completeRevealHold(1, createQuestion("multiple-choice")), 1);
+  assert.equal(completeRevealHold(5), 5);
+});

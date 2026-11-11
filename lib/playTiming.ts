@@ -146,6 +146,7 @@ export const STAGE_MOTION = {
 
 /** Reveal questions: defaults and clamps for the uncovering animation (`lib/reveal.ts`). */
 export const REVEAL_TIMING = {
+  sourceWaitMs: 1500,
   defaultMs: 1200,
   minMs: 200,
   maxMs: 6000,

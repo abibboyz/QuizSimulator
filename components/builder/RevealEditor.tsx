@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { CueSound, Question, RevealAnimation, RevealSettings, Theme } from "@/types/quiz";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
 import { Button } from "@/components/ui/Button";
 import { MediaDropZone } from "@/components/builder/MediaDropZone";
+import { MediaImage } from "@/components/ui/MediaImage";
 import { RevealCaption, RevealPicture } from "@/components/play/RevealPicture";
 import { REVEAL_TILE } from "@/lib/revealDraw";
 import {
@@ -40,6 +41,7 @@ function clampNum(raw: string, min: number, max: number, fallback: number, round
 export function RevealEditor({ question, theme, onChange }: Props) {
   const settings = resolveReveal(question);
   const info = REVEAL_ANIMATIONS[settings.animation];
+  const [elapsed, setElapsed] = useState<{ key: string | null; ms: number | null } | null>(null);
   const [run, setRun] = useState<number | null>(null);
   const correct = question.options.find((option) => option.correct) ?? question.options[0];
   const answerMedia = correct ? revealAnswerMedia(question, correct) : undefined;
@@ -58,6 +60,9 @@ export function RevealEditor({ question, theme, onChange }: Props) {
     run === null
       ? null
       : `${run}|${settings.animation}|${settings.durationMs}|${settings.tiles}|${settings.zoom}|${settings.focusX}|${settings.focusY}|${settings.coverFallback}`;
+  const onElapsed = useCallback((ms: number | null) => {
+    setElapsed({ key: revealKey, ms });
+  }, [revealKey]);
 
   return (
     <div className="space-y-4">
@@ -73,18 +78,28 @@ export function RevealEditor({ question, theme, onChange }: Props) {
             preview shows the real crop, corners and start frame. */}
         <div className="mx-auto w-full max-w-[16rem]">
           <div className="relative block aspect-[3/2] w-full overflow-hidden rounded-md bg-white">
-            <RevealPicture
-              question={{ media: answerMedia, reveal: question.reveal }}
-              theme={theme}
-              revealKey={revealKey}
-              maxHeight="100%"
-              fill
-              radius={REVEAL_TILE.radius}
-              fit={REVEAL_TILE}
-            />
+            {settings.cover ? (
+              <MediaImage media={settings.cover} className="h-full w-full object-contain" />
+            ) : (
+              <span className="grid h-full w-full place-items-center text-3xl font-bold text-ink-500">?</span>
+            )}
+            {revealKey !== null && (
+              <RevealPicture
+                key={revealKey}
+                onElapsed={onElapsed}
+                question={{ media: answerMedia, reveal: question.reveal }}
+                theme={theme}
+                revealKey={revealKey}
+                maxHeight="100%"
+                fill
+                radius={REVEAL_TILE.radius}
+                fit={REVEAL_TILE}
+              />
+            )}
           </div>
           <RevealCaption
             settings={settings}
+            elapsed={revealKey !== null && elapsed?.key === revealKey ? elapsed.ms : null}
             revealKey={revealKey}
             className="mt-2 text-center text-xs font-bold md:text-sm"
           />
@@ -99,7 +114,7 @@ export function RevealEditor({ question, theme, onChange }: Props) {
             <Button variant="ghost" size="sm" onClick={() => setRun(null)} disabled={run === null}>
               Cover
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setRun((n) => (n ?? 0) + 1)}>
+            <Button variant="outline" size="sm" onClick={() => { setElapsed(null); setRun((n) => (n ?? 0) + 1); }}>
               ▶ Play reveal
             </Button>
           </div>
