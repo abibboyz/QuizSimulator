@@ -1,6 +1,11 @@
 /** Core data model. Everything the app stores or exports is described here. */
 
 /**
+ * The answer mark (`answerMark`: circle and pop, no fading) and picture-grid
+ * `imageColumns` do NOT raise the stamp on purpose: a build without them ignores
+ * both and still plays the quiz correctly (classic reveal, automatic grid), so
+ * quizzes made with them keep opening in the main app.
+ * 12 adds image questions with several right answers (pick all of them).
  * 11 adds the game question types (memory-flip, pop-match, star-collect,
  * drag-match, sequence, timed-reveal) and the optional per-question `game`
  * settings. Older builds would not know these kinds, so such files are stamped 11.
@@ -21,7 +26,7 @@
  * it looked like before. The bump only stops an older build from importing a
  * quiz it can't draw — see `schemaVersionFor`.
  */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 /**
  * The oldest schema that can faithfully carry this quiz. Export files are
@@ -31,6 +36,8 @@ export const SCHEMA_VERSION = 11;
  * its hidden picture on show.
  */
 export function schemaVersionFor(quiz: Pick<Quiz, "questions" | "settings"> & Partial<Pick<Quiz, "theme">>): number {
+  // Older builds refuse an image question with several right answers, so such files say so up front.
+  if (quiz.questions.some((q) => q.kind === "image-choice" && q.options.filter((o) => o.correct).length > 1)) return 12;
   if (quiz.questions.some((q) => (GAME_KIND_LIST as readonly string[]).includes(q.kind))) return 11;
   if (quiz.settings.stageLayout || quiz.questions.some((q) => q.stageLayout || q.timerPlacement)) return 10;
   if (quiz.questions.some((q) => q.promptArea || q.imageArea || ((q.kind === "multiple-choice" || q.kind === "multi-select") && q.options.length > 6))) return 9;
@@ -401,6 +408,14 @@ export interface Option {
 }
 
 /** What to draw in the little badge on each answer tile. */
+/** How the correct answer is marked on reveal (lib/answerMark). `classic` is the original look. */
+export type AnswerMarkStyle = "classic" | "circle";
+export interface AnswerMark {
+  style: AnswerMarkStyle;
+  /** Circle colour. Unset is a bright red. */
+  color?: string;
+}
+
 export type OptionMarker = "shapes" | "letters" | "numbers" | "bullets" | "none";
 
 export interface AnswerTextStyle {
@@ -532,6 +547,19 @@ export interface Question {
   imageJoinerStyle?: Question["promptStyle"];
   /** Overrides the quiz-level timer. `null` means untimed. */
   timerSeconds?: number | null;
+  /** Overrides the quiz-wide answer mark for this question. */
+  answerMark?: AnswerMark;
+  /**
+   * With several right answers and the circle mark: circle them one after
+   * another (`one-by-one`, the default) or all at once (`together`).
+   * Question-level only.
+   */
+  circleOrder?: "one-by-one" | "together";
+  /**
+   * Picture grids (image-choice, reveal): pictures per row, 1–20. Unset keeps
+   * the automatic, roughly square grid. Ignored while words sit between pictures.
+   */
+  imageColumns?: number;
   /** Overrides the quiz-level base points. */
   points?: number;
   /** Overrides the quiz-wide cues, slot by slot. */
@@ -745,6 +773,11 @@ export interface QuizSettings {
   showProgressBar?: boolean;
   /** Quiz-wide question/answer animations. Absent = today's motion. */
   motion?: MotionOverrides;
+  /**
+   * How the correct answer is marked on reveal. Unset is the classic look (the
+   * other answers fade); new quizzes start with the circle, which fades nothing.
+   */
+  answerMark?: AnswerMark;
 }
 
 export interface Quiz {
@@ -823,17 +856,7 @@ export function validateQuiz(quiz: Quiz): ValidationIssue[] {
           message: single ? `${label} needs a picture for its answer.` : `${label} needs at least 2 answers with images.`,
         });
       }
-      const correctCount = q.options.filter((o) => o.correct).length;
-      if (correctCount > 1) {
-        issues.push({
-          questionId: q.id,
-          severity: "error",
-          message:
-            correctCount === 0
-              ? `${label} has no correct answer marked.`
-              : `${label} must have exactly one correct answer.`,
-        });
-      }
+      // Several right answers make it pick-all ("find the odd ones out"); none is a timed image slide.
     } else if (q.kind === "reveal") {
       if (q.options.length > 100) {
         issues.push({

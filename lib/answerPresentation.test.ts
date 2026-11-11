@@ -50,8 +50,9 @@ test("only image-choice accepts zero correct answers; choosing a correct image r
   quiz.questions[0].options[0].correct = true;
   assert.equal(isUnscoredImage(quiz.questions[0]), false);
   assert.deepEqual(validateQuiz(quiz), []);
+  // Schema 12: two ticks make it a pick-all picture question ("find the odd ones out"), which is valid.
   quiz.questions[0].options[1].correct = true;
-  assert.ok(validateQuiz(quiz).some((i) => /exactly one/.test(i.message)));
+  assert.deepEqual(validateQuiz(quiz).filter((i) => i.severity === "error"), []);
 });
 
 test("unscored image timeout leaves score and streak intact and records a neutral result", () => {

@@ -15,7 +15,7 @@ const q = (kind: Question["kind"], correct: number[], id = kind as string, n = 4
 /* ----------------------------------------------------------- schema / migration */
 
 test("schema: version 11 carries the game kinds, and only a game kind raises the stamp", () => {
-  assert.equal(SCHEMA_VERSION, 11);
+  assert.equal(SCHEMA_VERSION, 12, "12 = image questions with several right answers (lib/answerMark.test.ts)");
   assert.equal(schemaVersionFor(legacyQuiz()), 2, "an existing quiz keeps the stamp it always had (so older builds still open it)");
   for (const kind of GAME_KIND_LIST) assert.equal(schemaVersionFor(quizOf(q(kind, kind === "sequence" ? [0, 1, 2, 3] : [0]))), 11, kind);
   // Leftover game settings on a classic question (e.g. after switching kind back) do not change the stamp.

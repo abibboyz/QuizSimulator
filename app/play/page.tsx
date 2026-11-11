@@ -2,7 +2,7 @@
 
 import { LiveStage } from "@/components/play/LiveStage";
 
-import { isSingleAnswer, isUnscoredImage, showsFeedback } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage, picksAll, showsFeedback } from "@/lib/answerPresentation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -335,7 +335,7 @@ function PlayView() {
       }
       // Single-answer questions lock in on click; multi-select waits for Submit
       // (a lone multi-select answer behaves like multiple choice).
-      if (current?.kind !== "multi-select" || isSingleAnswer(current)) {
+      if (!picksAll(current)) {
         usePlaySession.getState().submit(elapsed);
       }
     },
@@ -369,7 +369,7 @@ function PlayView() {
           event.preventDefault();
           handlePick(current.options[n - 1].id);
         }
-        if ((event.key === "Enter" || event.key === " ") && (isUnscoredImage(current) && limit === null || current.kind === "multi-select" && state.selected.length || isGameKind(current.kind) && pickMode(current) !== "single" && state.selected.length)) {
+        if ((event.key === "Enter" || event.key === " ") && (isUnscoredImage(current) && limit === null || picksAll(current) && state.selected.length || isGameKind(current.kind) && pickMode(current) !== "single" && state.selected.length)) {
           event.preventDefault();
           submitAnswer();
         }
@@ -522,7 +522,7 @@ function PlayView() {
           <div className="pointer-events-auto flex shrink-0 justify-center gap-3 rounded-xl bg-black/50 px-4 py-2">
             <MuteButton />
             {phase === "asking" && isUnscoredImage(question) && limit === null && <Button variant="primary" size="lg" onClick={submitAnswer}>Continue →</Button>}
-            {phase === "asking" && (question.kind === "multi-select" && !isSingleAnswer(question) || isGameKind(question.kind) && pickMode(question) !== "single") && (
+            {phase === "asking" && (picksAll(question) || isGameKind(question.kind) && pickMode(question) !== "single") && (
               <Button variant="primary" size="lg" disabled={!selected.length} onClick={submitAnswer}>
                 Submit answer
               </Button>

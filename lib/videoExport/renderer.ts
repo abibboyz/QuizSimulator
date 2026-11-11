@@ -1,5 +1,5 @@
 import { createPromptDrawing, joinerDesignWidth, PROMPT_DESIGN_WIDTH } from "../promptRenderer.ts";
-import { answerBoxScale, answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, showsFeedback } from "../answerPresentation.ts";
+import { answerBoxScale, answerTextStyle, isScored, isSingleAnswer, isUnscoredImage, picksAll, showsFeedback } from "../answerPresentation.ts";
 /**
  * Draws one frame of a solo run onto a canvas, from nothing but a timestamp.
  *
@@ -28,7 +28,8 @@ import { questionTheme, promptPosition } from "@/lib/questionPresentation";
 import type { CelebrationAnimation, Cue, MediaRef, Option, Question, Quiz, StageLayoutItem, StageItemPlacement, TimerPlacement } from "@/types/quiz";
 import { fontFamily, DEFAULT_CORRECT_COLOR, DEFAULT_WRONG_COLOR, getPreset, readableTextOn, withAlpha } from "@/lib/themes";
 import { optionColor, optionMarker, themeAgeBand } from "@/lib/ageBands";
-import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageAreaHeight, imageAreaWidth, imageChoiceColumns, imageColumnLayout, imageJoinerColumnGaps, imageJoinerLabel, imageJoinerStyled } from "@/lib/imageChoice";
+import { DEFAULT_IMAGE_GAP, hidesImageBoxes, imageAreaHeight, imageAreaWidth, imageChoiceColumns, imageColumnLayout, imageJoinerColumnGaps, imageJoinerLabel, imageJoinersActive, imageJoinerStyled } from "@/lib/imageChoice";
+import { ANSWER_MARK_START, ANSWER_MARK_SWEEP, answerMarkAt, circleDelayMs, answerMarkEllipse, fadesOtherAnswers, resolveAnswerMark } from "@/lib/answerMark";
 import { litSteps, mascotOf, METER_STEPS, progressThickness, pulseMs, quizMascotFraction, quizProgressFraction, quizProgressReached, showsPerQuestion, showsProgressBar, timerMascotGeometry, timerProgressStyle } from "@/lib/progress";
 import { clampTimerOrigin, timerPlacementFor, timerScale, timerScaleForEdge, type TimerView } from "@/lib/timerPlacement";
 import { clampStagePlacement, stagePlacementFor } from "@/lib/stageLayout";
@@ -684,7 +685,7 @@ export class FrameRenderer {
     // "mt-8" button row (with Submit / Next when they'd show) and the hint line.
     const revealedNow = t >= current.revealAt;
     const showsButton =
-      (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && current.question.kind === "multi-select" && !isSingleAnswer(current.question)) || (!revealedNow && isGameKind(current.question.kind) && pickMode(current.question) !== "single");
+      (revealedNow && showsFeedback(this.quiz.settings, current.question)) || (!revealedNow && picksAll(current.question)) || (!revealedNow && isGameKind(current.question.kind) && pickMode(current.question) !== "single");
     const buttonRow = 32 + (showsButton ? 48 : 0);
     const barShown = current.timeoutBar && t >= (current.countdownAt ?? current.revealAt + celebrationDelayMs(current.question));
     const bottom = barShown ? 42 : 32;
@@ -1143,6 +1144,8 @@ export class FrameRenderer {
       ? ""
       : q.kind === "multi-select" && !isSingleAnswer(q)
         ? "· PICK ALL THAT APPLY"
+        : picksAll(q)
+          ? "· FIND THEM ALL"
         : q.kind === "image-choice"
           ? isUnscoredImage(q) ? "· LOOK AND DECIDE" : "· PICK AN IMAGE"
           : q.kind === "reveal"
@@ -1550,14 +1553,17 @@ export class FrameRenderer {
       w: CW,
       h,
       draw: (x, y) => {
+        // Circle mark: the correct tile is drawn after the others so its pop and circle sit on top.
+        const circleOn = revealed && !fadesOtherAnswers(resolveAnswerMark(this.quiz.settings, q));
+        const last: (() => void)[] = [];
         let ry = y;
         rows.forEach((row, r) => {
           row.forEach((tile, c) => {
-            this.drawTextTile(
+            const paint = ((ty: number) => () => this.drawTextTile(
               run,
               tile,
               x + c * (colW + gap),
-              ry,
+              ty,
               colW,
               rowH[r],
               t,
@@ -1566,10 +1572,13 @@ export class FrameRenderer {
               font,
               lh,
               markerFont,
-            );
+            ))(ry);
+            if (circleOn && tile.option.correct && !tile.game && !tile.verdict) last.push(paint);
+            else paint();
           });
           ry += rowH[r] + gap;
         });
+        last.forEach((paint) => paint());
       },
     };
   }
@@ -1631,7 +1640,11 @@ export class FrameRenderer {
     const bg = optionColor(i, { band: themeAgeBand(theme), colors: theme.optionColors, override: option.color });
     const showCorrect = tile.verdict ? revealed && tile.verdict === "correct" : revealed && option.correct;
     const showWrong = tile.verdict ? revealed && tile.verdict === "wrong" : revealed && tile.isPicked && !option.correct;
-    const faded = tile.verdict ? false : revealed && !option.correct && !tile.isPicked;
+    const mark = resolveAnswerMark(this.quiz.settings, run.question);
+    const faded = !fadesOtherAnswers(mark) || tile.verdict ? false : revealed && !option.correct && !tile.isPicked;
+    // Circle mark: the correct answer pops in place with a circle round it (drawn last by the grid).
+    const circled = !fadesOtherAnswers(mark) && !tile.verdict && !tile.game && revealed && option.correct;
+    const pop = circled ? answerMarkAt(t - run.revealAt - circleDelayMs(run.question, option.id)) : null;
 
     // `transition-all duration-200`: background, text colour, rings and opacity all ease together.
     const fill = mixColor(bg, showCorrect ? this.good : showWrong ? this.bad : bg, rp);
@@ -1647,7 +1660,8 @@ export class FrameRenderer {
     const ring = revealed ? lerp(ringBefore, showCorrect ? 1 : showWrong ? 0.4 : 0, rp) : ringBefore;
     const glow = showCorrect ? rp : 0;
 
-    const tin = this.tilePose(run, i, t);
+    const basePose = this.tilePose(run, i, t);
+    const tin = pop ? { ...basePose, scale: basePose.scale * pop.scale } : basePose;
     const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
     // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
@@ -1716,17 +1730,20 @@ export class FrameRenderer {
       } else {
         tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, tileText, "left", 0, !!typography.underline));
       }
-      if (tile.showMark) {
+      if (tile.showMark && !circled) {
         this.drawLine((tile.verdict ? tile.verdict === "correct" : option.correct) ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, tileText, "right");
       }
     }), i);
+    if (pop) this.drawAnswerCircle(tileX + tileW / 2, y + h / 2, tileW * pop.scale, h * pop.scale, pop.circle, mark.color);
   }
 
   /** AnswerGrid for image-choice: the numbered picture grid. */
   private imageGridBox(run: QuestionRun, t: number, CW: number, targetHeight?: number): Box {
     const q = run.question;
     const authoredWidth = targetHeight === undefined ? CW * imageAreaWidth(q) : CW;
-    const cols = imageChoiceColumns(q.options.length);
+    // A set column count (Question.imageColumns) applies unless words sit between the pictures.
+    const fixedColumns = imageJoinersActive(q.options.length, q.imageJoiners) ? undefined : q.imageColumns;
+    const cols = imageChoiceColumns(q.options.length, fixedColumns);
     const gap = q.optionGap ?? DEFAULT_IMAGE_GAP;
     const hideImageBoxes = hidesImageBoxes(this.quiz.settings, q);
     const typography = answerTextStyle(this.quiz.theme, q);
@@ -1755,7 +1772,9 @@ export class FrameRenderer {
       const drawing = this.joinerDrawing(text, joinerStyle, joinerFamily);
       return drawing.width * (joinerSize / promptFontSize(joinerStyle, 30));
     });
-    const columns = imageColumnLayout(q.options.length, authoredWidth, gap, colGaps);
+    const columns = imageColumnLayout(q.options.length, authoredWidth, gap, colGaps, fixedColumns);
+    const mark = resolveAnswerMark(this.quiz.settings, q);
+    const fadeOthers = fadesOtherAnswers(mark);
     const colW = columns.colW;
     let boxH = (colW * 2) / 3 * imageAreaHeight(q);
     const unscored = isUnscoredImage(q);
@@ -1800,6 +1819,7 @@ export class FrameRenderer {
       draw: (x, y) => {
         x += (CW - authoredWidth) / 2;
         let ry = y;
+        const circledTiles: (() => void)[] = [];
         rows.forEach((row, r) => {
           row.forEach(({ option, i, caption }, c) => {
             const tx = x + columns.left(c);
@@ -1807,12 +1827,16 @@ export class FrameRenderer {
             const isPicked = pickAt !== null && t >= pickAt;
             const showCorrect = revealed && option.correct;
             const showWrong = !unscored && revealed && isPicked && !option.correct;
-            const faded = !unscored && revealed && !option.correct && !isPicked;
+            const faded = fadeOthers && !unscored && revealed && !option.correct && !isPicked;
             const pickP = pickAt !== null && t >= pickAt ? tailwindEase(clamp01((t - pickAt) / TILE_STATE_MS)) : 0;
-            const tin = this.tilePose(run, i, t);
+            // Circle mark: the correct picture pops in place and is drawn last, over its neighbours.
+            const circled = !fadeOthers && !unscored && showCorrect;
+            const pop = circled ? answerMarkAt(t - run.revealAt - circleDelayMs(q, option.id)) : null;
+            const basePose = this.tilePose(run, i, t);
+            const tin = pop ? { ...basePose, scale: basePose.scale * pop.scale } : basePose;
             const opacity = faded ? lerp(1, 0.35, rp) : 1;
 
-            this.withLoop(answerLoop(resolveLoops(this.quiz.settings, q).answers, option), t - run.mountAt, tx, ry, colW, rowH[r], () => this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
+            const paint = ((ry: number) => () => this.withLoop(answerLoop(resolveLoops(this.quiz.settings, q).answers, option), t - run.mountAt, tx, ry, colW, rowH[r], () => this.withPose(tin, tx + colW / 2, ry + rowH[r] / 2, opacity, () => {
               this.noteAnswerRect(option.id, tx, ry, colW, rowH[r]);
               const rad = hideImageBoxes ? 0 : 6; // rounded-md
               if (!hideImageBoxes && showCorrect) {
@@ -1879,7 +1903,8 @@ export class FrameRenderer {
               }
               ctx.restore();
 
-              if (!unscored && revealed && (option.correct || isPicked)) {
+              // The circle replaces the tick on the correct picture; a wrong pick still gets its ✕.
+              if (!unscored && revealed && (option.correct || isPicked) && !circled) {
                 const markFont = this.font(600, 14);
                 const mark = option.correct ? "✓" : "✕";
                 const mw = this.measure(mark, markFont) + 12;
@@ -1909,7 +1934,16 @@ export class FrameRenderer {
                   !!typography.underline,
                 ),
               );
-            }), i);
+            }), i))(ry);
+            if (!pop) paint();
+            else {
+              const cx = tx + colW / 2;
+              const cy = ry + boxH / 2;
+              circledTiles.push(() => {
+                paint();
+                this.drawAnswerCircle(cx, cy, colW * pop.scale, boxH * pop.scale, pop.circle, mark.color);
+              });
+            }
           });
           if (colGaps) {
             row.forEach(({ i }, c) => {
@@ -1945,6 +1979,7 @@ export class FrameRenderer {
           }
           ry += rowH[r] + gap;
         });
+        circledTiles.forEach((paint) => paint());
         if (revealCapLines.length && revealSettings && revealCapFont) {
           const cap = captionPose(sinceReveal, revealSettings.durationMs);
           if (cap.opacity <= 0) return;
@@ -2715,7 +2750,9 @@ export class FrameRenderer {
   private answerColumns(question: Question): number {
     const n = question.options.length;
     if (isSingleAnswer(question)) return 1;
-    if (question.kind === "image-choice" || question.kind === "reveal") return Math.max(1, imageChoiceColumns(n));
+    if (question.kind === "image-choice" || question.kind === "reveal") {
+      return Math.max(1, imageChoiceColumns(n, imageJoinersActive(n, question.imageJoiners) ? undefined : question.imageColumns));
+    }
     return this.narrow || question.layout === "list" ? 1 : Math.min(2, n);
   }
 
@@ -3385,6 +3422,23 @@ export class FrameRenderer {
     this.ctx.translate(-cx, -cy);
     draw();
     this.ctx.restore();
+  }
+
+  /** The circle answer mark (lib/answerMark): a marker-pen ellipse round a tile, drawn `progress` of the way. */
+  private drawAnswerCircle(cx: number, cy: number, w: number, h: number, progress: number, color: string) {
+    if (progress <= 0) return;
+    const { ctx } = this;
+    const { rx, ry, stroke } = answerMarkEllipse(w, h);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, ANSWER_MARK_START, ANSWER_MARK_START + ANSWER_MARK_SWEEP * progress);
+    ctx.lineWidth = stroke;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = color;
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = stroke;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private withPose(pose: Pose, cx: number, cy: number, opacity: number, draw: () => void) {

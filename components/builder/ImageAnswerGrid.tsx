@@ -61,6 +61,9 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState(question.options[0]?.id ?? "");
+  const correctCount = question.options.filter((option) => option.correct).length;
+  // "Find the odd ones out": ticks toggle one by one instead of moving the single tick.
+  const [several, setSeveral] = useState(correctCount > 1);
 
   const count = question.options.length;
   const gap = question.optionGap ?? DEFAULT_IMAGE_GAP;
@@ -153,6 +156,10 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
   const markCorrect = (id: string) => {
     const current = latest.current.question;
     const clear = current.kind === "image-choice" && current.options.find((option) => option.id === id)?.correct;
+    if (current.kind === "image-choice" && several) {
+      commit(current.options.map((option) => (option.id === id ? { ...option, correct: !option.correct } : option)));
+      return;
+    }
     commit(current.options.map((option) => ({ ...option, correct: !clear && option.id === id })));
   };
 
@@ -215,7 +222,7 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-ink-400">
-          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · {count === 1 ? "Single answer · always celebrated, not scored" : question.options.some((option) => option.correct) ? "one correct" : "no correct answer"}</span>
+          Images <span className="text-ink-500">· {count} of {MAX_IMAGE_OPTIONS} · {count === 1 ? "Single answer · always celebrated, not scored" : correctCount > 1 ? `${correctCount} correct · find them all` : correctCount ? "one correct" : "no correct answer"}</span>
         </span>
         <span className="flex items-center gap-1">
           {action}
@@ -244,8 +251,20 @@ export function ImageAnswerGrid({ question, onChange, action }: Props) {
       {question.kind === "image-choice" && count > 1 && <button type="button" aria-pressed={!question.options.some((option) => option.correct)}
         className="focus-ring rounded-lg border border-ink-700 px-3 py-1.5 text-xs text-ink-300" disabled={busy}
         onClick={() => commit(latest.current.question.options.map((option) => ({ ...option, correct: false })))}>No correct answer · timed image slide</button>}
+      {question.kind === "image-choice" && count > 2 && <button type="button" aria-pressed={several}
+        className={`focus-ring rounded-lg border px-3 py-1.5 text-xs ${several ? "border-accent text-ink-100" : "border-ink-700 text-ink-300"}`} disabled={busy}
+        onClick={() => {
+          const next = !several;
+          setSeveral(next);
+          // Back to one right answer: keep the first tick only.
+          if (!next && correctCount > 1) {
+            const first = latest.current.question.options.find((option) => option.correct)?.id;
+            commit(latest.current.question.options.map((option) => ({ ...option, correct: option.id === first })));
+          }
+        }}>Several right answers · players find them all</button>}
       <p className="text-[11px] text-ink-500">
         Click an empty picture to upload it. + Add image adds one more answer. Bulk images adds several at once. Text under a picture is optional and only shows in play when you fill it in.
+        {question.kind === "image-choice" && several && " Several right answers: click each right image to tick or untick it; players must pick them all."}
         {question.kind === "image-choice" && " Click the correct image again to clear its tick. With no correct answer, images stay visible for the timer without scoring."}
         {question.kind === "reveal" &&
           " In play, every answer wears the same cover — the picture you set, or “?” — until the correct one is revealed."}

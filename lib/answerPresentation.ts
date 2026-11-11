@@ -11,6 +11,17 @@ export function isSingleAnswer(question: Pick<Question, "kind" | "options"> | un
   return !!question && SINGLE_ANSWER_KINDS.includes(question.kind) && question.options.length === 1;
 }
 
+/**
+ * Pick-all-that-apply: tap every right answer, then submit. Multi-select always
+ * (unless it has one answer); a picture question when it has two or more right
+ * answers ("find the 3 odd ones out").
+ */
+export function picksAll(question: Pick<Question, "kind" | "options"> | undefined): boolean {
+  if (!question || isSingleAnswer(question)) return false;
+  if (question.kind === "multi-select") return true;
+  return question.kind === "image-choice" && question.options.filter((option) => option.correct).length > 1;
+}
+
 /** Image slides with no marked answer run without scoring or reveal feedback. A single answer wins over this path. */
 export function isUnscoredImage(question: Pick<Question, "kind" | "options"> | undefined): boolean {
   return question?.kind === "image-choice" && !isSingleAnswer(question) && !question.options.some((option) => option.correct);

@@ -21,13 +21,26 @@ export function hidesImageBoxes(
   return question?.hideImageBoxes ?? settings?.hideImageBoxes === true;
 }
 
+export const MAX_IMAGE_COLUMNS = 20;
+
+/** A set column count (1–20), or undefined for the automatic square-ish grid. */
+export function fixedImageColumns(columns: number | undefined): number | undefined {
+  if (typeof columns !== "number" || !Number.isFinite(columns)) return undefined;
+  const n = Math.round(columns);
+  return n >= 1 ? Math.min(MAX_IMAGE_COLUMNS, n) : undefined;
+}
+
 /**
- * Columns for the picture grid. A pair sits side by side, a round of 12 lands
+ * Columns for the picture grid. `columns` (Question.imageColumns) fixes the
+ * count — 15 across for a wide 16:9 "find the odd one out" grid — and unset
+ * keeps the automatic grid below exactly as it always was. A pair sits side by side, a round of 12 lands
  * on three columns, and a full set of 100 packs into a small ten-across grid.
  * Each tile then shares the row evenly, so fewer pictures means bigger ones.
  */
-export function imageChoiceColumns(count: number): number {
+export function imageChoiceColumns(count: number, columns?: number): number {
   const n = Math.max(1, Math.floor(count));
+  const fixed = fixedImageColumns(columns);
+  if (fixed) return Math.min(n, fixed);
   if (n <= 3) return n;
   return Math.min(n, Math.round(Math.sqrt(n)));
 }
@@ -36,15 +49,15 @@ export function imageChoiceColumns(count: number): number {
  * Tile width and left offset inside a grid `width` wide. A lone picture fills
  * the authored image area; the area itself is responsive and user-sized.
  */
-export function imageChoiceTile(count: number, width: number, gapPx: number): { w: number; offset: number } {
-  const cols = imageChoiceColumns(count);
+export function imageChoiceTile(count: number, width: number, gapPx: number, columns?: number): { w: number; offset: number } {
+  const cols = imageChoiceColumns(count, columns);
   if (Math.floor(count) <= 1) {
     return { w: width, offset: 0 };
   }
   return { w: (width - gapPx * (cols - 1)) / cols, offset: 0 };
 }
 
-export function imageChoiceGridStyle(count: number, gapPx: number): {
+export function imageChoiceGridStyle(count: number, gapPx: number, columns?: number): {
   display: "grid";
   gap: string;
   gridTemplateColumns: string;
@@ -56,7 +69,7 @@ export function imageChoiceGridStyle(count: number, gapPx: number): {
   return {
     display: "grid",
     gap: `${gapPx}px`,
-    gridTemplateColumns: `repeat(${imageChoiceColumns(count)}, minmax(0, 1fr))`,
+    gridTemplateColumns: `repeat(${imageChoiceColumns(count, columns)}, minmax(0, 1fr))`,
   };
 }
 
@@ -154,9 +167,10 @@ export function imageColumnLayout(
   width: number,
   gapPx: number,
   columnGaps: readonly number[] | null,
+  columns?: number,
 ): { colW: number; colX: number; left: (column: number) => number } {
   if (!columnGaps) {
-    const tile = imageChoiceTile(count, width, gapPx);
+    const tile = imageChoiceTile(count, width, gapPx, columns);
     return {
       colW: tile.w,
       colX: tile.offset,

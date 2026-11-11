@@ -114,7 +114,10 @@ export function createQuiz(title = "Untitled quiz"): Quiz {
     title,
     description: "",
     theme: { ...DEFAULT_THEME },
-    settings: { ...DEFAULT_SETTINGS },
+    // New quizzes mark the answer with a circle and fade nothing. Kept out of
+    // DEFAULT_SETTINGS on purpose: storage merges those into every saved quiz,
+    // and a quiz saved before this existed must keep its classic look.
+    settings: { ...DEFAULT_SETTINGS, answerMark: { style: "circle" } },
     questions: [createQuestion()],
     createdAt: now,
     updatedAt: now,

@@ -21,7 +21,7 @@ import { GAME_KIND_LABELS } from "@/lib/gameTypes";
 import { GAME_KIND_LIST } from "@/types/quiz";
 import { PromptDesignPanel } from "@/components/builder/PromptDesignPanel";
 import { promptAlign, promptCharCount, promptFontSize, promptFontStack } from "@/lib/promptText";
-import { hidesImageBoxes, imageJoinerSlots, withImageJoiner, withImageJoinersFilled } from "@/lib/imageChoice";
+import { fixedImageColumns, hidesImageBoxes, imageJoinerSlots, MAX_IMAGE_COLUMNS, withImageJoiner, withImageJoinersFilled } from "@/lib/imageChoice";
 
 const PROMPT_EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -141,6 +141,40 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
           ))}
         </Select>
       </header>
+
+      {!(GAME_KIND_LIST as readonly string[]).includes(question.kind) && (
+        <Field label="Right answer" hint={`Quiz default: ${quiz.settings.answerMark?.style === "circle" ? "circle, nothing fades" : "classic, the others fade"}. A local choice affects only this question.`}>
+          <Select
+            value={question.answerMark?.style ?? "global"}
+            onChange={(event) => {
+              const rest = { ...question };
+              delete rest.answerMark;
+              const style = event.target.value;
+              onChange(style === "circle" || style === "classic" ? { ...rest, answerMark: { ...question.answerMark, style } } : rest);
+            }}
+          >
+            <option value="global">Use quiz setting</option>
+            <option value="circle">Circle, nothing fades</option>
+            <option value="classic">Classic, the others fade</option>
+          </Select>
+        </Field>
+      )}
+
+      {question.options.filter((option) => option.correct).length > 1 && (
+        <Field label="Circles" hint="With several right answers and the circle look: circle them one after another, or all at the same moment.">
+          <Select
+            value={question.circleOrder ?? "one-by-one"}
+            onChange={(event) => {
+              const rest = { ...question };
+              delete rest.circleOrder;
+              onChange(event.target.value === "together" ? { ...rest, circleOrder: "together" } : rest);
+            }}
+          >
+            <option value="one-by-one">One by one</option>
+            <option value="together">All at once</option>
+          </Select>
+        </Field>
+      )}
 
       {(question.kind === "image-choice" || question.kind === "reveal") && (
         <Field label="Image boxes" hint={`Quiz default: ${quiz.settings.hideImageBoxes ? "hidden" : "shown"}. A local choice affects only this question.`}>
@@ -317,6 +351,22 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
                 onChange({ ...question, optionGap: clamped });
               }}
               aria-label="Gap between image tiles in pixels"
+            />
+          </Field>
+          <Field label="Pictures per row" hint="Blank picks a square-ish grid. Set 15 for a wide 16:9 grid of 75. Ignored while words sit between pictures.">
+            <Input
+              type="number"
+              min={1}
+              max={MAX_IMAGE_COLUMNS}
+              placeholder="Auto"
+              value={question.imageColumns ?? ""}
+              onChange={(event) => {
+                const columns = fixedImageColumns(event.target.value === "" ? undefined : Number(event.target.value));
+                const rest = { ...question };
+                delete rest.imageColumns;
+                onChange(columns ? { ...rest, imageColumns: columns } : rest);
+              }}
+              aria-label="Pictures per row"
             />
           </Field>
           {question.options.length >= 2 && <ImageBetweenFields key={question.id} question={question} theme={theme} onChange={onChange} />}

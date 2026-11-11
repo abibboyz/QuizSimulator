@@ -3,6 +3,7 @@
 import type { Cue, CueSlot, Quiz, QuizSettings, Theme } from "@/types/quiz";
 import { Field, Input, Select, Textarea, Toggle } from "@/components/ui/Field";
 import { ColorSwatch } from "@/components/ui/ColorSwatch";
+import { ANSWER_MARK } from "@/lib/answerMark";
 import { CueEditor } from "@/components/builder/CueEditor";
 import { applyPostPack, CUE_SLOTS, CUE_SLOT_LABELS } from "@/lib/cues";
 import { ProgressPanel } from "@/components/builder/ProgressPanel";
@@ -120,6 +121,17 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           checked={settings.hideImageBoxes === true}
           onChange={(hideImageBoxes) => onChangeSettings({ hideImageBoxes })}
         />
+        <Toggle
+          label="Circle the right answer"
+          hint="On reveal nothing fades: the right answer pops a little and gets a circle. Off is the classic look, where the other answers fade."
+          checked={settings.answerMark?.style === "circle"}
+          onChange={(on) => onChangeSettings({ answerMark: { ...settings.answerMark, style: on ? "circle" : "classic" } })}
+        />
+        {settings.answerMark?.style === "circle" && (
+          <Field label="Circle colour" action={<ColorSwatch label="Answer circle colour" value={settings.answerMark.color} fallback={ANSWER_MARK.color} onChange={(color) => onChangeSettings({ answerMark: { style: "circle", ...(color ? { color } : {}) } })} />}>
+            <div className="h-8 rounded-lg border border-ink-700" style={{ background: settings.answerMark.color ?? ANSWER_MARK.color }} />
+          </Field>
+        )}
         <Toggle
           label="Sound effects"
           hint="Ticks, stings, and a fanfare at the end"

@@ -1,4 +1,4 @@
-import { isScored, isSingleAnswer, isUnscoredImage, showsFeedback, unscoredResult } from "../answerPresentation.ts";
+import { isScored, isSingleAnswer, isUnscoredImage, picksAll, showsFeedback, unscoredResult } from "../answerPresentation.ts";
 /**
  * The whole solo run, laid out on a clock before a single frame is drawn.
  *
@@ -537,7 +537,7 @@ function correctPicks(question: Question): string[] {
   if (question.kind === "sequence") return question.options.map((o) => o.id);
   const correct = question.options.filter((o) => o.correct).map((o) => o.id);
   if (!correct.length) return [];
-  return question.kind === "multi-select" || pickMode(question) === "multi" ? correct : [correct[0]];
+  return question.kind === "multi-select" || picksAll(question) || pickMode(question) === "multi" ? correct : [correct[0]];
 }
 
 /**

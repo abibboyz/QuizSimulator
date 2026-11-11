@@ -1,6 +1,6 @@
 "use client";
 
-import { isSingleAnswer, isUnscoredImage, unscoredResult } from "@/lib/answerPresentation";
+import { isSingleAnswer, isUnscoredImage, picksAll, unscoredResult } from "@/lib/answerPresentation";
 import { create } from "zustand";
 import type { Question, Quiz } from "@/types/quiz";
 import { scoreQuestion, shuffled, type ScoreResult } from "@/lib/scoring";
@@ -142,7 +142,7 @@ export const usePlaySession = create<PlayState>((set, get) => ({
     const question = order[index];
     if (!question || isUnscoredImage(question)) return;
 
-    if (question.kind === "multi-select" || (togglesPicks(question) && question.kind !== "sequence")) {
+    if (picksAll(question) || (togglesPicks(question) && question.kind !== "sequence")) {
       set({
         selected: selected.includes(optionId)
           ? selected.filter((id) => id !== optionId)
