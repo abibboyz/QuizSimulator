@@ -122,8 +122,8 @@ export function SettingsPanel({ quiz, onChangeQuiz, onChangeSettings, onChangeTh
           onChange={(hideImageBoxes) => onChangeSettings({ hideImageBoxes })}
         />
         <Toggle
-          label="Circle the right answer"
-          hint="On reveal nothing fades: the right answer pops a little and gets a circle. Off is the classic look, where the other answers fade."
+          label="Circle the right picture"
+          hint="Picture questions: on reveal nothing fades; the right picture pops a little and gets a circle. Text answers always keep their ticks. Off is the classic look, where the other pictures fade."
           checked={settings.answerMark?.style === "circle"}
           onChange={(on) => onChangeSettings({ answerMark: { ...settings.answerMark, style: on ? "circle" : "classic" } })}
         />

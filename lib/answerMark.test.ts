@@ -13,18 +13,30 @@ test("answer mark: a quiz saved without the setting keeps the classic look, wher
   assert.equal(DEFAULT_SETTINGS.answerMark, undefined, "storage merges DEFAULT_SETTINGS into saved quizzes, so it must not switch them");
 });
 
-test("answer mark: new quizzes start with the circle, which fades nothing", () => {
+const pictureQ = { kind: "image-choice" as const };
+
+test("answer mark: new quizzes start with the circle on picture questions, which fades nothing", () => {
   const quiz = createQuiz();
-  assert.equal(resolveAnswerMark(quiz.settings).style, "circle");
-  assert.equal(fadesOtherAnswers(resolveAnswerMark(quiz.settings)), false);
+  assert.equal(resolveAnswerMark(quiz.settings, pictureQ).style, "circle");
+  assert.equal(resolveAnswerMark(quiz.settings, { kind: "reveal" }).style, "circle");
+  assert.equal(fadesOtherAnswers(resolveAnswerMark(quiz.settings, pictureQ)), false);
+});
+
+test("answer mark: only picture questions circle; text answers keep their ticks and fading", () => {
+  const settings = { answerMark: { style: "circle" as const } };
+  for (const kind of ["multiple-choice", "true-false", "multi-select", "memory-flip"] as const) {
+    assert.equal(resolveAnswerMark(settings, { kind }).style, "classic", kind);
+    assert.equal(resolveAnswerMark(settings, { kind, answerMark: { style: "circle" } }).style, "classic", `${kind} ignores a circle override`);
+  }
+  assert.equal(resolveAnswerMark(settings).style, "classic", "no question, no circle");
 });
 
 test("answer mark: a question overrides the quiz, and colours fall back in order", () => {
   const settings = { answerMark: { style: "circle" as const, color: "#00ff00" } };
-  assert.deepEqual(resolveAnswerMark(settings), { style: "circle", color: "#00ff00" });
-  assert.deepEqual(resolveAnswerMark(settings, { answerMark: { style: "classic" } }), { style: "classic", color: "#00ff00" });
-  assert.equal(resolveAnswerMark(settings, { answerMark: { style: "circle", color: "#123456" } }).color, "#123456");
-  assert.equal(resolveAnswerMark({ answerMark: { style: "bogus" as never } }).style, "classic", "an unknown style falls back safely");
+  assert.deepEqual(resolveAnswerMark(settings, pictureQ), { style: "circle", color: "#00ff00" });
+  assert.deepEqual(resolveAnswerMark(settings, { ...pictureQ, answerMark: { style: "classic" } }), { style: "classic", color: "#00ff00" });
+  assert.equal(resolveAnswerMark(settings, { ...pictureQ, answerMark: { style: "circle", color: "#123456" } }).color, "#123456");
+  assert.equal(resolveAnswerMark({ answerMark: { style: "bogus" as never } }, pictureQ).style, "classic", "an unknown style falls back safely");
 });
 
 test("answer mark: nothing shows before the reveal, then the answer pops and settles while the circle draws", () => {

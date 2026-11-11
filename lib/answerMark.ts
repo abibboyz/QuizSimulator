@@ -39,12 +39,21 @@ export interface ResolvedAnswerMark {
   color: string;
 }
 
-/** Question override first, then the quiz setting, then `classic` (today's look). */
+/** Picture questions are the only ones that circle; text answers keep their ticks and fading. */
+export function circlesAnswers(kind: Question["kind"] | undefined): boolean {
+  return kind === "image-choice" || kind === "reveal";
+}
+
+/**
+ * Question override first, then the quiz setting, then `classic` (today's look).
+ * Only picture questions can circle: any other kind, or a call without one, resolves to classic.
+ */
 export function resolveAnswerMark(
   settings: Pick<QuizSettings, "answerMark"> | undefined,
-  question?: Pick<Question, "answerMark">,
+  question?: Pick<Question, "answerMark" | "kind">,
 ): ResolvedAnswerMark {
-  const style = question?.answerMark?.style ?? settings?.answerMark?.style ?? "classic";
+  const wanted = question?.answerMark?.style ?? settings?.answerMark?.style ?? "classic";
+  const style = circlesAnswers(question?.kind) ? wanted : "classic";
   const color = question?.answerMark?.color || settings?.answerMark?.color || ANSWER_MARK.color;
   return { style: ANSWER_MARK_STYLES.includes(style) ? style : "classic", color };
 }

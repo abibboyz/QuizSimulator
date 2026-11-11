@@ -142,7 +142,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         </Select>
       </header>
 
-      {!(GAME_KIND_LIST as readonly string[]).includes(question.kind) && (
+      {(question.kind === "image-choice" || question.kind === "reveal") && (
         <Field label="Right answer" hint={`Quiz default: ${quiz.settings.answerMark?.style === "circle" ? "circle, nothing fades" : "classic, the others fade"}. A local choice affects only this question.`}>
           <Select
             value={question.answerMark?.style ?? "global"}
@@ -160,7 +160,7 @@ export function QuestionEditor({ quiz, question, index, onChange, onChangeTheme 
         </Field>
       )}
 
-      {question.options.filter((option) => option.correct).length > 1 && (
+      {question.kind === "image-choice" && question.options.filter((option) => option.correct).length > 1 && (
         <Field label="Circles" hint="With several right answers and the circle look: circle them one after another, or all at the same moment.">
           <Select
             value={question.circleOrder ?? "one-by-one"}

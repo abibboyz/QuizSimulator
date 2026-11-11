@@ -1553,17 +1553,14 @@ export class FrameRenderer {
       w: CW,
       h,
       draw: (x, y) => {
-        // Circle mark: the correct tile is drawn after the others so its pop and circle sit on top.
-        const circleOn = revealed && !fadesOtherAnswers(resolveAnswerMark(this.quiz.settings, q));
-        const last: (() => void)[] = [];
         let ry = y;
         rows.forEach((row, r) => {
           row.forEach((tile, c) => {
-            const paint = ((ty: number) => () => this.drawTextTile(
+            this.drawTextTile(
               run,
               tile,
               x + c * (colW + gap),
-              ty,
+              ry,
               colW,
               rowH[r],
               t,
@@ -1572,13 +1569,10 @@ export class FrameRenderer {
               font,
               lh,
               markerFont,
-            ))(ry);
-            if (circleOn && tile.option.correct && !tile.game && !tile.verdict) last.push(paint);
-            else paint();
+            );
           });
           ry += rowH[r] + gap;
         });
-        last.forEach((paint) => paint());
       },
     };
   }
@@ -1640,11 +1634,7 @@ export class FrameRenderer {
     const bg = optionColor(i, { band: themeAgeBand(theme), colors: theme.optionColors, override: option.color });
     const showCorrect = tile.verdict ? revealed && tile.verdict === "correct" : revealed && option.correct;
     const showWrong = tile.verdict ? revealed && tile.verdict === "wrong" : revealed && tile.isPicked && !option.correct;
-    const mark = resolveAnswerMark(this.quiz.settings, run.question);
-    const faded = !fadesOtherAnswers(mark) || tile.verdict ? false : revealed && !option.correct && !tile.isPicked;
-    // Circle mark: the correct answer pops in place with a circle round it (drawn last by the grid).
-    const circled = !fadesOtherAnswers(mark) && !tile.verdict && !tile.game && revealed && option.correct;
-    const pop = circled ? answerMarkAt(t - run.revealAt - circleDelayMs(run.question, option.id)) : null;
+    const faded = tile.verdict ? false : revealed && !option.correct && !tile.isPicked;
 
     // `transition-all duration-200`: background, text colour, rings and opacity all ease together.
     const fill = mixColor(bg, showCorrect ? this.good : showWrong ? this.bad : bg, rp);
@@ -1660,8 +1650,7 @@ export class FrameRenderer {
     const ring = revealed ? lerp(ringBefore, showCorrect ? 1 : showWrong ? 0.4 : 0, rp) : ringBefore;
     const glow = showCorrect ? rp : 0;
 
-    const basePose = this.tilePose(run, i, t);
-    const tin = pop ? { ...basePose, scale: basePose.scale * pop.scale } : basePose;
+    const tin = this.tilePose(run, i, t);
     const opacity = faded ? lerp(1, 0.35, rp) : 1;
     const r = 16;
     // Hide answer boxes (lib/answerChrome): no card, ring or glow; feedback is a bar + tinted text/mark.
@@ -1730,11 +1719,10 @@ export class FrameRenderer {
       } else {
         tile.lines.forEach((line, li) => this.drawLine(line, cx, textTop + li * lh, lh, font, tileText, "left", 0, !!typography.underline));
       }
-      if (tile.showMark && !circled) {
+      if (tile.showMark) {
         this.drawLine((tile.verdict ? tile.verdict === "correct" : option.correct) ? "✓" : "✕", x + w - 16, cy - 16, 32, markerFont, tileText, "right");
       }
     }), i);
-    if (pop) this.drawAnswerCircle(tileX + tileW / 2, y + h / 2, tileW * pop.scale, h * pop.scale, pop.circle, mark.color);
   }
 
   /** AnswerGrid for image-choice: the numbered picture grid. */
@@ -1937,11 +1925,13 @@ export class FrameRenderer {
             }), i))(ry);
             if (!pop) paint();
             else {
+              // Round the picture and its caption, so the circle never crosses the answer's name.
+              const tileH = rowH[r];
               const cx = tx + colW / 2;
-              const cy = ry + boxH / 2;
+              const cy = ry + tileH / 2;
               circledTiles.push(() => {
                 paint();
-                this.drawAnswerCircle(cx, cy, colW * pop.scale, boxH * pop.scale, pop.circle, mark.color);
+                this.drawAnswerCircle(cx, cy, colW * pop.scale, tileH * pop.scale, pop.circle, mark.color);
               });
             }
           });
